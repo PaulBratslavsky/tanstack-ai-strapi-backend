@@ -1,0 +1,23 @@
+{
+  "kind": "collectionType",
+  "collectionName": "products",
+  "info": {
+    "singularName": "product",
+    "pluralName": "products",
+    "displayName": "Product",
+    "description": "A second demo type, deliberately unlike Article — different field names, a number and a boolean — so a cross-type search has to actually reconcile two schemas rather than one repeated twice"
+  },
+  "options": { "draftAndPublish": true },
+  "attributes": {
+    "name": { "type": "string", "required": true, "maxLength": 80 },
+    "sku": { "type": "uid", "targetField": "name" },
+    "summary": { "type": "text" },
+    "price": { "type": "decimal" },
+    "inStock": { "type": "boolean", "default": true },
+    "tier": {
+      "type": "enumeration",
+      "enum": ["community", "pro", "enterprise"],
+      "default": "community"
+    }
+  }
+}
