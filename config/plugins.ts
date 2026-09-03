@@ -37,8 +37,14 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
     resolve: '../strapi-plugin-tanstack-ai',
     config: {
       mcp: {
-        toolPrefix: 'tsai',
-        sizeLimitBytes: 100_000,
+        // Both keys were dead until phase 7 — declared, validated, ignored.
+        // They are set to the plugin's defaults explicitly here so the demo
+        // shows the surface without diverging from documented behaviour: an
+        // empty prefix (neither tool collides with a built-in) and a budget
+        // just under what an MCP client accepts, counted DOUBLED because every
+        // result rides the wire twice.
+        toolPrefix: '',
+        sizeLimitBytes: 950_000,
       },
       chat: {
         enabled: env.bool('TANSTACK_AI_CHAT', false),
