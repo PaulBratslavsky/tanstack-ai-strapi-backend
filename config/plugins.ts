@@ -56,6 +56,30 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
     },
   },
 
+  /**
+   * A THIRD-PARTY plugin that contributes tools, installed from npm.
+   *
+   * It exposes an `ai-tools` service (getTools/getMeta) and registers nothing
+   * with this plugin — the chat plugin discovers that service and namespaces
+   * what it finds. It is here to prove that path works for a plugin neither
+   * written nor modified for this project.
+   *
+   * From 2.5.0 it registers its own `plugin::youtube-transcripts.tool.*`
+   * permission actions, so its tools are grantable in Settings > Roles whether
+   * or not any chat host is installed — and this plugin only ever READS those
+   * actions to decide what a caller may use.
+   */
+  'youtube-transcripts': {
+    enabled: true,
+    config: {
+      proxyUrl: env('PROXY_URL'),
+      chunkSizeSeconds: 300, // Chunk size for pagination (5 minutes)
+      previewLength: 500, // Preview length in characters
+      maxFullTranscriptLength: 50000, // Auto-load full transcript if under this (~12K tokens)
+      searchSegmentSeconds: 30, // Segment size for BM25 search
+    },
+  },
+
   'users-permissions': {
     config: {
       jwtManagement: 'refresh',
