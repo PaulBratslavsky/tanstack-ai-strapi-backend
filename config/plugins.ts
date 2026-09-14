@@ -24,9 +24,16 @@ const deniedTypes = [
 ];
 
 const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin => ({
-  // Developed as a SIBLING directory, not inside this app, so it stays an
-  // independently publishable package. `strapi-plugin watch:link` from the
-  // plugin repo hot-reloads edits into here without a reinstall.
+  // WHERE THE PLUGIN COMES FROM depends on the environment.
+  //
+  // Here, in the base config, there is no `resolve`: Strapi loads the
+  // `strapi-plugin-tanstack-ai` package installed from npm (package.json
+  // dependencies). That is what Strapi Cloud and any production build run.
+  //
+  // `config/env/development/plugins.ts` adds `resolve: '../strapi-plugin-tanstack-ai'`
+  // on top, so `npm run develop` uses the sibling checkout instead. Strapi
+  // merges that file over this one when NODE_ENV is "development", which is
+  // also what it defaults NODE_ENV to when nothing sets it.
   //
   // The two halves are gated SEPARATELY and that is the point of the design:
   // tools are always on and pull no AI SDK at all, while chat is opt-in and is
@@ -34,7 +41,6 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
   // never enables chat never loads it.
   'tanstack-ai': {
     enabled: true,
-    resolve: '../strapi-plugin-tanstack-ai',
     config: {
       mcp: {
         // Both keys were dead until phase 7 — declared, validated, ignored.
