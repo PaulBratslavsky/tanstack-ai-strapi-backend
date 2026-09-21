@@ -29,7 +29,7 @@
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.30.3",
     "strapi-plugin-tanstack-ai": "^1.2.1",
-    "strapi-plugin-youtube-transcripts": "^2.5.0",
+    "strapi-plugin-youtube-transcripts": "^2.6.0",
     "styled-components": "^6.0.0"
   },
   "devDependencies": {
