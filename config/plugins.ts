@@ -35,10 +35,11 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
   // merges that file over this one when NODE_ENV is "development", which is
   // also what it defaults NODE_ENV to when nothing sets it.
   //
-  // The two halves are gated SEPARATELY and that is the point of the design:
-  // tools are always on and pull no AI SDK at all, while chat is opt-in and is
-  // the only thing that reaches for the ESM-only `@tanstack/ai`. A host that
-  // never enables chat never loads it.
+  // The two halves are gated SEPARATELY: tools are always on and pull no AI SDK
+  // at all, while chat is the only thing that reaches for the ESM-only
+  // `@tanstack/ai`. Chat is on by default (plugin 1.3.0+); if its key or
+  // packages are missing, Strapi still boots and the TanStack AI page says what
+  // to add. Set TANSTACK_AI_CHAT=false to turn it off.
   'tanstack-ai': {
     enabled: true,
     config: {
@@ -53,7 +54,7 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
         sizeLimitBytes: 950_000,
       },
       chat: {
-        enabled: env.bool('TANSTACK_AI_CHAT', false),
+        enabled: env.bool('TANSTACK_AI_CHAT', true),
         provider: env('TANSTACK_AI_PROVIDER', 'anthropic'),
         model: env('TANSTACK_AI_MODEL', 'claude-sonnet-5'),
         apiKey: env('ANTHROPIC_API_KEY'),
