@@ -455,11 +455,11 @@ export interface ApiArticleArticle extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
-    body: Schema.Attribute.Text;
     category: Schema.Attribute.Enumeration<
       ['tutorial', 'announcement', 'guide']
     > &
       Schema.Attribute.DefaultTo<'tutorial'>;
+    content: Schema.Attribute.RichText;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
