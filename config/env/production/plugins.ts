@@ -12,11 +12,10 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
   'tanstack-ai': {
     config: {
       chat: {
-        // On whenever an Anthropic key is configured, unless TANSTACK_AI_CHAT
-        // says otherwise. Chat with provider "anthropic" and no key fails the
-        // plugin's config validation, so a deploy without the key must default
-        // to chat off rather than refuse to boot.
-        enabled: env.bool('TANSTACK_AI_CHAT', Boolean(env('ANTHROPIC_API_KEY'))),
+        // On unless TANSTACK_AI_CHAT=false. Since plugin 1.3.0 a deploy without
+        // ANTHROPIC_API_KEY still boots: chat reports "not ready" and the
+        // TanStack AI page names the missing key.
+        enabled: env.bool('TANSTACK_AI_CHAT', true),
         // Ollama on a developer machine is not reachable from Cloud.
         provider: 'anthropic',
         model: env('TANSTACK_AI_MODEL', 'claude-sonnet-5'),
