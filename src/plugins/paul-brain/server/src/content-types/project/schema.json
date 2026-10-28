@@ -1,0 +1,69 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_projects",
+  "info": {
+    "singularName": "project",
+    "pluralName": "projects",
+    "displayName": "Project",
+    "description": "Paul's projects and initiatives"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "name"
+    },
+    "aliases": {
+      "type": "json",
+      "default": []
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["idea", "active", "paused", "done"],
+      "default": "idea"
+    },
+    "repo_url": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "text"
+    },
+    "goals": {
+      "type": "richtext"
+    },
+    "started": {
+      "type": "date"
+    },
+    "ended": {
+      "type": "date"
+    },
+    "notes": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.note",
+      "mappedBy": "projects"
+    },
+    "people": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.person",
+      "mappedBy": "projects"
+    },
+    "decisions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "plugin::paul-brain.decision",
+      "mappedBy": "project"
+    }
+  }
+}

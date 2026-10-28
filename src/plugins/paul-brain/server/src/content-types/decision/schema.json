@@ -1,0 +1,68 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_decisions",
+  "info": {
+    "singularName": "decision",
+    "pluralName": "decisions",
+    "displayName": "Decision",
+    "description": "Architecture decisions and key choices"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title"
+    },
+    "aliases": {
+      "type": "json",
+      "default": []
+    },
+    "context": {
+      "type": "richtext"
+    },
+    "decision": {
+      "type": "richtext"
+    },
+    "rationale": {
+      "type": "richtext"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["proposed", "accepted", "superseded"],
+      "default": "proposed"
+    },
+    "decided_on": {
+      "type": "date"
+    },
+    "supersedes": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::paul-brain.decision"
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::paul-brain.project",
+      "inversedBy": "decisions"
+    },
+    "people": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.person",
+      "mappedBy": "decisions"
+    },
+    "notes": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.note",
+      "mappedBy": "decisions"
+    }
+  }
+}

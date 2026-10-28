@@ -87,6 +87,11 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
     },
   },
 
+  'paul-brain': {
+    enabled: true,
+    resolve: './src/plugins/paul-brain',
+  },
+
   'users-permissions': {
     config: {
       jwtManagement: 'refresh',

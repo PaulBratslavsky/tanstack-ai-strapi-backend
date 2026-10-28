@@ -1,0 +1,38 @@
+{
+  "name": "strapi-plugin-paul-brain",
+  "version": "1.0.0",
+  "description": "Shared long-term memory (brain) for Paul's AI assistants",
+  "strapi": {
+    "kind": "plugin",
+    "name": "paul-brain",
+    "displayName": "Paul Brain",
+    "description": "Shared long-term memory for AI assistants via MCP"
+  },
+  "type": "commonjs",
+  "exports": {
+    "./package.json": "./package.json",
+    "./strapi-server": {
+      "types": "./dist/server/src/index.d.ts",
+      "source": "./server/src/index.ts",
+      "import": "./dist/server/index.mjs",
+      "require": "./dist/server/index.js",
+      "default": "./dist/server/index.js"
+    }
+  },
+  "scripts": {
+    "build": "strapi-plugin build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@strapi/sdk-plugin": "^5.0.0",
+    "@strapi/strapi": "5.52.2",
+    "@strapi/typescript-utils": "5.52.2",
+    "@types/node": "^20",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "@strapi/strapi": "^5.0.0"
+  },
+  "author": "Paul Bratslavsky",
+  "license": "MIT"
+}
