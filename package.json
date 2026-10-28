@@ -15,10 +15,10 @@
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
   },
   "dependencies": {
-    "@strapi/database": "5.52.2",
-    "@strapi/plugin-cloud": "5.52.2",
-    "@strapi/plugin-users-permissions": "5.52.2",
-    "@strapi/strapi": "5.52.2",
+    "@strapi/database": "5.59.0",
+    "@strapi/plugin-cloud": "5.59.0",
+    "@strapi/plugin-users-permissions": "5.59.0",
+    "@strapi/strapi": "5.59.0",
     "@tanstack/ai": "0.52.0",
     "@tanstack/ai-anthropic": "0.18.3",
     "@tanstack/ai-ollama": "0.10.3",
