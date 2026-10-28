@@ -1,0 +1,51 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_sources",
+  "info": {
+    "singularName": "source",
+    "pluralName": "sources",
+    "displayName": "Source",
+    "description": "External sources: videos, articles, transcripts, chats"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title"
+    },
+    "aliases": {
+      "type": "json",
+      "default": []
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": ["video", "article", "email", "transcript", "chat", "repo", "other"],
+      "default": "other"
+    },
+    "url": {
+      "type": "string"
+    },
+    "external_id": {
+      "type": "string"
+    },
+    "captured_on": {
+      "type": "date"
+    },
+    "excerpt": {
+      "type": "text"
+    },
+    "notes": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.note",
+      "mappedBy": "sources"
+    }
+  }
+}

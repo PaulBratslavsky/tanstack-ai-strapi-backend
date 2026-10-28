@@ -1,0 +1,65 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_people",
+  "info": {
+    "singularName": "person",
+    "pluralName": "people",
+    "displayName": "Person",
+    "description": "People in Paul's network"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "name"
+    },
+    "aliases": {
+      "type": "json",
+      "default": []
+    },
+    "role": {
+      "type": "string"
+    },
+    "org": {
+      "type": "string"
+    },
+    "email": {
+      "type": "email"
+    },
+    "handles": {
+      "type": "json",
+      "default": {}
+    },
+    "notes_md": {
+      "type": "richtext"
+    },
+    "last_contact": {
+      "type": "date"
+    },
+    "notes": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.note",
+      "mappedBy": "people"
+    },
+    "projects": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.project",
+      "inversedBy": "people"
+    },
+    "decisions": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.decision",
+      "inversedBy": "people"
+    }
+  }
+}
