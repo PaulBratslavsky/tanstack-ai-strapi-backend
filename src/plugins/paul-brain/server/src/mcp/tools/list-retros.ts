@@ -1,0 +1,83 @@
+import type { Core } from '@strapi/strapi';
+import { z } from '@strapi/utils';
+import { getActionId } from '../permissions';
+import { getUid } from '../types';
+
+export const register = (strapi: Core.Strapi) => {
+  strapi.ai.mcp.registerTool({
+    name: 'list_retros',
+    title: 'List Brain Retros',
+    description: 'List retro records. Filter by status. See get_brain_guide for usage.',
+    
+    resolveInputSchema: () => z.object({
+      status: z.enum(['open', 'fixed']).optional().describe('Filter by status'),
+      limit: z.number().min(1).max(50).optional().describe('Max results (default: 25)'),
+    }),
+    
+    resolveOutputSchema: () => z.object({
+      items: z.array(z.object({
+        documentId: z.string(),
+        slug: z.string(),
+        title: z.string(),
+        status: z.string(),
+        date: z.string().optional(),
+        failure: z.string().optional(),
+        fix: z.string().optional(),
+      })),
+      count: z.number(),
+    }),
+    
+    auth: {
+      policies: [{ action: getActionId('read') }],
+    },
+    
+    createHandler: (strapi) => async ({ args, context }) => {
+      const uid = getUid('retro');
+      const limit = args.limit || 25;
+      
+      const filters: any = {};
+      if (args.status) {
+        filters.status = { $eq: args.status };
+      }
+
+      const items = await strapi.documents(uid).findMany({
+        filters,
+        sort: { date: 'desc' },
+        limit,
+      });
+
+      const sanitized = await Promise.all(
+        items.map(async (item) => {
+          try {
+            return await strapi.contentAPI.sanitize.output(item, uid, context.userAbility);
+          } catch (err) {
+            return item;
+          }
+        })
+      );
+
+      const output = {
+        items: sanitized.map(item => ({
+          documentId: item.documentId,
+          slug: item.slug,
+          title: item.title,
+          status: item.status,
+          date: item.date,
+          failure: item.failure,
+          fix: item.fix,
+        })),
+        count: sanitized.length,
+      };
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(output, null, 2),
+          },
+        ],
+        structuredContent: output,
+      };
+    },
+  });
+};

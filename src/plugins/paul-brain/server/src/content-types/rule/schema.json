@@ -1,0 +1,36 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_rules",
+  "info": {
+    "singularName": "rule",
+    "pluralName": "rules",
+    "displayName": "Rule",
+    "description": "Deterministic routing/handling rules editable in admin"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "match": {
+      "type": "text",
+      "required": true
+    },
+    "action": {
+      "type": "text",
+      "required": true
+    },
+    "priority": {
+      "type": "integer",
+      "default": 0
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

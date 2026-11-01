@@ -1,0 +1,37 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_capabilities",
+  "info": {
+    "singularName": "capability",
+    "pluralName": "capabilities",
+    "displayName": "Capability",
+    "description": "What a system can and CANNOT do, probed and dated"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "system": {
+      "type": "string",
+      "required": true
+    },
+    "capability": {
+      "type": "text",
+      "required": true
+    },
+    "canDo": {
+      "type": "boolean",
+      "required": true
+    },
+    "verifiedAt": {
+      "type": "date"
+    },
+    "howVerified": {
+      "type": "text"
+    },
+    "notes": {
+      "type": "text"
+    }
+  }
+}

@@ -14,7 +14,7 @@ export const register = (strapi: Core.Strapi) => {
       title: z.string().describe('Note title (used to generate slug)'),
       body: z.string().optional().describe('Note body (markdown)'),
       summary: z.string().max(280).optional().describe('Short summary'),
-      kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference']).optional().describe('Note kind (default: fact)'),
+      kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference', 'lesson']).optional().describe('Note kind (default: fact)'),
       tags: z.array(z.string()).optional().describe('Tags for categorization'),
       confidence: z.enum(['low', 'medium', 'high']).optional().describe('Confidence level'),
       source_bot: z.string().optional().describe('Bot identifier that created this'),

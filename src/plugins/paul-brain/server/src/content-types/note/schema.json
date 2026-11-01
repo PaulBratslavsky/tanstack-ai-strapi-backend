@@ -33,8 +33,18 @@
     },
     "kind": {
       "type": "enumeration",
-      "enum": ["fact", "preference", "idea", "todo", "log", "reference"],
+      "enum": ["fact", "preference", "idea", "todo", "log", "reference", "lesson"],
       "default": "fact"
+    },
+    "verifiedAt": {
+      "type": "date"
+    },
+    "howToRecheck": {
+      "type": "text"
+    },
+    "durability": {
+      "type": "enumeration",
+      "enum": ["durable", "temporary"]
     },
     "tags": {
       "type": "json",

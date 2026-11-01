@@ -7,6 +7,14 @@ import * as updateNote from './update-note';
 import * as link from './link';
 import * as logDecision from './log-decision';
 import * as forget from './forget';
+import * as logRetro from './log-retro';
+import * as listRetros from './list-retros';
+import * as logGap from './log-gap';
+import * as listGaps from './list-gaps';
+import * as recordCapability from './record-capability';
+import * as listCapabilities from './list-capabilities';
+import * as addRule from './add-rule';
+import * as listRules from './list-rules';
 
 export const tools = [
   getBrainGuide,
@@ -18,4 +26,12 @@ export const tools = [
   link,
   logDecision,
   forget,
+  logRetro,
+  listRetros,
+  logGap,
+  listGaps,
+  recordCapability,
+  listCapabilities,
+  addRule,
+  listRules,
 ];
