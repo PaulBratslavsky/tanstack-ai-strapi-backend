@@ -33,6 +33,8 @@ export const register = (strapi: Core.Strapi) => {
           name: z.string(),
         }).nullish(),
         waitingOn: z.string().nullish(),
+        source: z.string().nullish(),
+        capturedBy: z.string().nullish(),
       })),
       count: z.number(),
     }),
@@ -131,6 +133,8 @@ export const register = (strapi: Core.Strapi) => {
           name: todo.project.name,
         } : undefined,
         waitingOn: todo.waitingOn,
+        source: todo.source,
+        capturedBy: todo.capturedBy,
       }));
 
       const output = stripNullish({

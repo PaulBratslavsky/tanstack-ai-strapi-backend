@@ -1,13 +1,9 @@
 import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
-import * as fs from 'fs';
-import * as path from 'path';
+import { BRAIN_GUIDE } from '../guides/brain-guide';
 
-const loadGuide = () => {
-  const guidePath = path.join(__dirname, '../guides/brain-guide.md');
-  return fs.readFileSync(guidePath, 'utf-8');
-};
+const PLUGIN_VERSION = '1.2.0';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -27,18 +23,16 @@ export const register = (strapi: Core.Strapi) => {
     },
     
     createHandler: () => async () => {
-      const guideContent = loadGuide();
-      const version = '1.1.0';
       return {
         content: [
           {
             type: 'text',
-            text: `${guideContent}\n\n---\nPlugin version: ${version}`,
+            text: `${BRAIN_GUIDE}\n\n---\nPlugin version: ${PLUGIN_VERSION}`,
           },
         ],
         structuredContent: {
-          guide: guideContent,
-          version,
+          guide: BRAIN_GUIDE,
+          version: PLUGIN_VERSION,
         },
       };
     },
