@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import type { BrainService } from '../../services/brain';
+import { stripNullish } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -46,10 +47,10 @@ export const register = (strapi: Core.Strapi) => {
         limit: args.limit,
       });
 
-      const output = {
+      const output = stripNullish({
         results,
         count: results.length,
-      };
+      });
 
       return {
         content: [

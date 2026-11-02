@@ -1,6 +1,6 @@
 {
   "name": "strapi-plugin-paul-brain",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Shared long-term memory (brain) for Paul's AI assistants",
   "strapi": {
     "kind": "plugin",

@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid, CONTENT_TYPES } from '../types';
+import { stripNullish } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -81,10 +82,10 @@ export const register = (strapi: Core.Strapi) => {
       allItems.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       const limited = allItems.slice(0, limit);
 
-      const output = {
+      const output = stripNullish({
         items: limited,
         count: limited.length,
-      };
+      });
 
       return {
         content: [
