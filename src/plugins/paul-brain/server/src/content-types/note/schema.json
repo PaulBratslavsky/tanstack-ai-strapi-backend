@@ -91,6 +91,12 @@
       "relation": "manyToMany",
       "target": "plugin::paul-brain.decision",
       "inversedBy": "notes"
+    },
+    "relatedTodos": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.todo",
+      "mappedBy": "relatedNotes"
     }
   }
 }

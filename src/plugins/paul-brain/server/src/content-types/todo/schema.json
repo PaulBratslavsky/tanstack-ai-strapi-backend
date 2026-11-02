@@ -1,0 +1,82 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_todos",
+  "info": {
+    "singularName": "todo",
+    "pluralName": "todos",
+    "displayName": "Todo",
+    "description": "Task management for Paul's work"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["inbox", "next", "doing", "waiting", "done", "dropped"],
+      "default": "inbox"
+    },
+    "priority": {
+      "type": "enumeration",
+      "enum": ["P0", "P1", "P2", "P3"],
+      "default": "P2"
+    },
+    "dueDate": {
+      "type": "date"
+    },
+    "doDate": {
+      "type": "date"
+    },
+    "goal": {
+      "type": "text"
+    },
+    "acceptanceCriteria": {
+      "type": "text"
+    },
+    "context": {
+      "type": "richtext"
+    },
+    "links": {
+      "type": "json",
+      "default": []
+    },
+    "relatedNotes": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.note",
+      "inversedBy": "relatedTodos"
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::paul-brain.project",
+      "inversedBy": "todos"
+    },
+    "waitingOn": {
+      "type": "string"
+    },
+    "log": {
+      "type": "json",
+      "default": []
+    },
+    "source": {
+      "type": "enumeration",
+      "enum": ["paul", "email", "meeting", "bot", "other"],
+      "default": "other"
+    },
+    "capturedBy": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "closingNote": {
+      "type": "text"
+    }
+  }
+}
