@@ -19858,9 +19858,9 @@ const register$k = (strapi2) => {
       results: array(object({
         type: string(),
         documentId: string(),
-        slug: string().optional(),
-        title: string().optional(),
-        name: string().optional(),
+        slug: string().nullish(),
+        title: string().nullish(),
+        name: string().nullish(),
         snippet: string(),
         score: number(),
         updatedAt: string()
@@ -19969,9 +19969,9 @@ const register$i = (strapi2) => {
       items: array(object({
         type: string(),
         documentId: string(),
-        title: string().optional(),
-        name: string().optional(),
-        slug: string().optional(),
+        title: string().nullish(),
+        name: string().nullish(),
+        slug: string().nullish(),
         updatedAt: string()
       })),
       count: number()
@@ -20584,9 +20584,9 @@ const register$b = (strapi2) => {
         slug: string(),
         title: string(),
         status: string(),
-        date: string().optional(),
-        failure: string().optional(),
-        fix: string().optional()
+        date: string().nullish(),
+        failure: string().nullish(),
+        fix: string().nullish()
       })),
       count: number()
     }),
@@ -20742,9 +20742,9 @@ const register$9 = (strapi2) => {
         title: string(),
         status: string(),
         count: number(),
-        date: string().optional(),
-        request: string().optional(),
-        whatWasNeeded: string().optional()
+        date: string().nullish(),
+        request: string().nullish(),
+        whatWasNeeded: string().nullish()
       })),
       count: number()
     }),
@@ -20890,9 +20890,9 @@ const register$7 = (strapi2) => {
         system: string(),
         capability: string(),
         canDo: boolean(),
-        verifiedAt: string().optional(),
-        howVerified: string().optional(),
-        notes: string().optional()
+        verifiedAt: string().nullish(),
+        howVerified: string().nullish(),
+        notes: string().nullish()
       })),
       count: number()
     }),
@@ -21298,13 +21298,13 @@ const register$2 = (strapi2) => {
         title: string(),
         status: string(),
         priority: string(),
-        dueDate: string().optional(),
-        doDate: string().optional(),
+        dueDate: string().nullish(),
+        doDate: string().nullish(),
         project: object({
           documentId: string(),
           name: string()
-        }).optional(),
-        waitingOn: string().optional()
+        }).nullish(),
+        waitingOn: string().nullish()
       })),
       count: number()
     }),
@@ -21421,28 +21421,28 @@ const register$1 = (strapi2) => {
       title: string(),
       status: string(),
       priority: string(),
-      dueDate: string().optional(),
-      doDate: string().optional(),
-      goal: string().optional(),
-      acceptanceCriteria: string().optional(),
-      context: string().optional(),
-      links: array(any()).optional(),
+      dueDate: string().nullish(),
+      doDate: string().nullish(),
+      goal: string().nullish(),
+      acceptanceCriteria: string().nullish(),
+      context: string().nullish(),
+      links: array(any()).nullish(),
       relatedNotes: array(object({
         documentId: string(),
         title: string(),
-        slug: string().optional()
-      })).optional(),
+        slug: string().nullish()
+      })).nullish(),
       project: object({
         documentId: string(),
         name: string(),
-        slug: string().optional()
-      }).optional(),
-      waitingOn: string().optional(),
-      log: array(any()).optional(),
-      source: string().optional(),
-      capturedBy: string().optional(),
-      completedAt: string().optional(),
-      closingNote: string().optional(),
+        slug: string().nullish()
+      }).nullish(),
+      waitingOn: string().nullish(),
+      log: array(any()).nullish(),
+      source: string().nullish(),
+      capturedBy: string().nullish(),
+      completedAt: string().nullish(),
+      closingNote: string().nullish(),
       createdAt: string(),
       updatedAt: string()
     }),
