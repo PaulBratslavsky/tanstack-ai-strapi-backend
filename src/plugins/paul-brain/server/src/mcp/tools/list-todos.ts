@@ -118,31 +118,23 @@ export const register = (strapi: Core.Strapi) => {
 
       todos = todos.slice(0, limit);
 
-      const sanitized = [];
-      for (const todo of todos) {
-        try {
-          const sanitizedTodo = await strapi.contentAPI.sanitize.output(todo, uid, context.userAbility);
-          sanitized.push({
-            documentId: sanitizedTodo.documentId,
-            title: sanitizedTodo.title,
-            status: sanitizedTodo.status,
-            priority: sanitizedTodo.priority,
-            dueDate: sanitizedTodo.dueDate,
-            doDate: sanitizedTodo.doDate,
-            project: sanitizedTodo.project ? {
-              documentId: sanitizedTodo.project.documentId,
-              name: sanitizedTodo.project.name,
-            } : undefined,
-            waitingOn: sanitizedTodo.waitingOn,
-          });
-        } catch (err) {
-          strapi.log.warn('Failed to sanitize todo:', err);
-        }
-      }
+      const formattedTodos = todos.map(todo => ({
+        documentId: todo.documentId,
+        title: todo.title,
+        status: todo.status,
+        priority: todo.priority,
+        dueDate: todo.dueDate,
+        doDate: todo.doDate,
+        project: todo.project ? {
+          documentId: todo.project.documentId,
+          name: todo.project.name,
+        } : undefined,
+        waitingOn: todo.waitingOn,
+      }));
 
       const output = {
-        todos: sanitized,
-        count: sanitized.length,
+        todos: formattedTodos,
+        count: formattedTodos.length,
       };
 
       return {

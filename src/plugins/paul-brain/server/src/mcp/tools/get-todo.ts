@@ -62,37 +62,36 @@ export const register = (strapi: Core.Strapi) => {
       }
 
       const todo = todos[0];
-      const sanitized = await strapi.contentAPI.sanitize.output(todo, uid, context.userAbility);
 
       const output = {
-        documentId: sanitized.documentId,
-        title: sanitized.title,
-        status: sanitized.status,
-        priority: sanitized.priority,
-        dueDate: sanitized.dueDate,
-        doDate: sanitized.doDate,
-        goal: sanitized.goal,
-        acceptanceCriteria: sanitized.acceptanceCriteria,
-        context: sanitized.context,
-        links: sanitized.links,
-        relatedNotes: sanitized.relatedNotes?.map((note: any) => ({
+        documentId: todo.documentId,
+        title: todo.title,
+        status: todo.status,
+        priority: todo.priority,
+        dueDate: todo.dueDate,
+        doDate: todo.doDate,
+        goal: todo.goal,
+        acceptanceCriteria: todo.acceptanceCriteria,
+        context: todo.context,
+        links: todo.links,
+        relatedNotes: todo.relatedNotes?.map((note: any) => ({
           documentId: note.documentId,
           title: note.title,
           slug: note.slug,
         })),
-        project: sanitized.project ? {
-          documentId: sanitized.project.documentId,
-          name: sanitized.project.name,
-          slug: sanitized.project.slug,
+        project: todo.project ? {
+          documentId: todo.project.documentId,
+          name: todo.project.name,
+          slug: todo.project.slug,
         } : undefined,
-        waitingOn: sanitized.waitingOn,
-        log: sanitized.log,
-        source: sanitized.source,
-        capturedBy: sanitized.capturedBy,
-        completedAt: sanitized.completedAt,
-        closingNote: sanitized.closingNote,
-        createdAt: sanitized.createdAt,
-        updatedAt: sanitized.updatedAt,
+        waitingOn: todo.waitingOn,
+        log: todo.log,
+        source: todo.source,
+        capturedBy: todo.capturedBy,
+        completedAt: todo.completedAt,
+        closingNote: todo.closingNote,
+        createdAt: todo.createdAt,
+        updatedAt: todo.updatedAt,
       };
 
       return {

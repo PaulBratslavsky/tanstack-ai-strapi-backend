@@ -21348,30 +21348,22 @@ const register$2 = (strapi2) => {
         return 0;
       });
       todos = todos.slice(0, limit);
-      const sanitized = [];
-      for (const todo2 of todos) {
-        try {
-          const sanitizedTodo = await strapi22.contentAPI.sanitize.output(todo2, uid, context.userAbility);
-          sanitized.push({
-            documentId: sanitizedTodo.documentId,
-            title: sanitizedTodo.title,
-            status: sanitizedTodo.status,
-            priority: sanitizedTodo.priority,
-            dueDate: sanitizedTodo.dueDate,
-            doDate: sanitizedTodo.doDate,
-            project: sanitizedTodo.project ? {
-              documentId: sanitizedTodo.project.documentId,
-              name: sanitizedTodo.project.name
-            } : void 0,
-            waitingOn: sanitizedTodo.waitingOn
-          });
-        } catch (err) {
-          strapi22.log.warn("Failed to sanitize todo:", err);
-        }
-      }
+      const formattedTodos = todos.map((todo2) => ({
+        documentId: todo2.documentId,
+        title: todo2.title,
+        status: todo2.status,
+        priority: todo2.priority,
+        dueDate: todo2.dueDate,
+        doDate: todo2.doDate,
+        project: todo2.project ? {
+          documentId: todo2.project.documentId,
+          name: todo2.project.name
+        } : void 0,
+        waitingOn: todo2.waitingOn
+      }));
       const output = {
-        todos: sanitized,
-        count: sanitized.length
+        todos: formattedTodos,
+        count: formattedTodos.length
       };
       return {
         content: [
@@ -21441,36 +21433,35 @@ const register$1 = (strapi2) => {
         throw new Error(`Todo not found: ${args.identifier}`);
       }
       const todo2 = todos[0];
-      const sanitized = await strapi22.contentAPI.sanitize.output(todo2, uid, context.userAbility);
       const output = {
-        documentId: sanitized.documentId,
-        title: sanitized.title,
-        status: sanitized.status,
-        priority: sanitized.priority,
-        dueDate: sanitized.dueDate,
-        doDate: sanitized.doDate,
-        goal: sanitized.goal,
-        acceptanceCriteria: sanitized.acceptanceCriteria,
-        context: sanitized.context,
-        links: sanitized.links,
-        relatedNotes: sanitized.relatedNotes?.map((note2) => ({
+        documentId: todo2.documentId,
+        title: todo2.title,
+        status: todo2.status,
+        priority: todo2.priority,
+        dueDate: todo2.dueDate,
+        doDate: todo2.doDate,
+        goal: todo2.goal,
+        acceptanceCriteria: todo2.acceptanceCriteria,
+        context: todo2.context,
+        links: todo2.links,
+        relatedNotes: todo2.relatedNotes?.map((note2) => ({
           documentId: note2.documentId,
           title: note2.title,
           slug: note2.slug
         })),
-        project: sanitized.project ? {
-          documentId: sanitized.project.documentId,
-          name: sanitized.project.name,
-          slug: sanitized.project.slug
+        project: todo2.project ? {
+          documentId: todo2.project.documentId,
+          name: todo2.project.name,
+          slug: todo2.project.slug
         } : void 0,
-        waitingOn: sanitized.waitingOn,
-        log: sanitized.log,
-        source: sanitized.source,
-        capturedBy: sanitized.capturedBy,
-        completedAt: sanitized.completedAt,
-        closingNote: sanitized.closingNote,
-        createdAt: sanitized.createdAt,
-        updatedAt: sanitized.updatedAt
+        waitingOn: todo2.waitingOn,
+        log: todo2.log,
+        source: todo2.source,
+        capturedBy: todo2.capturedBy,
+        completedAt: todo2.completedAt,
+        closingNote: todo2.closingNote,
+        createdAt: todo2.createdAt,
+        updatedAt: todo2.updatedAt
       };
       return {
         content: [
