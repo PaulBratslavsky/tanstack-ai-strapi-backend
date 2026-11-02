@@ -13,7 +13,7 @@ export const PERMISSIONS = [
     section: 'plugins',
     pluginName: PLUGIN_NAME,
     uid: 'read',
-    displayName: 'Read brain (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules)',
+    displayName: 'Read brain (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo)',
   },
   {
     section: 'plugins',
@@ -38,6 +38,12 @@ export const PERMISSIONS = [
     pluginName: PLUGIN_NAME,
     uid: 'rule.write',
     displayName: 'Write rules (add_rule)',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    uid: 'todo.write',
+    displayName: 'Write todos (add_todo, update_todo, complete_todo)',
   },
   {
     section: 'plugins',

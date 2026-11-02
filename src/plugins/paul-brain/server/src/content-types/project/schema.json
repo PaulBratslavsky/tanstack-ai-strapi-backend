@@ -70,6 +70,12 @@
       "relation": "oneToMany",
       "target": "plugin::paul-brain.retro",
       "mappedBy": "project"
+    },
+    "todos": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "plugin::paul-brain.todo",
+      "mappedBy": "project"
     }
   }
 }

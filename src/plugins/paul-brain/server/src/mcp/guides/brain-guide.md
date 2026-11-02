@@ -50,6 +50,15 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
    - Fields: name, match, action, priority, enabled
    - Sorted by priority for rule engines
 
+10. **todo** — Task management for Paul's work
+   - Status: `inbox` (bot-captured, for Paul to confirm), `next`, `doing`, `waiting`, `done`, `dropped`
+   - Priority: `P0` (urgent today), `P1` (this week), `P2` (soon, default), `P3` (someday)
+   - Fields: title, dueDate, doDate, goal, acceptanceCriteria, context (markdown)
+   - Links: JSON array of {type: email|github|calendar|doc|url|other, label, url, note}
+   - Relations: relatedNotes (many-to-many with note), project (many-to-one)
+   - Log: JSON array of timestamped entries tracking changes
+   - Bot-captured todos default to `inbox` status for Paul to confirm
+
 ## When to Use Which Tool
 
 ### remember
@@ -137,6 +146,35 @@ Create a deterministic routing/handling rule.
 List routing/handling rules sorted by priority.
 - Filter by enabled status
 
+### add_todo
+Create a new todo item.
+- Bot-captured todos default to `inbox` status for Paul to confirm
+- Priority: `P0` (urgent today), `P1` (this week), `P2` (soon, default), `P3` (someday)
+- Always set `source` and `capturedBy` to track origin
+- Links are JSON objects with type, label, url, optional note
+
+### update_todo
+Update a todo's fields.
+- Use `appendContext` to add without overwriting
+- Use `appendLog` to add log entries
+- Changing status to `done` automatically sets `completedAt`
+
+### list_todos
+List todos with flexible filters.
+- Filter by status, priority, project
+- Filter by `dueBefore` or `overdue` for deadline management
+- Filter by `waitingOlderThanDays` to find stale waiting items
+- Results sorted by priority (P0 first) then dueDate
+
+### get_todo
+Fetch one todo by documentId with populated relatedNotes and project.
+- Use after `list_todos` to get full details
+
+### complete_todo
+Mark a todo as done with optional closing note.
+- Sets status to `done` and records `completedAt` timestamp
+- Adds log entry automatically
+
 ## Best Practices
 
 1. **Deduplication**: Always let `remember` dedupe by slug — it's automatic
@@ -149,6 +187,8 @@ List routing/handling rules sorted by priority.
 8. **Write negatives**: Use `record_capability` with `canDo: false` to document what doesn't work
 9. **Log gaps**: When you can't handle something well, `log_gap` so we can build it later
 10. **Log retros**: When things fail in real work, `log_retro` with the fix for future reference
+11. **Todo status workflow**: Bot-captured todos go to `inbox` for Paul to confirm → `next` → `doing` → `done`
+12. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
 
 ## Common Workflows
 
@@ -172,15 +212,27 @@ List routing/handling rules sorted by priority.
 2. `get_entity` to get full details
 3. `list_recent` to see what was captured recently
 
+### Capturing a todo from an email/meeting
+1. `add_todo` with source=email/meeting, capturedBy set to bot name
+2. Status defaults to `inbox` for Paul to review
+3. Link related notes with `relatedNoteIds`
+4. Set priority based on urgency
+
+### Managing todos
+1. `list_todos` with status filters to see what's in flight
+2. `update_todo` to change status, add context, or append log entries
+3. `complete_todo` when done with optional closing note
+
 ## Permissions
 
 Each tool requires specific permissions on your admin token:
 - `plugin::paul-brain.guide.read` — read this guide
-- `plugin::paul-brain.read` — recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules
+- `plugin::paul-brain.read` — recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo
 - `plugin::paul-brain.note.write` — remember, update_note, link
 - `plugin::paul-brain.decision.write` — log_decision
 - `plugin::paul-brain.meta.write` — log_retro, log_gap, record_capability
 - `plugin::paul-brain.rule.write` — add_rule
+- `plugin::paul-brain.todo.write` — add_todo, update_todo, complete_todo
 - `plugin::paul-brain.forget` — forget (dangerous, usually not granted)
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.

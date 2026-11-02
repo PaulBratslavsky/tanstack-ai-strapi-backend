@@ -7,6 +7,7 @@ import retro from './retro';
 import gap from './gap';
 import capability from './capability';
 import rule from './rule';
+import todo from './todo';
 
 export default {
   note,
@@ -18,4 +19,5 @@ export default {
   gap,
   capability,
   rule,
+  todo,
 };

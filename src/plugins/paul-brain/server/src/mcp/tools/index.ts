@@ -15,6 +15,11 @@ import * as recordCapability from './record-capability';
 import * as listCapabilities from './list-capabilities';
 import * as addRule from './add-rule';
 import * as listRules from './list-rules';
+import * as addTodo from './add-todo';
+import * as updateTodo from './update-todo';
+import * as listTodos from './list-todos';
+import * as getTodo from './get-todo';
+import * as completeTodo from './complete-todo';
 
 export const tools = [
   getBrainGuide,
@@ -34,4 +39,9 @@ export const tools = [
   listCapabilities,
   addRule,
   listRules,
+  addTodo,
+  updateTodo,
+  listTodos,
+  getTodo,
+  completeTodo,
 ];
