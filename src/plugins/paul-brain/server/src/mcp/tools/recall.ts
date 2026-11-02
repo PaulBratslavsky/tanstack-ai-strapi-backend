@@ -21,9 +21,9 @@ export const register = (strapi: Core.Strapi) => {
       results: z.array(z.object({
         type: z.string(),
         documentId: z.string(),
-        slug: z.string().optional(),
-        title: z.string().optional(),
-        name: z.string().optional(),
+        slug: z.string().nullish(),
+        title: z.string().nullish(),
+        name: z.string().nullish(),
         snippet: z.string(),
         score: z.number(),
         updatedAt: z.string(),
