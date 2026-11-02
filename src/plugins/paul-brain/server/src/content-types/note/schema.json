@@ -33,8 +33,11 @@
     },
     "kind": {
       "type": "enumeration",
-      "enum": ["fact", "preference", "idea", "todo", "log", "reference", "lesson"],
+      "enum": ["fact", "preference", "idea", "todo", "log", "reference", "lesson", "video", "taught"],
       "default": "fact"
+    },
+    "videoId": {
+      "type": "string"
     },
     "verifiedAt": {
       "type": "date"

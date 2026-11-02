@@ -48,22 +48,37 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
   ): Promise<DedupeResult> {
     const uid = `plugin::${PLUGIN_NAME}.${type}`;
     
-    const entities = await strapi.documents(uid).findMany({
-      filters: {
-        $or: [
-          { slug: { $eq: slug } },
-          { aliases: { $contains: slug } },
-        ],
-      },
+    // First try exact slug match
+    const exactMatch = await strapi.documents(uid).findMany({
+      filters: { slug: { $eq: slug } },
       limit: 1,
     });
 
-    if (entities.length > 0) {
+    if (exactMatch.length > 0) {
       return {
         exists: true,
-        documentId: entities[0].documentId,
-        entity: entities[0],
+        documentId: exactMatch[0].documentId,
+        entity: exactMatch[0],
       };
+    }
+
+    // If no slug match, fetch entities with aliases and match in JS
+    // This avoids Postgres jsonb LIKE incompatibility
+    const candidates = await strapi.documents(uid).findMany({
+      filters: { aliases: { $notNull: true } },
+      limit: 100,
+    });
+
+    const slugLower = slug.toLowerCase();
+    for (const entity of candidates) {
+      const aliases = Array.isArray(entity.aliases) ? entity.aliases : [];
+      if (aliases.some((alias: string) => alias.toLowerCase() === slugLower)) {
+        return {
+          exists: true,
+          documentId: entity.documentId,
+          entity,
+        };
+      }
     }
 
     return { exists: false };
@@ -108,16 +123,24 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
           filters.updatedAt = { $gte: since };
         }
 
-        if (tags && type === 'note') {
-          filters.tags = { $contains: tags };
-        }
-
+        // Fetch without tags filter - we'll filter in JS to avoid Postgres jsonb LIKE incompatibility
         const entities = await strapi.documents(uid).findMany({
           filters,
           limit: 100,
         });
 
         for (const entity of entities) {
+          // Apply tags filter in JS for DB-agnostic compatibility
+          if (tags && type === 'note') {
+            const entityTags = Array.isArray(entity.tags) ? entity.tags : [];
+            const tagsLower = tags.map((t: string) => t.toLowerCase());
+            const hasMatchingTag = entityTags.some((t: string) => 
+              tagsLower.includes(t.toLowerCase())
+            );
+            if (!hasMatchingTag) {
+              continue;
+            }
+          }
           let score = 0;
           let snippet = '';
 

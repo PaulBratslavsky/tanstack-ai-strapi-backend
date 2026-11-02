@@ -15,7 +15,8 @@ export const register = (strapi: Core.Strapi) => {
       body: z.string().optional().describe('Replace body (use appendBody to add)'),
       appendBody: z.string().optional().describe('Append to body (preferred over replace)'),
       summary: z.string().max(280).optional().describe('New summary'),
-      kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference']).optional().describe('New kind'),
+      kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference', 'lesson', 'video', 'taught']).optional().describe('New kind'),
+      videoId: z.string().optional().describe('YouTube video ID'),
       addTags: z.array(z.string()).optional().describe('Tags to add'),
       removeTags: z.array(z.string()).optional().describe('Tags to remove'),
       confidence: z.enum(['low', 'medium', 'high']).optional().describe('New confidence'),
@@ -55,6 +56,7 @@ export const register = (strapi: Core.Strapi) => {
       if (args.title) updates.title = args.title;
       if (args.summary) updates.summary = args.summary;
       if (args.kind) updates.kind = args.kind;
+      if (args.videoId !== undefined) updates.videoId = args.videoId;
       if (args.confidence) updates.confidence = args.confidence;
       if (args.pinned !== undefined) updates.pinned = args.pinned;
       if (args.expires_on) updates.expires_on = args.expires_on;
