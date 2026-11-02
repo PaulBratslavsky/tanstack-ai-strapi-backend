@@ -11,7 +11,7 @@ export const register = (strapi: Core.Strapi) => {
     
     resolveInputSchema: () => z.object({
       types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source'])).optional().describe('Limit to these types (default: all)'),
-      kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference']).optional().describe('Filter notes by kind'),
+      kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference', 'lesson']).optional().describe('Filter notes by kind'),
       source_bot: z.string().optional().describe('Filter by source_bot (notes only)'),
       limit: z.number().min(1).max(50).optional().describe('Max results (default: 25)'),
     }),

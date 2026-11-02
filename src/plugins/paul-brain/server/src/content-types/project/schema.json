@@ -64,6 +64,12 @@
       "relation": "oneToMany",
       "target": "plugin::paul-brain.decision",
       "mappedBy": "project"
+    },
+    "retros": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "plugin::paul-brain.retro",
+      "mappedBy": "project"
     }
   }
 }

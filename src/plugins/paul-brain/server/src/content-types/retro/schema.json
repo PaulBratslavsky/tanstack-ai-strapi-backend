@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_retros",
+  "info": {
+    "singularName": "retro",
+    "pluralName": "retros",
+    "displayName": "Retro",
+    "description": "Failure on real work + fix"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title"
+    },
+    "date": {
+      "type": "date"
+    },
+    "task": {
+      "type": "text"
+    },
+    "failure": {
+      "type": "text"
+    },
+    "fix": {
+      "type": "text"
+    },
+    "fixLocation": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["open", "fixed"],
+      "default": "open"
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::paul-brain.project",
+      "inversedBy": "retros"
+    }
+  }
+}

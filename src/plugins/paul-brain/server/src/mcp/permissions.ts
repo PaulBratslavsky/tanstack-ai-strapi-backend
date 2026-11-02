@@ -13,7 +13,7 @@ export const PERMISSIONS = [
     section: 'plugins',
     pluginName: PLUGIN_NAME,
     uid: 'read',
-    displayName: 'Read brain (recall, get_entity, list_recent)',
+    displayName: 'Read brain (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules)',
   },
   {
     section: 'plugins',
@@ -26,6 +26,18 @@ export const PERMISSIONS = [
     pluginName: PLUGIN_NAME,
     uid: 'decision.write',
     displayName: 'Write decisions (log_decision)',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    uid: 'meta.write',
+    displayName: 'Write meta (log_retro, log_gap, record_capability)',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    uid: 'rule.write',
+    displayName: 'Write rules (add_rule)',
   },
   {
     section: 'plugins',
