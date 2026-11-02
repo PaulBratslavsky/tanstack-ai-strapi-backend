@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
+import { stripNullish } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -63,7 +64,7 @@ export const register = (strapi: Core.Strapi) => {
 
       const todo = todos[0];
 
-      const output = {
+      const output = stripNullish({
         documentId: todo.documentId,
         title: todo.title,
         status: todo.status,
@@ -92,7 +93,7 @@ export const register = (strapi: Core.Strapi) => {
         closingNote: todo.closingNote,
         createdAt: todo.createdAt,
         updatedAt: todo.updatedAt,
-      };
+      });
 
       return {
         content: [

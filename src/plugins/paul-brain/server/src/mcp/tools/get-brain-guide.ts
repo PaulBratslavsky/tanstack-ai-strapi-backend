@@ -19,6 +19,7 @@ export const register = (strapi: Core.Strapi) => {
     
     resolveOutputSchema: () => z.object({
       guide: z.string().describe('The complete brain usage guide in markdown format'),
+      version: z.string().describe('Plugin version'),
     }),
     
     auth: {
@@ -27,15 +28,17 @@ export const register = (strapi: Core.Strapi) => {
     
     createHandler: () => async () => {
       const guideContent = loadGuide();
+      const version = '1.1.0';
       return {
         content: [
           {
             type: 'text',
-            text: guideContent,
+            text: `${guideContent}\n\n---\nPlugin version: ${version}`,
           },
         ],
         structuredContent: {
           guide: guideContent,
+          version,
         },
       };
     },

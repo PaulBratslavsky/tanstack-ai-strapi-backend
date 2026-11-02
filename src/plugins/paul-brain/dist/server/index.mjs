@@ -19790,22 +19790,28 @@ const register$l = (strapi2) => {
     description: "Returns the complete usage guide for Paul's Brain: what content types exist, when to use which tool, best practices, tagging conventions, and permission requirements.",
     resolveInputSchema: () => object({}),
     resolveOutputSchema: () => object({
-      guide: string().describe("The complete brain usage guide in markdown format")
+      guide: string().describe("The complete brain usage guide in markdown format"),
+      version: string().describe("Plugin version")
     }),
     auth: {
       policies: [{ action: getActionId("guide.read") }]
     },
     createHandler: () => async () => {
       const guideContent = loadGuide();
+      const version2 = "1.1.0";
       return {
         content: [
           {
             type: "text",
-            text: guideContent
+            text: `${guideContent}
+
+---
+Plugin version: ${version2}`
           }
         ],
         structuredContent: {
-          guide: guideContent
+          guide: guideContent,
+          version: version2
         }
       };
     }
@@ -19815,6 +19821,24 @@ const getBrainGuide = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defin
   __proto__: null,
   register: register$l
 }, Symbol.toStringTag, { value: "Module" }));
+function stripNullish(obj) {
+  if (obj === null || obj === void 0) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.filter((item) => item !== null && item !== void 0).map((item) => stripNullish(item));
+  }
+  if (typeof obj === "object") {
+    const cleaned = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== null && value !== void 0) {
+        cleaned[key] = stripNullish(value);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
 const register$k = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "recall",
@@ -19852,10 +19876,10 @@ const register$k = (strapi2) => {
         since: args.since,
         limit: args.limit
       });
-      const output = {
+      const output = stripNullish({
         results,
         count: results.length
-      };
+      });
       return {
         content: [
           {
@@ -19993,10 +20017,10 @@ const register$i = (strapi2) => {
       }
       allItems.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       const limited = allItems.slice(0, limit);
-      const output = {
+      const output = stripNullish({
         items: limited,
         count: limited.length
-      };
+      });
       return {
         content: [
           {
@@ -20578,17 +20602,8 @@ const register$b = (strapi2) => {
         sort: { date: "desc" },
         limit
       });
-      const sanitized = await Promise.all(
-        items.map(async (item) => {
-          try {
-            return await strapi22.contentAPI.sanitize.output(item, uid, context.userAbility);
-          } catch (err) {
-            return item;
-          }
-        })
-      );
-      const output = {
-        items: sanitized.map((item) => ({
+      const output = stripNullish({
+        items: items.map((item) => ({
           documentId: item.documentId,
           slug: item.slug,
           title: item.title,
@@ -20597,8 +20612,8 @@ const register$b = (strapi2) => {
           failure: item.failure,
           fix: item.fix
         })),
-        count: sanitized.length
-      };
+        count: items.length
+      });
       return {
         content: [
           {
@@ -20736,17 +20751,8 @@ const register$9 = (strapi2) => {
         sort: { count: "desc", date: "desc" },
         limit
       });
-      const sanitized = await Promise.all(
-        items.map(async (item) => {
-          try {
-            return await strapi22.contentAPI.sanitize.output(item, uid, context.userAbility);
-          } catch (err) {
-            return item;
-          }
-        })
-      );
-      const output = {
-        items: sanitized.map((item) => ({
+      const output = stripNullish({
+        items: items.map((item) => ({
           documentId: item.documentId,
           slug: item.slug,
           title: item.title,
@@ -20756,8 +20762,8 @@ const register$9 = (strapi2) => {
           request: item.request,
           whatWasNeeded: item.whatWasNeeded
         })),
-        count: sanitized.length
-      };
+        count: items.length
+      });
       return {
         content: [
           {
@@ -20884,17 +20890,8 @@ const register$7 = (strapi2) => {
         sort: { verifiedAt: "desc" },
         limit
       });
-      const sanitized = await Promise.all(
-        items.map(async (item) => {
-          try {
-            return await strapi22.contentAPI.sanitize.output(item, uid, context.userAbility);
-          } catch (err) {
-            return item;
-          }
-        })
-      );
-      const output = {
-        items: sanitized.map((item) => ({
+      const output = stripNullish({
+        items: items.map((item) => ({
           documentId: item.documentId,
           system: item.system,
           capability: item.capability,
@@ -20903,8 +20900,8 @@ const register$7 = (strapi2) => {
           howVerified: item.howVerified,
           notes: item.notes
         })),
-        count: sanitized.length
-      };
+        count: items.length
+      });
       return {
         content: [
           {
@@ -21361,10 +21358,10 @@ const register$2 = (strapi2) => {
         } : void 0,
         waitingOn: todo2.waitingOn
       }));
-      const output = {
+      const output = stripNullish({
         todos: formattedTodos,
         count: formattedTodos.length
-      };
+      });
       return {
         content: [
           {
@@ -21433,7 +21430,7 @@ const register$1 = (strapi2) => {
         throw new Error(`Todo not found: ${args.identifier}`);
       }
       const todo2 = todos[0];
-      const output = {
+      const output = stripNullish({
         documentId: todo2.documentId,
         title: todo2.title,
         status: todo2.status,
@@ -21462,7 +21459,7 @@ const register$1 = (strapi2) => {
         closingNote: todo2.closingNote,
         createdAt: todo2.createdAt,
         updatedAt: todo2.updatedAt
-      };
+      });
       return {
         content: [
           {

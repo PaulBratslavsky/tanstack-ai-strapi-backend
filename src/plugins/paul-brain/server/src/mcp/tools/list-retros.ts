@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
+import { stripNullish } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -46,18 +47,8 @@ export const register = (strapi: Core.Strapi) => {
         limit,
       });
 
-      const sanitized = await Promise.all(
-        items.map(async (item) => {
-          try {
-            return await strapi.contentAPI.sanitize.output(item, uid, context.userAbility);
-          } catch (err) {
-            return item;
-          }
-        })
-      );
-
-      const output = {
-        items: sanitized.map(item => ({
+      const output = stripNullish({
+        items: items.map(item => ({
           documentId: item.documentId,
           slug: item.slug,
           title: item.title,
@@ -66,8 +57,8 @@ export const register = (strapi: Core.Strapi) => {
           failure: item.failure,
           fix: item.fix,
         })),
-        count: sanitized.length,
-      };
+        count: items.length,
+      });
 
       return {
         content: [
