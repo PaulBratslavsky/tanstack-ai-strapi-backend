@@ -1,9 +1,8 @@
 {
-  "extends": "../../../tsconfig.json",
+  "extends": "@strapi/typescript-utils/tsconfigs/server",
   "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./server/src"
+    "outDir": "./dist"
   },
-  "include": ["server/src/**/*"],
+  "include": ["admin/**/*", "server/**/*"],
   "exclude": ["node_modules", "dist"]
 }
