@@ -1,12 +1,9 @@
 import type { Core } from '@strapi/strapi';
-import { PERMISSIONS } from './mcp/permissions';
 
-const register = async ({ strapi }: { strapi: Core.Strapi }) => {
-  await strapi
-    .service('admin::permission')
-    .actionProvider.registerMany(PERMISSIONS);
-
-  strapi.log.info(`[paul-brain] Registered ${PERMISSIONS.length} permission actions`);
+const register = ({ strapi }: { strapi: Core.Strapi }) => {
+  // Permissions are now registered in bootstrap.ts
+  // This follows the pattern from strapi-plugin-youtube-transcripts
+  strapi.log.debug('[paul-brain] Plugin registered');
 };
 
 export default register;
