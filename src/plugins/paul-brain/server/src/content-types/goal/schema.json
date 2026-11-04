@@ -1,0 +1,60 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_goals",
+  "info": {
+    "singularName": "goal",
+    "pluralName": "goals",
+    "displayName": "Goal",
+    "description": "Goals with daily check-ins and streak tracking"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "category": {
+      "type": "enumeration",
+      "enum": ["health", "fitness", "work", "learning", "personal", "other"]
+    },
+    "cadence": {
+      "type": "enumeration",
+      "enum": ["daily", "weekly"],
+      "default": "daily"
+    },
+    "target": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["active", "paused", "done", "dropped"],
+      "default": "active"
+    },
+    "startDate": {
+      "type": "date"
+    },
+    "currentStreak": {
+      "type": "integer",
+      "default": 0
+    },
+    "bestStreak": {
+      "type": "integer",
+      "default": 0
+    },
+    "lastCheckinDate": {
+      "type": "date"
+    },
+    "checkins": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "plugin::paul-brain.goal-checkin",
+      "mappedBy": "goal"
+    }
+  }
+}
