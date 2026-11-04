@@ -13,6 +13,9 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 - **Uniform results are suspect**: If all/none/zero results come back, verify by checking one raw record
 - **Write negatives down**: Record what systems CANNOT do (capabilities table)
 - **Build new skills from gaps and retros**: When we fail or lack something repeatedly, that's the signal to improve
+- **Start every session with get_briefing**: Load context about lessons, open issues, and urgent work
+- **Log retros after real failures**: Don't let lessons slip away
+- **Handle duplicate candidates**: When remember or add_todo returns needsDecision, choose merge/new/supersede
 
 ## Content Types
 
@@ -39,12 +42,14 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
    - Include \`external_id\` for YouTube videos to enable join with transcripts plugin
 
 6. **retro** — Failure on real work + fix (post-mortem)
-   - Fields: title, date, task, failure, fix, fixLocation, status (open/fixed)
+   - Fields: title, date, task, failure, fix, fixLocation, status (open/fixed/declined/wontfix)
    - Link to project when relevant
+   - Use update_retro to change status or add fix details
 
 7. **gap** — Request nothing handled well (capability we lack)
-   - Fields: title, date, request, whatWasNeeded, count, status (open/built/wontfix)
-   - Auto-increments count if same title exists and is open
+   - Fields: title, date, request, whatWasNeeded, count, status (open/built/wontfix), firstSeen, seenDates
+   - Appends to seenDates when logged again; proposeCapability: true when seenDates reaches 2
+   - Use update_gap to change status or description
 
 8. **capability** — What a system can and CANNOT do (probed and dated)
    - Fields: system, capability, canDo (boolean), verifiedAt, howVerified, notes
@@ -55,13 +60,14 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
    - Sorted by priority for rule engines
 
 10. **todo** — Task management for Paul's work
-   - Status: \`inbox\` (bot-captured, for Paul to confirm), \`next\`, \`doing\`, \`waiting\`, \`done\`, \`dropped\`
+   - Status: \`inbox\` (bot-captured, for Paul to confirm), \`next\`, \`doing\`, \`waiting\`, \`done\`, \`dropped\`, \`superseded\`
    - Priority: \`P0\` (urgent today), \`P1\` (this week), \`P2\` (soon, default), \`P3\` (someday)
    - Fields: title, dueDate, doDate, goal, acceptanceCriteria, context (markdown)
    - Links: JSON array of {type: email|github|calendar|doc|url|other, label, url, note}
-   - Relations: relatedNotes (many-to-many with note), project (many-to-one)
+   - Relations: relatedNotes (many-to-many with note), project (many-to-one), supersededBy (self-relation)
    - Log: JSON array of timestamped entries tracking changes
    - Bot-captured todos default to \`inbox\` status for Paul to confirm
+   - Duplicate detection: add_todo checks for similar todos unless onDuplicate is set
 
 11. **goal** — Goals with daily/weekly check-ins and streak tracking
    - Status: \`active\`, \`paused\`, \`done\`, \`dropped\`
@@ -77,11 +83,26 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 
 ## When to Use Which Tool
 
+### get_briefing
+Get a compact session briefing to start every session.
+- Returns pinned and recent lessons (notes with lesson field)
+- Open retros and gaps
+- P0/P1 or overdue todos
+- Recent 'cannot' capabilities (last 90 days)
+- Call this first to load context
+
+### health_check
+Run diagnostic checks on brain data.
+- Checks for duplicates, missing fields, stale data, orphans, broken relations
+- Returns findings with severity (BLOCK/WARN) and suggested fixes
+- Run periodically or when data quality is suspect
+
 ### remember
-Create a new note OR merge with an existing one (by slug/alias).
-- Default mode: \`merge\` — appends to existing note if slug matches
-- Use \`replace\` mode to overwrite
-- Use \`new\` mode to force a new note even if slug exists
+Create a new note with duplicate detection.
+- Returns needsDecision: true with candidates if similar notes found and onDuplicate not set
+- onDuplicate: 'merge' — append to existing note
+- onDuplicate: 'new' — force create new note
+- onDuplicate: 'supersede' — create new and mark old as superseded
 - Always set meaningful tags
 - Set \`source_bot\` to identify which bot created it
 - Use \`createMissing: true\` to auto-create linked entities by name
@@ -130,15 +151,27 @@ Delete an entity (requires \`confirm: true\`).
 Create a retro record (failure on real work + fix).
 - Link to project when relevant
 - Mark status as \`open\` or \`fixed\`
+- Log after every real failure to capture lessons
+
+### update_retro
+Update an existing retro.
+- Change status to \`fixed\`, \`declined\`, or \`wontfix\`
+- Add or update fix details
 
 ### list_retros
 List retro records.
-- Filter by status: \`open\`, \`fixed\`
+- Filter by status: \`open\`, \`fixed\`, \`declined\`, \`wontfix\`
 
 ### log_gap
 Create a gap record (request nothing handled well).
-- Automatically increments count if a similar open gap title exists
+- Appends to seenDates if a similar open gap exists
+- Returns proposeCapability: true when seenDates reaches 2
 - Status: \`open\`, \`built\`, \`wontfix\`
+
+### update_gap
+Update an existing gap.
+- Change status to \`built\` or \`wontfix\`
+- Update request or whatWasNeeded description
 
 ### list_gaps
 List gap records sorted by count (highest first) then date.
@@ -163,7 +196,11 @@ List routing/handling rules sorted by priority.
 - Filter by enabled status
 
 ### add_todo
-Create a new todo item.
+Create a new todo item with duplicate detection.
+- Returns needsDecision: true with candidates if similar todos found and onDuplicate not set
+- onDuplicate: 'merge' — append context to existing todo and add log entry
+- onDuplicate: 'new' — force create new todo
+- onDuplicate: 'supersede' — create new and mark old as superseded
 - Bot-captured todos default to \`inbox\` status for Paul to confirm
 - Priority: \`P0\` (urgent today), \`P1\` (this week), \`P2\` (soon, default), \`P3\` (someday)
 - Always set \`source\` and \`capturedBy\` to track origin
@@ -225,20 +262,23 @@ Update goal fields.
 
 ## Best Practices
 
-1. **Deduplication**: Always let \`remember\` dedupe by slug — it's automatic
-2. **Tagging**: Tag liberally. Common tags: \`#strapi\`, \`#mcp\`, \`#cursor\`, \`#ai\`, \`#deployment\`, \`#bug\`, \`#feature\`
-3. **Linking**: Link notes to people/projects/sources — it enables context traversal
-4. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
-5. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
-6. **Pinning**: Pin critical notes so they rank higher in search
-7. **Source Bot**: Always set \`source_bot\` to identify which bot created a note
-8. **Write negatives**: Use \`record_capability\` with \`canDo: false\` to document what doesn't work
-9. **Log gaps**: When you can't handle something well, \`log_gap\` so we can build it later
-10. **Log retros**: When things fail in real work, \`log_retro\` with the fix for future reference
-11. **Todo status workflow**: Bot-captured todos go to \`inbox\` for Paul to confirm → \`next\` → \`doing\` → \`done\`
-12. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
-13. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
-14. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
+1. **Start with briefing**: Call \`get_briefing\` at session start to load lessons, open issues, and urgent todos
+2. **Handle duplicates**: When \`remember\` or \`add_todo\` returns needsDecision with candidates, review and choose merge/new/supersede
+3. **Deduplication**: Let tools check for duplicates automatically — they'll ask when unsure
+4. **Tagging**: Tag liberally. Common tags: \`#strapi\`, \`#mcp\`, \`#cursor\`, \`#ai\`, \`#deployment\`, \`#bug\`, \`#feature\`
+5. **Linking**: Link notes to people/projects/sources — it enables context traversal
+6. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
+7. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
+8. **Pinning**: Pin critical notes so they rank higher in search
+9. **Source Bot**: Always set \`source_bot\` to identify which bot created a note
+10. **Write negatives**: Use \`record_capability\` with \`canDo: false\` to document what doesn't work
+11. **Log gaps**: When you can't handle something well, \`log_gap\` so we can build it later
+12. **Log retros**: When things fail in real work, \`log_retro\` with the fix for future reference
+13. **Close retros**: Use \`update_retro\` to mark status as fixed/declined/wontfix when resolved
+14. **Todo status workflow**: Bot-captured todos go to \`inbox\` for Paul to confirm → \`next\` → \`doing\` → \`done\`
+15. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
+16. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
+17. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
 
 ## Common Workflows
 
@@ -284,9 +324,13 @@ Update goal fields.
 Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.guide.read\` — read this guide
 - \`plugin::paul-brain.read\` — recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo
+- \`plugin::paul-brain.health.read\` — health_check
+- \`plugin::paul-brain.brief.read\` — get_briefing
 - \`plugin::paul-brain.note.write\` — remember, update_note, link
 - \`plugin::paul-brain.decision.write\` — log_decision
 - \`plugin::paul-brain.meta.write\` — log_retro, log_gap, record_capability
+- \`plugin::paul-brain.retro.update\` — update_retro
+- \`plugin::paul-brain.gap.update\` — update_gap
 - \`plugin::paul-brain.rule.write\` — add_rule
 - \`plugin::paul-brain.todo.write\` — add_todo, update_todo, complete_todo
 - \`plugin::paul-brain.goal.read\` — list_goals, get_goal_progress

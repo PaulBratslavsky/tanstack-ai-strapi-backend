@@ -97,6 +97,11 @@
       "relation": "manyToMany",
       "target": "plugin::paul-brain.todo",
       "mappedBy": "relatedNotes"
+    },
+    "supersededBy": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::paul-brain.note"
     }
   }
 }

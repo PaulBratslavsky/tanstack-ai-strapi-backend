@@ -37,7 +37,7 @@
     },
     "status": {
       "type": "enumeration",
-      "enum": ["open", "fixed"],
+      "enum": ["open", "fixed", "declined", "wontfix"],
       "default": "open"
     },
     "project": {

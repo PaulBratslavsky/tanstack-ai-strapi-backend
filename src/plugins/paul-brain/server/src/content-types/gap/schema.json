@@ -37,6 +37,13 @@
       "type": "enumeration",
       "enum": ["open", "built", "wontfix"],
       "default": "open"
+    },
+    "firstSeen": {
+      "type": "date"
+    },
+    "seenDates": {
+      "type": "json",
+      "default": []
     }
   }
 }
