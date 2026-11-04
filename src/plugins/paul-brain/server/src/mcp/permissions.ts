@@ -48,6 +48,18 @@ export const PERMISSIONS = [
   {
     section: 'plugins',
     pluginName: PLUGIN_NAME,
+    uid: 'goal.read',
+    displayName: 'Read goals (list_goals, get_goal_progress)',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    uid: 'goal.write',
+    displayName: 'Write goals (add_goal, update_goal, log_checkin)',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
     uid: 'forget',
     displayName: 'Delete entities (forget)',
   },

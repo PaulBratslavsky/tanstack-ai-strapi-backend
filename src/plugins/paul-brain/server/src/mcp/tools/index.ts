@@ -20,6 +20,11 @@ import * as updateTodo from './update-todo';
 import * as listTodos from './list-todos';
 import * as getTodo from './get-todo';
 import * as completeTodo from './complete-todo';
+import * as addGoal from './add-goal';
+import * as listGoals from './list-goals';
+import * as logCheckin from './log-checkin';
+import * as getGoalProgress from './get-goal-progress';
+import * as updateGoal from './update-goal';
 
 export const tools = [
   getBrainGuide,
@@ -44,4 +49,9 @@ export const tools = [
   listTodos,
   getTodo,
   completeTodo,
+  addGoal,
+  listGoals,
+  logCheckin,
+  getGoalProgress,
+  updateGoal,
 ];

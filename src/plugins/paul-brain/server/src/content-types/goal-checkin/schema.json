@@ -1,0 +1,36 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_goal_checkins",
+  "info": {
+    "singularName": "goal-checkin",
+    "pluralName": "goal-checkins",
+    "displayName": "Goal Checkin",
+    "description": "Daily or weekly check-ins for goals"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "goal": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::paul-brain.goal",
+      "inversedBy": "checkins"
+    },
+    "date": {
+      "type": "date",
+      "required": true
+    },
+    "met": {
+      "type": "boolean",
+      "required": true
+    },
+    "note": {
+      "type": "text"
+    },
+    "loggedBy": {
+      "type": "string"
+    }
+  }
+}

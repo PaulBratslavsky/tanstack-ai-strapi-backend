@@ -8,6 +8,8 @@ import gap from './gap';
 import capability from './capability';
 import rule from './rule';
 import todo from './todo';
+import goal from './goal';
+import goalCheckin from './goal-checkin';
 
 export default {
   note,
@@ -20,4 +22,6 @@ export default {
   capability,
   rule,
   todo,
+  goal,
+  'goal-checkin': goalCheckin,
 };

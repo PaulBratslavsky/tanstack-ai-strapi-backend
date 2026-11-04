@@ -63,6 +63,18 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
    - Log: JSON array of timestamped entries tracking changes
    - Bot-captured todos default to \`inbox\` status for Paul to confirm
 
+11. **goal** — Goals with daily/weekly check-ins and streak tracking
+   - Status: \`active\`, \`paused\`, \`done\`, \`dropped\`
+   - Category: \`health\`, \`fitness\`, \`work\`, \`learning\`, \`personal\`, \`other\`
+   - Cadence: \`daily\` (default), \`weekly\`
+   - Fields: title, description, target (e.g. "last meal by 5 PM"), startDate
+   - Streaks: currentStreak (consecutive met days ending on latest check-in), bestStreak
+   - One-to-many relation with goal-checkin
+
+12. **goal-checkin** — Daily or weekly check-ins for goals
+   - Fields: goal (relation), date (required), met (boolean, required), note, loggedBy
+   - One check-in per goal per date (updates existing instead of creating duplicate)
+
 ## When to Use Which Tool
 
 ### remember
@@ -179,6 +191,38 @@ Mark a todo as done with optional closing note.
 - Sets status to \`done\` and records \`completedAt\` timestamp
 - Adds log entry automatically
 
+### add_goal
+Create a new goal with daily or weekly check-ins.
+- Categories: \`health\`, \`fitness\`, \`work\`, \`learning\`, \`personal\`, \`other\`
+- Cadence: \`daily\` (default) or \`weekly\`
+- Refuses duplicate active goals with the same title (returns existing instead)
+- Auto-sets startDate to today if not provided
+
+### list_goals
+List goals with filters by status and category.
+- Includes currentStreak and bestStreak
+- Filter by status: \`active\`, \`paused\`, \`done\`, \`dropped\`
+- Filter by category
+
+### log_checkin
+Log a check-in for a goal (updates existing for same date).
+- Date defaults to today in America/Los_Angeles timezone
+- Recomputes currentStreak: consecutive met days ending on latest check-in
+- Recomputes bestStreak from entire history
+- For daily goals, if latest check-in is older than yesterday, currentStreak = 0
+- Missed or unlogged days break the streak
+
+### get_goal_progress
+Get goal progress with metrics and recent check-ins.
+- Returns currentStreak and bestStreak
+- Calculates met rate over last 7 and 30 days
+- Returns recent check-ins (default: 14, configurable)
+
+### update_goal
+Update goal fields.
+- Can update: status, description, category, target, cadence
+- Identify by documentId or title
+
 ## Best Practices
 
 1. **Deduplication**: Always let \`remember\` dedupe by slug — it's automatic
@@ -193,6 +237,8 @@ Mark a todo as done with optional closing note.
 10. **Log retros**: When things fail in real work, \`log_retro\` with the fix for future reference
 11. **Todo status workflow**: Bot-captured todos go to \`inbox\` for Paul to confirm → \`next\` → \`doing\` → \`done\`
 12. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
+13. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
+14. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
 
 ## Common Workflows
 
@@ -227,6 +273,12 @@ Mark a todo as done with optional closing note.
 2. \`update_todo\` to change status, add context, or append log entries
 3. \`complete_todo\` when done with optional closing note
 
+### Tracking goals
+1. \`add_goal\` to create a new goal with category and target
+2. \`log_checkin\` daily (or weekly) to record progress
+3. \`get_goal_progress\` to see streaks, met rates, and recent history
+4. \`list_goals\` to see all active goals or filter by status/category
+
 ## Permissions
 
 Each tool requires specific permissions on your admin token:
@@ -237,6 +289,8 @@ Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.meta.write\` — log_retro, log_gap, record_capability
 - \`plugin::paul-brain.rule.write\` — add_rule
 - \`plugin::paul-brain.todo.write\` — add_todo, update_todo, complete_todo
+- \`plugin::paul-brain.goal.read\` — list_goals, get_goal_progress
+- \`plugin::paul-brain.goal.write\` — add_goal, update_goal, log_checkin
 - \`plugin::paul-brain.forget\` — forget (dangerous, usually not granted)
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
