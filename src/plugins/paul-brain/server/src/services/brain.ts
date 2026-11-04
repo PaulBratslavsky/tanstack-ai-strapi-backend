@@ -239,6 +239,70 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
 
     return entities.length > 0 ? entities[0].documentId : null;
   },
+
+  normalizeTitle(title: string): string {
+    return title
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ');
+  },
+
+  isSimilar(title1: string, title2: string): boolean {
+    const norm1 = this.normalizeTitle(title1);
+    const norm2 = this.normalizeTitle(title2);
+    
+    if (norm1 === norm2) return true;
+    
+    const words1 = norm1.split(' ');
+    const words2 = norm2.split(' ');
+    const commonWords = words1.filter(w => words2.includes(w) && w.length > 3);
+    
+    const similarity = (2 * commonWords.length) / (words1.length + words2.length);
+    return similarity > 0.7;
+  },
+
+  async findDuplicateTodos(title: string, dueDate?: string, projectId?: string): Promise<any[]> {
+    const uid = `plugin::${PLUGIN_NAME}.todo`;
+    const todos = await strapi.documents(uid).findMany({
+      filters: {
+        status: { $notIn: ['done', 'dropped', 'superseded'] }
+      },
+      limit: 100,
+    });
+
+    const candidates = [];
+    for (const todo of todos) {
+      if (this.isSimilar(title, todo.title)) {
+        const sameDueDate = dueDate && todo.dueDate && dueDate === todo.dueDate;
+        const sameProject = projectId && todo.project?.documentId === projectId;
+        
+        if (sameDueDate || sameProject || !dueDate) {
+          candidates.push(todo);
+        }
+      }
+    }
+
+    return candidates;
+  },
+
+  async findDuplicateNotes(title: string): Promise<any[]> {
+    const uid = `plugin::${PLUGIN_NAME}.note`;
+    const slug = this.slugify(title);
+    
+    const notes = await strapi.documents(uid).findMany({
+      limit: 100,
+    });
+
+    const candidates = [];
+    for (const note of notes) {
+      if (note.slug === slug || this.isSimilar(title, note.title)) {
+        candidates.push(note);
+      }
+    }
+
+    return candidates;
+  },
 });
 
 export default brain;

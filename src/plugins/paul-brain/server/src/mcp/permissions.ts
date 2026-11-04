@@ -30,8 +30,32 @@ export const PERMISSIONS = [
   {
     section: 'plugins',
     pluginName: PLUGIN_NAME,
+    uid: 'health.read',
+    displayName: 'Read health diagnostics (health_check)',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
     uid: 'meta.write',
     displayName: 'Write meta (log_retro, log_gap, record_capability)',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    uid: 'retro.update',
+    displayName: 'Update retros (update_retro)',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    uid: 'gap.update',
+    displayName: 'Update gaps (update_gap)',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    uid: 'brief.read',
+    displayName: 'Read briefing (get_briefing)',
   },
   {
     section: 'plugins',

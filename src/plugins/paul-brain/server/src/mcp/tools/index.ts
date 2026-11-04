@@ -25,6 +25,10 @@ import * as listGoals from './list-goals';
 import * as logCheckin from './log-checkin';
 import * as getGoalProgress from './get-goal-progress';
 import * as updateGoal from './update-goal';
+import * as healthCheck from './health-check';
+import * as updateRetro from './update-retro';
+import * as updateGap from './update-gap';
+import * as getBriefing from './get-briefing';
 
 export const tools = [
   getBrainGuide,
@@ -38,8 +42,10 @@ export const tools = [
   forget,
   logRetro,
   listRetros,
+  updateRetro,
   logGap,
   listGaps,
+  updateGap,
   recordCapability,
   listCapabilities,
   addRule,
@@ -54,4 +60,6 @@ export const tools = [
   logCheckin,
   getGoalProgress,
   updateGoal,
+  healthCheck,
+  getBriefing,
 ];

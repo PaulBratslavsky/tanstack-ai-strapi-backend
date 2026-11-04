@@ -18,7 +18,7 @@
     },
     "status": {
       "type": "enumeration",
-      "enum": ["inbox", "next", "doing", "waiting", "done", "dropped"],
+      "enum": ["inbox", "next", "doing", "waiting", "done", "dropped", "superseded"],
       "default": "inbox"
     },
     "priority": {
@@ -77,6 +77,11 @@
     },
     "closingNote": {
       "type": "text"
+    },
+    "supersededBy": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::paul-brain.todo"
     }
   }
 }

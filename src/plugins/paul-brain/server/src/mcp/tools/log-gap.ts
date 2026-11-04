@@ -2,13 +2,14 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
+import { stripNullish } from '../utils';
 import type { BrainService } from '../../services/brain';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'log_gap',
     title: 'Log Brain Gap',
-    description: 'Create a gap record (request nothing handled well). Increments count if a similar open gap title exists. See get_brain_guide for usage.',
+    description: 'Create a gap record (request nothing handled well). If a similar open gap exists, appends to seenDates and returns proposeCapability: true when seenDates reaches 2.',
     
     resolveInputSchema: () => z.object({
       title: z.string().describe('Gap title'),
@@ -24,6 +25,8 @@ export const register = (strapi: Core.Strapi) => {
       slug: z.string(),
       count: z.number(),
       message: z.string(),
+      proposeCapability: z.boolean().optional(),
+      seenDates: z.array(z.string()).optional(),
     }),
     
     auth: {
@@ -35,6 +38,7 @@ export const register = (strapi: Core.Strapi) => {
       const uid = getUid('gap');
       
       const slug = brainService.slugify(args.title);
+      const today = new Date().toISOString().split('T')[0];
       
       const existing = await strapi.documents(uid).findMany({
         filters: {
@@ -47,25 +51,37 @@ export const register = (strapi: Core.Strapi) => {
       let result: any;
       let created = false;
       let message = '';
+      let proposeCapability = false;
 
       if (existing.length > 0) {
         const existingGap = existing[0];
-        const newCount = (existingGap.count || 1) + 1;
+        const seenDates = Array.isArray(existingGap.seenDates) ? [...existingGap.seenDates] : [];
+        
+        if (!seenDates.includes(today)) {
+          seenDates.push(today);
+        }
+        
+        if (seenDates.length >= 2) {
+          proposeCapability = true;
+        }
         
         result = await strapi.documents(uid).update({
           documentId: existingGap.documentId,
           data: {
-            count: newCount,
+            count: (existingGap.count || 1) + 1,
+            seenDates,
           },
         });
         
         created = false;
-        message = `Incremented existing gap count to ${newCount}`;
+        message = `Appended to existing gap seenDates (count: ${result.count})`;
       } else {
         const data: any = {
           title: args.title,
           slug,
-          date: args.date || new Date().toISOString(),
+          date: args.date || today,
+          firstSeen: today,
+          seenDates: [today],
           request: args.request,
           whatWasNeeded: args.whatWasNeeded,
           count: 1,
@@ -77,13 +93,15 @@ export const register = (strapi: Core.Strapi) => {
         message = 'Created new gap';
       }
 
-      const output = {
+      const output = stripNullish({
         created,
         documentId: result.documentId,
         slug: result.slug,
         count: result.count,
         message,
-      };
+        proposeCapability: proposeCapability || undefined,
+        seenDates: result.seenDates,
+      });
 
       return {
         content: [
