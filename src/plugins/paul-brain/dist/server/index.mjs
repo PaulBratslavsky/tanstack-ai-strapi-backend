@@ -9,7 +9,115 @@ import require$$0$7 from "buffer";
 import require$$0$6 from "stream";
 import require$$2$1 from "util";
 import "node:stream";
-const register$m = ({ strapi: strapi2 }) => {
+const PLUGIN_NAME$1 = "paul-brain";
+const CONTENT_TYPES = ["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo"];
+const getUid = (type) => `plugin::${PLUGIN_NAME$1}.${type}`;
+const PERMISSIONS = [
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "guide.read",
+    displayName: "Read brain guide"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "read",
+    displayName: "Read brain (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "note.write",
+    displayName: "Write notes (remember, update_note, link)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "decision.write",
+    displayName: "Write decisions (log_decision)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "health.read",
+    displayName: "Read health diagnostics (health_check)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "meta.write",
+    displayName: "Write meta (log_retro, log_gap, record_capability)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "retro.update",
+    displayName: "Update retros (update_retro)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "gap.update",
+    displayName: "Update gaps (update_gap)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "brief.read",
+    displayName: "Read briefing (get_briefing)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "rule.write",
+    displayName: "Write rules (add_rule)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "todo.write",
+    displayName: "Write todos (add_todo, update_todo, complete_todo)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "goal.read",
+    displayName: "Read goals (list_goals, get_goal_progress)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "goal.write",
+    displayName: "Write goals (add_goal, update_goal, log_checkin)"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    uid: "forget",
+    displayName: "Delete entities (forget)"
+  }
+];
+const getActionId = (uid) => `plugin::${PLUGIN_NAME$1}.${uid}`;
+const register$v = ({ strapi: strapi2 }) => {
+  const actionProvider = strapi2.service("admin::permission").actionProvider;
+  const existingActions = PERMISSIONS.filter(
+    (permission) => actionProvider.has(`plugin::paul-brain.${permission.uid}`)
+  );
+  const newActions = PERMISSIONS.filter(
+    (permission) => !actionProvider.has(`plugin::paul-brain.${permission.uid}`)
+  );
+  if (newActions.length > 0) {
+    actionProvider.registerMany(newActions);
+    strapi2.log.info(
+      `[paul-brain] Registered ${newActions.length} new permission actions in register phase`
+    );
+  }
+  if (existingActions.length > 0) {
+    strapi2.log.debug(
+      `[paul-brain] Skipped ${existingActions.length} already-registered permission actions`
+    );
+  }
   strapi2.log.debug("[paul-brain] Plugin registered");
 };
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
@@ -19723,60 +19831,6 @@ _enum([
   "published"
 ]).describe("Filter by publication status");
 string().describe("Search query string");
-const PLUGIN_NAME$1 = "paul-brain";
-const CONTENT_TYPES = ["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo"];
-const getUid = (type) => `plugin::${PLUGIN_NAME$1}.${type}`;
-const PERMISSIONS = [
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "guide.read",
-    displayName: "Read brain guide"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "read",
-    displayName: "Read brain (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "note.write",
-    displayName: "Write notes (remember, update_note, link)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "decision.write",
-    displayName: "Write decisions (log_decision)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "meta.write",
-    displayName: "Write meta (log_retro, log_gap, record_capability)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "rule.write",
-    displayName: "Write rules (add_rule)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "todo.write",
-    displayName: "Write todos (add_todo, update_todo, complete_todo)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "forget",
-    displayName: "Delete entities (forget)"
-  }
-];
-const getActionId = (uid) => `plugin::${PLUGIN_NAME$1}.${uid}`;
 const BRAIN_GUIDE = `# Paul's Brain — Usage Guide for AI Assistants
 
 ## What is this?
@@ -19788,6 +19842,9 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 - **Uniform results are suspect**: If all/none/zero results come back, verify by checking one raw record
 - **Write negatives down**: Record what systems CANNOT do (capabilities table)
 - **Build new skills from gaps and retros**: When we fail or lack something repeatedly, that's the signal to improve
+- **Start every session with get_briefing**: Load context about lessons, open issues, and urgent work
+- **Log retros after real failures**: Don't let lessons slip away
+- **Handle duplicate candidates**: When remember or add_todo returns needsDecision, choose merge/new/supersede
 
 ## Content Types
 
@@ -19814,12 +19871,14 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
    - Include \`external_id\` for YouTube videos to enable join with transcripts plugin
 
 6. **retro** — Failure on real work + fix (post-mortem)
-   - Fields: title, date, task, failure, fix, fixLocation, status (open/fixed)
+   - Fields: title, date, task, failure, fix, fixLocation, status (open/fixed/declined/wontfix)
    - Link to project when relevant
+   - Use update_retro to change status or add fix details
 
 7. **gap** — Request nothing handled well (capability we lack)
-   - Fields: title, date, request, whatWasNeeded, count, status (open/built/wontfix)
-   - Auto-increments count if same title exists and is open
+   - Fields: title, date, request, whatWasNeeded, count, status (open/built/wontfix), firstSeen, seenDates
+   - Appends to seenDates when logged again; proposeCapability: true when seenDates reaches 2
+   - Use update_gap to change status or description
 
 8. **capability** — What a system can and CANNOT do (probed and dated)
    - Fields: system, capability, canDo (boolean), verifiedAt, howVerified, notes
@@ -19830,21 +19889,49 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
    - Sorted by priority for rule engines
 
 10. **todo** — Task management for Paul's work
-   - Status: \`inbox\` (bot-captured, for Paul to confirm), \`next\`, \`doing\`, \`waiting\`, \`done\`, \`dropped\`
+   - Status: \`inbox\` (bot-captured, for Paul to confirm), \`next\`, \`doing\`, \`waiting\`, \`done\`, \`dropped\`, \`superseded\`
    - Priority: \`P0\` (urgent today), \`P1\` (this week), \`P2\` (soon, default), \`P3\` (someday)
    - Fields: title, dueDate, doDate, goal, acceptanceCriteria, context (markdown)
    - Links: JSON array of {type: email|github|calendar|doc|url|other, label, url, note}
-   - Relations: relatedNotes (many-to-many with note), project (many-to-one)
+   - Relations: relatedNotes (many-to-many with note), project (many-to-one), supersededBy (self-relation)
    - Log: JSON array of timestamped entries tracking changes
    - Bot-captured todos default to \`inbox\` status for Paul to confirm
+   - Duplicate detection: add_todo checks for similar todos unless onDuplicate is set
+
+11. **goal** — Goals with daily/weekly check-ins and streak tracking
+   - Status: \`active\`, \`paused\`, \`done\`, \`dropped\`
+   - Category: \`health\`, \`fitness\`, \`work\`, \`learning\`, \`personal\`, \`other\`
+   - Cadence: \`daily\` (default), \`weekly\`
+   - Fields: title, description, target (e.g. "last meal by 5 PM"), startDate
+   - Streaks: currentStreak (consecutive met days ending on latest check-in), bestStreak
+   - One-to-many relation with goal-checkin
+
+12. **goal-checkin** — Daily or weekly check-ins for goals
+   - Fields: goal (relation), date (required), met (boolean, required), note, loggedBy
+   - One check-in per goal per date (updates existing instead of creating duplicate)
 
 ## When to Use Which Tool
 
+### get_briefing
+Get a compact session briefing to start every session.
+- Returns pinned and recent lessons (notes with lesson field)
+- Open retros and gaps
+- P0/P1 or overdue todos
+- Recent 'cannot' capabilities (last 90 days)
+- Call this first to load context
+
+### health_check
+Run diagnostic checks on brain data.
+- Checks for duplicates, missing fields, stale data, orphans, broken relations
+- Returns findings with severity (BLOCK/WARN) and suggested fixes
+- Run periodically or when data quality is suspect
+
 ### remember
-Create a new note OR merge with an existing one (by slug/alias).
-- Default mode: \`merge\` — appends to existing note if slug matches
-- Use \`replace\` mode to overwrite
-- Use \`new\` mode to force a new note even if slug exists
+Create a new note with duplicate detection.
+- Returns needsDecision: true with candidates if similar notes found and onDuplicate not set
+- onDuplicate: 'merge' — append to existing note
+- onDuplicate: 'new' — force create new note
+- onDuplicate: 'supersede' — create new and mark old as superseded
 - Always set meaningful tags
 - Set \`source_bot\` to identify which bot created it
 - Use \`createMissing: true\` to auto-create linked entities by name
@@ -19893,15 +19980,27 @@ Delete an entity (requires \`confirm: true\`).
 Create a retro record (failure on real work + fix).
 - Link to project when relevant
 - Mark status as \`open\` or \`fixed\`
+- Log after every real failure to capture lessons
+
+### update_retro
+Update an existing retro.
+- Change status to \`fixed\`, \`declined\`, or \`wontfix\`
+- Add or update fix details
 
 ### list_retros
 List retro records.
-- Filter by status: \`open\`, \`fixed\`
+- Filter by status: \`open\`, \`fixed\`, \`declined\`, \`wontfix\`
 
 ### log_gap
 Create a gap record (request nothing handled well).
-- Automatically increments count if a similar open gap title exists
+- Appends to seenDates if a similar open gap exists
+- Returns proposeCapability: true when seenDates reaches 2
 - Status: \`open\`, \`built\`, \`wontfix\`
+
+### update_gap
+Update an existing gap.
+- Change status to \`built\` or \`wontfix\`
+- Update request or whatWasNeeded description
 
 ### list_gaps
 List gap records sorted by count (highest first) then date.
@@ -19926,7 +20025,11 @@ List routing/handling rules sorted by priority.
 - Filter by enabled status
 
 ### add_todo
-Create a new todo item.
+Create a new todo item with duplicate detection.
+- Returns needsDecision: true with candidates if similar todos found and onDuplicate not set
+- onDuplicate: 'merge' — append context to existing todo and add log entry
+- onDuplicate: 'new' — force create new todo
+- onDuplicate: 'supersede' — create new and mark old as superseded
 - Bot-captured todos default to \`inbox\` status for Paul to confirm
 - Priority: \`P0\` (urgent today), \`P1\` (this week), \`P2\` (soon, default), \`P3\` (someday)
 - Always set \`source\` and \`capturedBy\` to track origin
@@ -19954,20 +20057,57 @@ Mark a todo as done with optional closing note.
 - Sets status to \`done\` and records \`completedAt\` timestamp
 - Adds log entry automatically
 
+### add_goal
+Create a new goal with daily or weekly check-ins.
+- Categories: \`health\`, \`fitness\`, \`work\`, \`learning\`, \`personal\`, \`other\`
+- Cadence: \`daily\` (default) or \`weekly\`
+- Refuses duplicate active goals with the same title (returns existing instead)
+- Auto-sets startDate to today if not provided
+
+### list_goals
+List goals with filters by status and category.
+- Includes currentStreak and bestStreak
+- Filter by status: \`active\`, \`paused\`, \`done\`, \`dropped\`
+- Filter by category
+
+### log_checkin
+Log a check-in for a goal (updates existing for same date).
+- Date defaults to today in America/Los_Angeles timezone
+- Recomputes currentStreak: consecutive met days ending on latest check-in
+- Recomputes bestStreak from entire history
+- For daily goals, if latest check-in is older than yesterday, currentStreak = 0
+- Missed or unlogged days break the streak
+
+### get_goal_progress
+Get goal progress with metrics and recent check-ins.
+- Returns currentStreak and bestStreak
+- Calculates met rate over last 7 and 30 days
+- Returns recent check-ins (default: 14, configurable)
+
+### update_goal
+Update goal fields.
+- Can update: status, description, category, target, cadence
+- Identify by documentId or title
+
 ## Best Practices
 
-1. **Deduplication**: Always let \`remember\` dedupe by slug — it's automatic
-2. **Tagging**: Tag liberally. Common tags: \`#strapi\`, \`#mcp\`, \`#cursor\`, \`#ai\`, \`#deployment\`, \`#bug\`, \`#feature\`
-3. **Linking**: Link notes to people/projects/sources — it enables context traversal
-4. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
-5. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
-6. **Pinning**: Pin critical notes so they rank higher in search
-7. **Source Bot**: Always set \`source_bot\` to identify which bot created a note
-8. **Write negatives**: Use \`record_capability\` with \`canDo: false\` to document what doesn't work
-9. **Log gaps**: When you can't handle something well, \`log_gap\` so we can build it later
-10. **Log retros**: When things fail in real work, \`log_retro\` with the fix for future reference
-11. **Todo status workflow**: Bot-captured todos go to \`inbox\` for Paul to confirm → \`next\` → \`doing\` → \`done\`
-12. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
+1. **Start with briefing**: Call \`get_briefing\` at session start to load lessons, open issues, and urgent todos
+2. **Handle duplicates**: When \`remember\` or \`add_todo\` returns needsDecision with candidates, review and choose merge/new/supersede
+3. **Deduplication**: Let tools check for duplicates automatically — they'll ask when unsure
+4. **Tagging**: Tag liberally. Common tags: \`#strapi\`, \`#mcp\`, \`#cursor\`, \`#ai\`, \`#deployment\`, \`#bug\`, \`#feature\`
+5. **Linking**: Link notes to people/projects/sources — it enables context traversal
+6. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
+7. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
+8. **Pinning**: Pin critical notes so they rank higher in search
+9. **Source Bot**: Always set \`source_bot\` to identify which bot created a note
+10. **Write negatives**: Use \`record_capability\` with \`canDo: false\` to document what doesn't work
+11. **Log gaps**: When you can't handle something well, \`log_gap\` so we can build it later
+12. **Log retros**: When things fail in real work, \`log_retro\` with the fix for future reference
+13. **Close retros**: Use \`update_retro\` to mark status as fixed/declined/wontfix when resolved
+14. **Todo status workflow**: Bot-captured todos go to \`inbox\` for Paul to confirm → \`next\` → \`doing\` → \`done\`
+15. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
+16. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
+17. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
 
 ## Common Workflows
 
@@ -20002,22 +20142,34 @@ Mark a todo as done with optional closing note.
 2. \`update_todo\` to change status, add context, or append log entries
 3. \`complete_todo\` when done with optional closing note
 
+### Tracking goals
+1. \`add_goal\` to create a new goal with category and target
+2. \`log_checkin\` daily (or weekly) to record progress
+3. \`get_goal_progress\` to see streaks, met rates, and recent history
+4. \`list_goals\` to see all active goals or filter by status/category
+
 ## Permissions
 
 Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.guide.read\` — read this guide
 - \`plugin::paul-brain.read\` — recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo
+- \`plugin::paul-brain.health.read\` — health_check
+- \`plugin::paul-brain.brief.read\` — get_briefing
 - \`plugin::paul-brain.note.write\` — remember, update_note, link
 - \`plugin::paul-brain.decision.write\` — log_decision
 - \`plugin::paul-brain.meta.write\` — log_retro, log_gap, record_capability
+- \`plugin::paul-brain.retro.update\` — update_retro
+- \`plugin::paul-brain.gap.update\` — update_gap
 - \`plugin::paul-brain.rule.write\` — add_rule
 - \`plugin::paul-brain.todo.write\` — add_todo, update_todo, complete_todo
+- \`plugin::paul-brain.goal.read\` — list_goals, get_goal_progress
+- \`plugin::paul-brain.goal.write\` — add_goal, update_goal, log_checkin
 - \`plugin::paul-brain.forget\` — forget (dangerous, usually not granted)
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.2.0";
-const register$l = (strapi2) => {
+const PLUGIN_VERSION = "1.4.0";
+const register$u = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
     title: "Get Brain Usage Guide",
@@ -20051,7 +20203,7 @@ Plugin version: ${PLUGIN_VERSION}`
 };
 const getBrainGuide = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$l
+  register: register$u
 }, Symbol.toStringTag, { value: "Module" }));
 function stripNullish(obj) {
   if (obj === null || obj === void 0) {
@@ -20071,7 +20223,7 @@ function stripNullish(obj) {
   }
   return obj;
 }
-const register$k = (strapi2) => {
+const register$t = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "recall",
     title: "Recall from Brain",
@@ -20126,9 +20278,9 @@ const register$k = (strapi2) => {
 };
 const recall = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$k
+  register: register$t
 }, Symbol.toStringTag, { value: "Module" }));
-const register$j = (strapi2) => {
+const register$s = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_entity",
     title: "Get Brain Entity",
@@ -20181,9 +20333,9 @@ const register$j = (strapi2) => {
 };
 const getEntity = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$j
+  register: register$s
 }, Symbol.toStringTag, { value: "Module" }));
-const register$i = (strapi2) => {
+const register$r = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_recent",
     title: "List Recent Brain Items",
@@ -20267,13 +20419,13 @@ const register$i = (strapi2) => {
 };
 const listRecent = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$i
+  register: register$r
 }, Symbol.toStringTag, { value: "Module" }));
-const register$h = (strapi2) => {
+const register$q = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "remember",
     title: "Remember in Brain",
-    description: "Create a note OR merge with existing (by slug/alias). Default mode: merge (appends). Use replace to overwrite, new to force new. Auto-creates missing linked entities with createMissing. Always set tags and source_bot. See get_brain_guide for usage.",
+    description: "Create a note with duplicate detection. onDuplicate: merge (append to existing), new (force new), supersede (mark old as superseded). Always set tags and source_bot.",
     resolveInputSchema: () => object({
       title: string().describe("Note title (used to generate slug)"),
       body: string().optional().describe("Note body (markdown)"),
@@ -20285,18 +20437,31 @@ const register$h = (strapi2) => {
       source_bot: string().optional().describe("Bot identifier that created this"),
       pinned: boolean().optional().describe("Pin this note for higher search ranking"),
       expires_on: string().optional().describe("Expiration date (ISO format)"),
-      mode: _enum(["merge", "replace", "new"]).optional().describe("merge: append to existing (default), replace: overwrite, new: force new"),
+      onDuplicate: _enum(["merge", "new", "supersede"]).optional().describe("How to handle duplicates: merge (append), new (force new), supersede (mark old superseded)"),
       createMissing: boolean().optional().describe("Auto-create missing people/projects/sources by name"),
       link_people: array(string()).optional().describe("People names or slugs to link"),
       link_projects: array(string()).optional().describe("Project names or slugs to link"),
       link_sources: array(string()).optional().describe("Source titles or slugs to link")
     }),
-    resolveOutputSchema: () => object({
-      created: boolean(),
-      documentId: string(),
-      slug: string(),
-      message: string()
-    }),
+    resolveOutputSchema: () => union([
+      object({
+        needsDecision: literal(true),
+        candidates: array(object({
+          documentId: string(),
+          title: string(),
+          slug: string(),
+          kind: string().optional(),
+          summary: string().optional()
+        }))
+      }),
+      object({
+        created: boolean(),
+        documentId: string(),
+        slug: string(),
+        message: string(),
+        superseded: string().optional()
+      })
+    ]),
     auth: {
       policies: [{ action: getActionId("note.write") }]
     },
@@ -20304,11 +20469,36 @@ const register$h = (strapi2) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
       const uid = getUid("note");
       const slug = brainService.slugify(args.title);
-      const mode2 = args.mode || "merge";
+      if (!args.onDuplicate) {
+        const candidates = await brainService.findDuplicateNotes(args.title);
+        if (candidates.length > 0) {
+          const output2 = stripNullish({
+            needsDecision: true,
+            candidates: candidates.map((c) => ({
+              documentId: c.documentId,
+              title: c.title,
+              slug: c.slug,
+              kind: c.kind,
+              summary: c.summary
+            }))
+          });
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(output2, null, 2)
+              }
+            ],
+            structuredContent: output2
+          };
+        }
+      }
       const existing = await brainService.findBySlugOrAlias("note", slug);
       let result;
       let created = false;
       let message = "";
+      let supersededId;
+      const mode2 = args.onDuplicate || "merge";
       if (existing.exists && mode2 !== "new") {
         if (mode2 === "merge") {
           result = await brainService.mergeNote(existing.documentId, {
@@ -20323,6 +20513,17 @@ const register$h = (strapi2) => {
             expires_on: args.expires_on
           });
           message = "Merged with existing note";
+        } else if (mode2 === "supersede") {
+          result = await createNewNote(strapi22, uid, args, slug, brainService);
+          await strapi22.documents(uid).update({
+            documentId: existing.documentId,
+            data: {
+              supersededBy: { connect: [{ documentId: result.documentId }] }
+            }
+          });
+          created = true;
+          message = "Created new note and superseded old one";
+          supersededId = existing.documentId;
         } else {
           result = await strapi22.documents(uid).update({
             documentId: existing.documentId,
@@ -20342,79 +20543,17 @@ const register$h = (strapi2) => {
           message = "Replaced existing note";
         }
       } else {
-        const data = {
-          title: args.title,
-          slug,
-          body: args.body,
-          summary: args.summary,
-          kind: args.kind || "fact",
-          videoId: args.videoId,
-          tags: args.tags || [],
-          confidence: args.confidence || "medium",
-          source_bot: args.source_bot,
-          pinned: args.pinned || false,
-          expires_on: args.expires_on
-        };
-        if (args.createMissing) {
-          if (args.link_people) {
-            const peopleIds = await Promise.all(
-              args.link_people.map(async (name) => {
-                const personSlug = brainService.slugify(name);
-                const existingPerson = await brainService.findBySlugOrAlias("person", personSlug);
-                if (existingPerson.exists) {
-                  return existingPerson.documentId;
-                }
-                const newPerson = await strapi22.documents(getUid("person")).create({
-                  data: { name, slug: personSlug }
-                });
-                return newPerson.documentId;
-              })
-            );
-            data.people = { connect: peopleIds.map((id) => ({ documentId: id })) };
-          }
-          if (args.link_projects) {
-            const projectIds = await Promise.all(
-              args.link_projects.map(async (name) => {
-                const projectSlug = brainService.slugify(name);
-                const existingProject = await brainService.findBySlugOrAlias("project", projectSlug);
-                if (existingProject.exists) {
-                  return existingProject.documentId;
-                }
-                const newProject = await strapi22.documents(getUid("project")).create({
-                  data: { name, slug: projectSlug }
-                });
-                return newProject.documentId;
-              })
-            );
-            data.projects = { connect: projectIds.map((id) => ({ documentId: id })) };
-          }
-          if (args.link_sources) {
-            const sourceIds = await Promise.all(
-              args.link_sources.map(async (title) => {
-                const sourceSlug = brainService.slugify(title);
-                const existingSource = await brainService.findBySlugOrAlias("source", sourceSlug);
-                if (existingSource.exists) {
-                  return existingSource.documentId;
-                }
-                const newSource = await strapi22.documents(getUid("source")).create({
-                  data: { title, slug: sourceSlug }
-                });
-                return newSource.documentId;
-              })
-            );
-            data.sources = { connect: sourceIds.map((id) => ({ documentId: id })) };
-          }
-        }
-        result = await strapi22.documents(uid).create({ data });
+        result = await createNewNote(strapi22, uid, args, slug, brainService);
         created = true;
         message = "Created new note";
       }
-      const output = {
+      const output = stripNullish({
         created,
         documentId: result.documentId,
         slug: result.slug,
-        message
-      };
+        message,
+        superseded: supersededId
+      });
       return {
         content: [
           {
@@ -20427,11 +20566,77 @@ const register$h = (strapi2) => {
     }
   });
 };
+async function createNewNote(strapi2, uid, args, slug, brainService) {
+  const data = {
+    title: args.title,
+    slug,
+    body: args.body,
+    summary: args.summary,
+    kind: args.kind || "fact",
+    videoId: args.videoId,
+    tags: args.tags || [],
+    confidence: args.confidence || "medium",
+    source_bot: args.source_bot,
+    pinned: args.pinned || false,
+    expires_on: args.expires_on
+  };
+  if (args.createMissing) {
+    if (args.link_people) {
+      const peopleIds = await Promise.all(
+        args.link_people.map(async (name) => {
+          const personSlug = brainService.slugify(name);
+          const existingPerson = await brainService.findBySlugOrAlias("person", personSlug);
+          if (existingPerson.exists) {
+            return existingPerson.documentId;
+          }
+          const newPerson = await strapi2.documents(getUid("person")).create({
+            data: { name, slug: personSlug }
+          });
+          return newPerson.documentId;
+        })
+      );
+      data.people = { connect: peopleIds.map((id) => ({ documentId: id })) };
+    }
+    if (args.link_projects) {
+      const projectIds = await Promise.all(
+        args.link_projects.map(async (name) => {
+          const projectSlug = brainService.slugify(name);
+          const existingProject = await brainService.findBySlugOrAlias("project", projectSlug);
+          if (existingProject.exists) {
+            return existingProject.documentId;
+          }
+          const newProject = await strapi2.documents(getUid("project")).create({
+            data: { name, slug: projectSlug }
+          });
+          return newProject.documentId;
+        })
+      );
+      data.projects = { connect: projectIds.map((id) => ({ documentId: id })) };
+    }
+    if (args.link_sources) {
+      const sourceIds = await Promise.all(
+        args.link_sources.map(async (title) => {
+          const sourceSlug = brainService.slugify(title);
+          const existingSource = await brainService.findBySlugOrAlias("source", sourceSlug);
+          if (existingSource.exists) {
+            return existingSource.documentId;
+          }
+          const newSource = await strapi2.documents(getUid("source")).create({
+            data: { title, slug: sourceSlug }
+          });
+          return newSource.documentId;
+        })
+      );
+      data.sources = { connect: sourceIds.map((id) => ({ documentId: id })) };
+    }
+  }
+  return strapi2.documents(uid).create({ data });
+}
 const remember = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$h
+  register: register$q
 }, Symbol.toStringTag, { value: "Module" }));
-const register$g = (strapi2) => {
+const register$p = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_note",
     title: "Update Brain Note",
@@ -20522,9 +20727,9 @@ ${args.appendBody}` : args.appendBody;
 };
 const updateNote = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$g
+  register: register$p
 }, Symbol.toStringTag, { value: "Module" }));
-const register$f = (strapi2) => {
+const register$o = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "link",
     title: "Link Brain Entities",
@@ -20588,9 +20793,9 @@ const register$f = (strapi2) => {
 };
 const link = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$f
+  register: register$o
 }, Symbol.toStringTag, { value: "Module" }));
-const register$e = (strapi2) => {
+const register$n = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_decision",
     title: "Log Brain Decision",
@@ -20675,9 +20880,9 @@ const register$e = (strapi2) => {
 };
 const logDecision = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$e
+  register: register$n
 }, Symbol.toStringTag, { value: "Module" }));
-const register$d = (strapi2) => {
+const register$m = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "forget",
     title: "Forget from Brain",
@@ -20731,9 +20936,9 @@ const register$d = (strapi2) => {
 };
 const forget = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$d
+  register: register$m
 }, Symbol.toStringTag, { value: "Module" }));
-const register$c = (strapi2) => {
+const register$l = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_retro",
     title: "Log Brain Retro",
@@ -20796,9 +21001,9 @@ const register$c = (strapi2) => {
 };
 const logRetro = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$c
+  register: register$l
 }, Symbol.toStringTag, { value: "Module" }));
-const register$b = (strapi2) => {
+const register$k = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_retros",
     title: "List Brain Retros",
@@ -20860,13 +21065,13 @@ const register$b = (strapi2) => {
 };
 const listRetros = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$b
+  register: register$k
 }, Symbol.toStringTag, { value: "Module" }));
-const register$a = (strapi2) => {
+const register$j = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_gap",
     title: "Log Brain Gap",
-    description: "Create a gap record (request nothing handled well). Increments count if a similar open gap title exists. See get_brain_guide for usage.",
+    description: "Create a gap record (request nothing handled well). If a similar open gap exists, appends to seenDates and returns proposeCapability: true when seenDates reaches 2.",
     resolveInputSchema: () => object({
       title: string().describe("Gap title"),
       date: string().optional().describe("Date of gap (ISO format)"),
@@ -20879,7 +21084,9 @@ const register$a = (strapi2) => {
       documentId: string(),
       slug: string(),
       count: number(),
-      message: string()
+      message: string(),
+      proposeCapability: boolean().optional(),
+      seenDates: array(string()).optional()
     }),
     auth: {
       policies: [{ action: getActionId("meta.write") }]
@@ -20888,6 +21095,7 @@ const register$a = (strapi2) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
       const uid = getUid("gap");
       const slug = brainService.slugify(args.title);
+      const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
       const existing = await strapi22.documents(uid).findMany({
         filters: {
           slug: { $eq: slug },
@@ -20898,22 +21106,32 @@ const register$a = (strapi2) => {
       let result;
       let created = false;
       let message = "";
+      let proposeCapability = false;
       if (existing.length > 0) {
         const existingGap = existing[0];
-        const newCount = (existingGap.count || 1) + 1;
+        const seenDates = Array.isArray(existingGap.seenDates) ? [...existingGap.seenDates] : [];
+        if (!seenDates.includes(today)) {
+          seenDates.push(today);
+        }
+        if (seenDates.length >= 2) {
+          proposeCapability = true;
+        }
         result = await strapi22.documents(uid).update({
           documentId: existingGap.documentId,
           data: {
-            count: newCount
+            count: (existingGap.count || 1) + 1,
+            seenDates
           }
         });
         created = false;
-        message = `Incremented existing gap count to ${newCount}`;
+        message = `Appended to existing gap seenDates (count: ${result.count})`;
       } else {
         const data = {
           title: args.title,
           slug,
-          date: args.date || (/* @__PURE__ */ new Date()).toISOString(),
+          date: args.date || today,
+          firstSeen: today,
+          seenDates: [today],
           request: args.request,
           whatWasNeeded: args.whatWasNeeded,
           count: 1,
@@ -20923,13 +21141,15 @@ const register$a = (strapi2) => {
         created = true;
         message = "Created new gap";
       }
-      const output = {
+      const output = stripNullish({
         created,
         documentId: result.documentId,
         slug: result.slug,
         count: result.count,
-        message
-      };
+        message,
+        proposeCapability: proposeCapability || void 0,
+        seenDates: result.seenDates
+      });
       return {
         content: [
           {
@@ -20944,9 +21164,9 @@ const register$a = (strapi2) => {
 };
 const logGap = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$a
+  register: register$j
 }, Symbol.toStringTag, { value: "Module" }));
-const register$9 = (strapi2) => {
+const register$i = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_gaps",
     title: "List Brain Gaps",
@@ -21010,9 +21230,9 @@ const register$9 = (strapi2) => {
 };
 const listGaps = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$9
+  register: register$i
 }, Symbol.toStringTag, { value: "Module" }));
-const register$8 = (strapi2) => {
+const register$h = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "record_capability",
     title: "Record Brain Capability",
@@ -21084,9 +21304,9 @@ const register$8 = (strapi2) => {
 };
 const recordCapability = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$8
+  register: register$h
 }, Symbol.toStringTag, { value: "Module" }));
-const register$7 = (strapi2) => {
+const register$g = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_capabilities",
     title: "List Brain Capabilities",
@@ -21148,9 +21368,9 @@ const register$7 = (strapi2) => {
 };
 const listCapabilities = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$7
+  register: register$g
 }, Symbol.toStringTag, { value: "Module" }));
-const register$6 = (strapi2) => {
+const register$f = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_rule",
     title: "Add Brain Rule",
@@ -21197,9 +21417,9 @@ const register$6 = (strapi2) => {
 };
 const addRule = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$6
+  register: register$f
 }, Symbol.toStringTag, { value: "Module" }));
-const register$5 = (strapi2) => {
+const register$e = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_rules",
     title: "List Brain Rules",
@@ -21268,13 +21488,13 @@ const register$5 = (strapi2) => {
 };
 const listRules = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$5
+  register: register$e
 }, Symbol.toStringTag, { value: "Module" }));
-const register$4 = (strapi2) => {
+const register$d = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_todo",
     title: "Add Todo",
-    description: "Create a new todo item. Bot-captured todos default to inbox status for Paul to confirm. Priority: P0 (urgent today), P1 (this week), P2 (soon, default), P3 (someday). Links are JSON objects with type (email|github|calendar|doc|url|other), label, url, note.",
+    description: "Create a new todo item with duplicate detection. Bot-captured todos default to inbox status. Priority: P0 (urgent today), P1 (this week), P2 (soon, default), P3 (someday). onDuplicate: merge (append to existing), new (force new), supersede (mark old as superseded).",
     resolveInputSchema: () => object({
       title: string().describe("Todo title"),
       status: _enum(["inbox", "next", "doing", "waiting", "done", "dropped"]).optional().describe("Status (default: inbox)"),
@@ -21295,68 +21515,136 @@ const register$4 = (strapi2) => {
       waitingOn: string().optional().describe("What/who this is waiting on"),
       source: _enum(["paul", "email", "meeting", "bot", "other"]).optional().describe("Source (default: other)"),
       capturedBy: string().optional().describe("Bot or system that captured this"),
-      logEntry: string().optional().describe("Initial log entry")
+      logEntry: string().optional().describe("Initial log entry"),
+      onDuplicate: _enum(["merge", "new", "supersede"]).optional().describe("How to handle duplicates: merge (append), new (force new), supersede (mark old superseded)")
     }),
-    resolveOutputSchema: () => object({
-      documentId: string(),
-      title: string(),
-      status: string(),
-      priority: string()
-    }),
+    resolveOutputSchema: () => union([
+      object({
+        needsDecision: literal(true),
+        candidates: array(object({
+          documentId: string(),
+          title: string(),
+          status: string(),
+          priority: string(),
+          dueDate: string().optional(),
+          project: any().optional()
+        }))
+      }),
+      object({
+        documentId: string(),
+        title: string(),
+        status: string(),
+        priority: string(),
+        merged: boolean().optional(),
+        superseded: string().optional()
+      })
+    ]),
     auth: {
       policies: [{ action: getActionId("todo.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
+      const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
       const uid = getUid("todo");
-      const data = {
-        title: args.title,
-        status: args.status || "inbox",
-        priority: args.priority || "P2",
-        dueDate: args.dueDate,
-        doDate: args.doDate,
-        goal: args.goal,
-        acceptanceCriteria: args.acceptanceCriteria,
-        context: args.context,
-        links: args.links || [],
-        waitingOn: args.waitingOn,
-        source: args.source || "other",
-        capturedBy: args.capturedBy,
-        log: []
-      };
-      if (args.logEntry) {
-        data.log = [{
-          date: (/* @__PURE__ */ new Date()).toISOString(),
-          entry: args.logEntry,
-          by: args.capturedBy || "system"
-        }];
-      }
-      if (args.relatedNoteIds && args.relatedNoteIds.length > 0) {
-        data.relatedNotes = {
-          connect: args.relatedNoteIds.map((id) => ({ documentId: id }))
-        };
-      }
-      if (args.projectId) {
-        const projectUid = getUid("project");
-        const projects = await strapi22.documents(projectUid).findMany({
-          filters: {
-            $or: [
-              { documentId: { $eq: args.projectId } },
-              { slug: { $eq: args.projectId } }
-            ]
-          },
-          limit: 1
-        });
-        if (projects.length > 0) {
-          data.project = { connect: [{ documentId: projects[0].documentId }] };
+      if (!args.onDuplicate) {
+        const candidates = await brainService.findDuplicateTodos(args.title, args.dueDate, args.projectId);
+        if (candidates.length > 0) {
+          const output2 = stripNullish({
+            needsDecision: true,
+            candidates: candidates.map((c) => ({
+              documentId: c.documentId,
+              title: c.title,
+              status: c.status,
+              priority: c.priority,
+              dueDate: c.dueDate,
+              project: c.project
+            }))
+          });
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(output2, null, 2)
+              }
+            ],
+            structuredContent: output2
+          };
         }
       }
-      const result = await strapi22.documents(uid).create({ data });
-      const output = {
+      if (args.onDuplicate && args.onDuplicate !== "new") {
+        const candidates = await brainService.findDuplicateTodos(args.title, args.dueDate, args.projectId);
+        if (candidates.length > 0) {
+          const existing = candidates[0];
+          if (args.onDuplicate === "merge") {
+            const updates = {};
+            if (args.context) {
+              updates.context = existing.context ? `${existing.context}
+
+---
+
+${args.context}` : args.context;
+            }
+            const logEntries = Array.isArray(existing.log) ? [...existing.log] : [];
+            logEntries.push({
+              date: (/* @__PURE__ */ new Date()).toISOString(),
+              entry: `Merged with new todo: ${args.title}${args.logEntry ? ` - ${args.logEntry}` : ""}`,
+              by: args.capturedBy || "system"
+            });
+            updates.log = logEntries;
+            const result2 = await strapi22.documents(uid).update({
+              documentId: existing.documentId,
+              data: updates
+            });
+            const output2 = stripNullish({
+              documentId: result2.documentId,
+              title: result2.title,
+              status: result2.status,
+              priority: result2.priority,
+              merged: true
+            });
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(output2, null, 2)
+                }
+              ],
+              structuredContent: output2
+            };
+          } else if (args.onDuplicate === "supersede") {
+            const newTodo = await createNewTodo(strapi22, uid, args);
+            await strapi22.documents(uid).update({
+              documentId: existing.documentId,
+              data: {
+                status: "superseded",
+                supersededBy: { connect: [{ documentId: newTodo.documentId }] }
+              }
+            });
+            const output2 = stripNullish({
+              documentId: newTodo.documentId,
+              title: newTodo.title,
+              status: newTodo.status,
+              priority: newTodo.priority,
+              superseded: existing.documentId
+            });
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(output2, null, 2)
+                }
+              ],
+              structuredContent: output2
+            };
+          }
+        }
+      }
+      const result = await createNewTodo(strapi22, uid, args);
+      const output = stripNullish({
         documentId: result.documentId,
         title: result.title,
         status: result.status,
         priority: result.priority
-      };
+      });
       return {
         content: [
           {
@@ -21369,11 +21657,56 @@ const register$4 = (strapi2) => {
     }
   });
 };
+async function createNewTodo(strapi2, uid, args) {
+  const data = {
+    title: args.title,
+    status: args.status || "inbox",
+    priority: args.priority || "P2",
+    dueDate: args.dueDate,
+    doDate: args.doDate,
+    goal: args.goal,
+    acceptanceCriteria: args.acceptanceCriteria,
+    context: args.context,
+    links: args.links || [],
+    waitingOn: args.waitingOn,
+    source: args.source || "other",
+    capturedBy: args.capturedBy,
+    log: []
+  };
+  if (args.logEntry) {
+    data.log = [{
+      date: (/* @__PURE__ */ new Date()).toISOString(),
+      entry: args.logEntry,
+      by: args.capturedBy || "system"
+    }];
+  }
+  if (args.relatedNoteIds && args.relatedNoteIds.length > 0) {
+    data.relatedNotes = {
+      connect: args.relatedNoteIds.map((id) => ({ documentId: id }))
+    };
+  }
+  if (args.projectId) {
+    const projectUid = getUid("project");
+    const projects = await strapi2.documents(projectUid).findMany({
+      filters: {
+        $or: [
+          { documentId: { $eq: args.projectId } },
+          { slug: { $eq: args.projectId } }
+        ]
+      },
+      limit: 1
+    });
+    if (projects.length > 0) {
+      data.project = { connect: [{ documentId: projects[0].documentId }] };
+    }
+  }
+  return strapi2.documents(uid).create({ data });
+}
 const addTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$4
+  register: register$d
 }, Symbol.toStringTag, { value: "Module" }));
-const register$3 = (strapi2) => {
+const register$c = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_todo",
     title: "Update Todo",
@@ -21478,9 +21811,9 @@ ${args.appendContext}` : args.appendContext;
 };
 const updateTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$3
+  register: register$c
 }, Symbol.toStringTag, { value: "Module" }));
-const register$2 = (strapi2) => {
+const register$b = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_todos",
     title: "List Todos",
@@ -21612,9 +21945,9 @@ const register$2 = (strapi2) => {
 };
 const listTodos = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$2
+  register: register$b
 }, Symbol.toStringTag, { value: "Module" }));
-const register$1 = (strapi2) => {
+const register$a = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_todo",
     title: "Get Todo",
@@ -21710,9 +22043,9 @@ const register$1 = (strapi2) => {
 };
 const getTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$1
+  register: register$a
 }, Symbol.toStringTag, { value: "Module" }));
-const register = (strapi2) => {
+const register$9 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "complete_todo",
     title: "Complete Todo",
@@ -21779,6 +22112,1179 @@ const register = (strapi2) => {
 };
 const completeTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  register: register$9
+}, Symbol.toStringTag, { value: "Module" }));
+const register$8 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "add_goal",
+    title: "Add Goal",
+    description: "Create a new goal with daily or weekly check-ins. Categories: health, fitness, work, learning, personal, other. Refuses duplicate active goals by title.",
+    resolveInputSchema: () => object({
+      title: string().describe("Goal title"),
+      description: string().optional().describe("Goal description"),
+      category: _enum(["health", "fitness", "work", "learning", "personal", "other"]).optional().describe("Goal category"),
+      cadence: _enum(["daily", "weekly"]).optional().describe("Check-in cadence (default: daily)"),
+      target: string().optional().describe('Target metric or description (e.g. "last meal by 5 PM")'),
+      startDate: string().optional().describe("Start date (ISO format, defaults to today)")
+    }),
+    resolveOutputSchema: () => object({
+      documentId: string(),
+      title: string(),
+      category: string().nullish(),
+      cadence: string(),
+      status: string(),
+      currentStreak: number(),
+      bestStreak: number(),
+      alreadyExists: boolean().optional()
+    }),
+    auth: {
+      policies: [{ action: getActionId("goal.write") }]
+    },
+    createHandler: (strapi22) => async ({ args, context }) => {
+      const uid = getUid("goal");
+      const existingGoals = await strapi22.documents(uid).findMany({
+        filters: {
+          title: { $eq: args.title },
+          status: { $eq: "active" }
+        },
+        limit: 1
+      });
+      if (existingGoals.length > 0) {
+        const existing = existingGoals[0];
+        const output2 = stripNullish({
+          documentId: existing.documentId,
+          title: existing.title,
+          category: existing.category,
+          cadence: existing.cadence,
+          status: existing.status,
+          currentStreak: existing.currentStreak,
+          bestStreak: existing.bestStreak,
+          alreadyExists: true
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(output2, null, 2)
+            }
+          ],
+          structuredContent: output2
+        };
+      }
+      const data = {
+        title: args.title,
+        description: args.description,
+        category: args.category,
+        cadence: args.cadence || "daily",
+        target: args.target,
+        status: "active",
+        startDate: args.startDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+        currentStreak: 0,
+        bestStreak: 0
+      };
+      const result = await strapi22.documents(uid).create({ data });
+      const output = stripNullish({
+        documentId: result.documentId,
+        title: result.title,
+        category: result.category,
+        cadence: result.cadence,
+        status: result.status,
+        currentStreak: result.currentStreak,
+        bestStreak: result.bestStreak
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const addGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$8
+}, Symbol.toStringTag, { value: "Module" }));
+const register$7 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "list_goals",
+    title: "List Goals",
+    description: "List goals with filters by status and category. Includes current and best streaks.",
+    resolveInputSchema: () => object({
+      status: array(_enum(["active", "paused", "done", "dropped"])).optional().describe("Filter by status"),
+      category: array(_enum(["health", "fitness", "work", "learning", "personal", "other"])).optional().describe("Filter by category"),
+      limit: number().min(1).max(100).optional().describe("Max results (default: 50)")
+    }),
+    resolveOutputSchema: () => object({
+      goals: array(object({
+        documentId: string(),
+        title: string(),
+        description: string().nullish(),
+        category: string().nullish(),
+        cadence: string(),
+        target: string().nullish(),
+        status: string(),
+        startDate: string().nullish(),
+        currentStreak: number(),
+        bestStreak: number(),
+        lastCheckinDate: string().nullish()
+      })),
+      count: number()
+    }),
+    auth: {
+      policies: [{ action: getActionId("goal.read") }]
+    },
+    createHandler: (strapi22) => async ({ args, context }) => {
+      const uid = getUid("goal");
+      const limit = args.limit || 50;
+      const filters2 = {};
+      if (args.status && args.status.length > 0) {
+        filters2.status = { $in: args.status };
+      }
+      if (args.category && args.category.length > 0) {
+        filters2.category = { $in: args.category };
+      }
+      const goals = await strapi22.documents(uid).findMany({
+        filters: filters2,
+        limit,
+        sort: { createdAt: "desc" }
+      });
+      const formattedGoals = goals.map((goal2) => ({
+        documentId: goal2.documentId,
+        title: goal2.title,
+        description: goal2.description,
+        category: goal2.category,
+        cadence: goal2.cadence,
+        target: goal2.target,
+        status: goal2.status,
+        startDate: goal2.startDate,
+        currentStreak: goal2.currentStreak,
+        bestStreak: goal2.bestStreak,
+        lastCheckinDate: goal2.lastCheckinDate
+      }));
+      const output = stripNullish({
+        goals: formattedGoals,
+        count: formattedGoals.length
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const listGoals = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$7
+}, Symbol.toStringTag, { value: "Module" }));
+function calculateStreaks(checkins, cadence) {
+  if (checkins.length === 0) {
+    return { currentStreak: 0, bestStreak: 0 };
+  }
+  const sortedCheckins = [...checkins].sort((a, b) => b.date.localeCompare(a.date));
+  const latestCheckin = sortedCheckins[0];
+  const latestDate = new Date(latestCheckin.date);
+  const today = /* @__PURE__ */ new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysDiff = Math.floor((today.getTime() - latestDate.getTime()) / (1e3 * 60 * 60 * 24));
+  let currentStreak = 0;
+  if (cadence === "daily") {
+    if (daysDiff > 1) {
+      currentStreak = 0;
+    } else {
+      for (let i = 0; i < sortedCheckins.length; i++) {
+        const checkin = sortedCheckins[i];
+        if (!checkin.met) break;
+        if (i === 0) {
+          currentStreak = 1;
+        } else {
+          const prevDate = new Date(sortedCheckins[i - 1].date);
+          const currDate = new Date(checkin.date);
+          const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1e3 * 60 * 60 * 24));
+          if (diff === 1) {
+            currentStreak++;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+  } else {
+    if (daysDiff > 7) {
+      currentStreak = 0;
+    } else {
+      for (let i = 0; i < sortedCheckins.length; i++) {
+        const checkin = sortedCheckins[i];
+        if (!checkin.met) break;
+        if (i === 0) {
+          currentStreak = 1;
+        } else {
+          const prevDate = new Date(sortedCheckins[i - 1].date);
+          const currDate = new Date(checkin.date);
+          const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1e3 * 60 * 60 * 24));
+          if (diff >= 6 && diff <= 8) {
+            currentStreak++;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+  }
+  let bestStreak = 0;
+  let tempStreak = 0;
+  for (let i = sortedCheckins.length - 1; i >= 0; i--) {
+    const checkin = sortedCheckins[i];
+    if (checkin.met) {
+      if (i === sortedCheckins.length - 1) {
+        tempStreak = 1;
+      } else {
+        const currDate = new Date(checkin.date);
+        const prevDate = new Date(sortedCheckins[i + 1].date);
+        const diff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1e3 * 60 * 60 * 24));
+        if (cadence === "daily" && diff === 1) {
+          tempStreak++;
+        } else if (cadence === "weekly" && diff >= 6 && diff <= 8) {
+          tempStreak++;
+        } else {
+          tempStreak = 1;
+        }
+      }
+      bestStreak = Math.max(bestStreak, tempStreak);
+    } else {
+      tempStreak = 0;
+    }
+  }
+  return { currentStreak, bestStreak };
+}
+const register$6 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "log_checkin",
+    title: "Log Goal Check-in",
+    description: "Log a check-in for a goal. Updates existing check-in for the same date. Recomputes currentStreak (consecutive met days ending on latest check-in) and bestStreak. For daily goals, missed/unlogged days break the streak.",
+    resolveInputSchema: () => object({
+      goal: string().describe("Goal documentId or title"),
+      date: string().optional().describe("Check-in date (ISO format, defaults to today in America/Los_Angeles)"),
+      met: boolean().describe("Whether the goal was met"),
+      note: string().optional().describe("Optional note"),
+      loggedBy: string().optional().describe("Who logged this check-in")
+    }),
+    resolveOutputSchema: () => object({
+      checkinId: string(),
+      goalId: string(),
+      date: string(),
+      met: boolean(),
+      currentStreak: number(),
+      bestStreak: number()
+    }),
+    auth: {
+      policies: [{ action: getActionId("goal.write") }]
+    },
+    createHandler: (strapi22) => async ({ args, context }) => {
+      const goalUid = getUid("goal");
+      const checkinUid = getUid("goal-checkin");
+      const goals = await strapi22.documents(goalUid).findMany({
+        filters: {
+          $or: [
+            { documentId: { $eq: args.goal } },
+            { title: { $eq: args.goal } }
+          ]
+        },
+        limit: 1
+      });
+      if (goals.length === 0) {
+        throw new Error(`Goal not found: ${args.goal}`);
+      }
+      const goal2 = goals[0];
+      const checkinDate = args.date || (/* @__PURE__ */ new Date()).toLocaleString("en-US", {
+        timeZone: "America/Los_Angeles",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).split(",")[0].split("/").reverse().join("-").replace(/(\d+)-(\d+)-(\d+)/, "$1-$3-$2");
+      const existingCheckins = await strapi22.documents(checkinUid).findMany({
+        filters: {
+          goal: { documentId: { $eq: goal2.documentId } },
+          date: { $eq: checkinDate }
+        },
+        limit: 1
+      });
+      let checkin;
+      if (existingCheckins.length > 0) {
+        checkin = await strapi22.documents(checkinUid).update({
+          documentId: existingCheckins[0].documentId,
+          data: {
+            met: args.met,
+            note: args.note,
+            loggedBy: args.loggedBy
+          }
+        });
+      } else {
+        checkin = await strapi22.documents(checkinUid).create({
+          data: {
+            goal: { connect: [{ documentId: goal2.documentId }] },
+            date: checkinDate,
+            met: args.met,
+            note: args.note,
+            loggedBy: args.loggedBy
+          }
+        });
+      }
+      const allCheckins = await strapi22.documents(checkinUid).findMany({
+        filters: {
+          goal: { documentId: { $eq: goal2.documentId } }
+        },
+        limit: 1e3
+      });
+      const { currentStreak, bestStreak } = calculateStreaks(allCheckins, goal2.cadence);
+      await strapi22.documents(goalUid).update({
+        documentId: goal2.documentId,
+        data: {
+          currentStreak,
+          bestStreak,
+          lastCheckinDate: checkinDate
+        }
+      });
+      const output = stripNullish({
+        checkinId: checkin.documentId,
+        goalId: goal2.documentId,
+        date: checkinDate,
+        met: args.met,
+        currentStreak,
+        bestStreak
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const logCheckin = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$6
+}, Symbol.toStringTag, { value: "Module" }));
+const register$5 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "get_goal_progress",
+    title: "Get Goal Progress",
+    description: "Get goal progress including streaks, met rate over last 7 and 30 days, and recent check-ins.",
+    resolveInputSchema: () => object({
+      goal: string().describe("Goal documentId or title"),
+      recentCheckinsLimit: number().min(1).max(100).optional().describe("Number of recent check-ins to return (default: 14)")
+    }),
+    resolveOutputSchema: () => object({
+      goalId: string(),
+      title: string(),
+      status: string(),
+      currentStreak: number(),
+      bestStreak: number(),
+      metRateLast7Days: number().nullish(),
+      metRateLast30Days: number().nullish(),
+      recentCheckins: array(object({
+        date: string(),
+        met: boolean(),
+        note: string().nullish(),
+        loggedBy: string().nullish()
+      }))
+    }),
+    auth: {
+      policies: [{ action: getActionId("goal.read") }]
+    },
+    createHandler: (strapi22) => async ({ args, context }) => {
+      const goalUid = getUid("goal");
+      const checkinUid = getUid("goal-checkin");
+      const goals = await strapi22.documents(goalUid).findMany({
+        filters: {
+          $or: [
+            { documentId: { $eq: args.goal } },
+            { title: { $eq: args.goal } }
+          ]
+        },
+        limit: 1
+      });
+      if (goals.length === 0) {
+        throw new Error(`Goal not found: ${args.goal}`);
+      }
+      const goal2 = goals[0];
+      const allCheckins = await strapi22.documents(checkinUid).findMany({
+        filters: {
+          goal: { documentId: { $eq: goal2.documentId } }
+        },
+        limit: 1e3,
+        sort: { date: "desc" }
+      });
+      const recentLimit = args.recentCheckinsLimit || 14;
+      const recentCheckins = allCheckins.slice(0, recentLimit).map((c) => ({
+        date: c.date,
+        met: c.met,
+        note: c.note,
+        loggedBy: c.loggedBy
+      }));
+      const now = /* @__PURE__ */ new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3);
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1e3);
+      const checkins7Days = allCheckins.filter((c) => new Date(c.date) >= sevenDaysAgo);
+      const checkins30Days = allCheckins.filter((c) => new Date(c.date) >= thirtyDaysAgo);
+      let metRateLast7Days = null;
+      if (checkins7Days.length > 0) {
+        const metCount = checkins7Days.filter((c) => c.met).length;
+        metRateLast7Days = Math.round(metCount / checkins7Days.length * 100) / 100;
+      }
+      let metRateLast30Days = null;
+      if (checkins30Days.length > 0) {
+        const metCount = checkins30Days.filter((c) => c.met).length;
+        metRateLast30Days = Math.round(metCount / checkins30Days.length * 100) / 100;
+      }
+      const output = stripNullish({
+        goalId: goal2.documentId,
+        title: goal2.title,
+        status: goal2.status,
+        currentStreak: goal2.currentStreak,
+        bestStreak: goal2.bestStreak,
+        metRateLast7Days,
+        metRateLast30Days,
+        recentCheckins
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const getGoalProgress = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$5
+}, Symbol.toStringTag, { value: "Module" }));
+const register$4 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "update_goal",
+    title: "Update Goal",
+    description: "Update goal fields including status, description, category, target, etc.",
+    resolveInputSchema: () => object({
+      goal: string().describe("Goal documentId or title"),
+      status: _enum(["active", "paused", "done", "dropped"]).optional().describe("Update status"),
+      description: string().optional().describe("Update description"),
+      category: _enum(["health", "fitness", "work", "learning", "personal", "other"]).optional().describe("Update category"),
+      target: string().optional().describe("Update target"),
+      cadence: _enum(["daily", "weekly"]).optional().describe("Update cadence")
+    }),
+    resolveOutputSchema: () => object({
+      documentId: string(),
+      title: string(),
+      status: string(),
+      description: string().nullish(),
+      category: string().nullish(),
+      target: string().nullish(),
+      cadence: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("goal.write") }]
+    },
+    createHandler: (strapi22) => async ({ args, context }) => {
+      const uid = getUid("goal");
+      const goals = await strapi22.documents(uid).findMany({
+        filters: {
+          $or: [
+            { documentId: { $eq: args.goal } },
+            { title: { $eq: args.goal } }
+          ]
+        },
+        limit: 1
+      });
+      if (goals.length === 0) {
+        throw new Error(`Goal not found: ${args.goal}`);
+      }
+      const goal2 = goals[0];
+      const updateData = {};
+      if (args.status !== void 0) updateData.status = args.status;
+      if (args.description !== void 0) updateData.description = args.description;
+      if (args.category !== void 0) updateData.category = args.category;
+      if (args.target !== void 0) updateData.target = args.target;
+      if (args.cadence !== void 0) updateData.cadence = args.cadence;
+      const updated = await strapi22.documents(uid).update({
+        documentId: goal2.documentId,
+        data: updateData
+      });
+      const output = stripNullish({
+        documentId: updated.documentId,
+        title: updated.title,
+        status: updated.status,
+        description: updated.description,
+        category: updated.category,
+        target: updated.target,
+        cadence: updated.cadence
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const updateGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$4
+}, Symbol.toStringTag, { value: "Module" }));
+function normalizeTitle(title) {
+  return title.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
+}
+function isSimilar(title1, title2) {
+  const norm1 = normalizeTitle(title1);
+  const norm2 = normalizeTitle(title2);
+  if (norm1 === norm2) return true;
+  const words1 = norm1.split(" ");
+  const words2 = norm2.split(" ");
+  const commonWords = words1.filter((w) => words2.includes(w) && w.length > 3);
+  const similarity = 2 * commonWords.length / (words1.length + words2.length);
+  return similarity > 0.7;
+}
+const register$3 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "health_check",
+    title: "Health Check",
+    description: "Run diagnostic checks on brain data. Returns findings with severity (BLOCK/WARN), kind, type, ids, message, and suggestedFix. Checks for duplicates, missing fields, stale data, orphans, broken relations, old capabilities, and open retros.",
+    resolveInputSchema: () => object({
+      checks: array(_enum([
+        "duplicates",
+        "missing_fields",
+        "stale_notes",
+        "orphans",
+        "broken_relations",
+        "old_capabilities",
+        "open_retros",
+        "sanity"
+      ])).optional().describe("Specific checks to run (default: all)")
+    }),
+    resolveOutputSchema: () => object({
+      findings: array(object({
+        severity: _enum(["BLOCK", "WARN"]),
+        kind: string(),
+        type: string(),
+        ids: array(string()),
+        message: string(),
+        suggestedFix: string()
+      })),
+      summary: object({
+        total: number(),
+        blocks: number(),
+        warns: number()
+      })
+    }),
+    auth: {
+      policies: [{ action: getActionId("health.read") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const findings = [];
+      const checksToRun = args.checks || [
+        "duplicates",
+        "missing_fields",
+        "stale_notes",
+        "orphans",
+        "broken_relations",
+        "old_capabilities",
+        "open_retros",
+        "sanity"
+      ];
+      if (checksToRun.includes("duplicates")) {
+        const todoUid = getUid("todo");
+        const todos = await strapi22.documents(todoUid).findMany({
+          filters: {
+            status: { $notIn: ["done", "dropped", "superseded"] }
+          },
+          limit: 500
+        });
+        for (let i = 0; i < todos.length; i++) {
+          for (let j = i + 1; j < todos.length; j++) {
+            const t1 = todos[i];
+            const t2 = todos[j];
+            if (isSimilar(t1.title, t2.title)) {
+              const sameDueDate = t1.dueDate && t2.dueDate && t1.dueDate === t2.dueDate;
+              const sameProject = t1.project?.documentId === t2.project?.documentId;
+              if (sameDueDate || sameProject) {
+                findings.push({
+                  severity: "WARN",
+                  kind: "duplicate_todo",
+                  type: "todo",
+                  ids: [t1.documentId, t2.documentId],
+                  message: `Likely duplicate todos: "${t1.title}" and "${t2.title}"`,
+                  suggestedFix: `Review and merge or supersede one: add_todo with onDuplicate: 'supersede'`
+                });
+              }
+            }
+          }
+        }
+        const noteUid = getUid("note");
+        const notes = await strapi22.documents(noteUid).findMany({
+          limit: 500
+        });
+        for (let i = 0; i < notes.length; i++) {
+          for (let j = i + 1; j < notes.length; j++) {
+            const n1 = notes[i];
+            const n2 = notes[j];
+            if (isSimilar(n1.title, n2.title)) {
+              findings.push({
+                severity: "WARN",
+                kind: "duplicate_note",
+                type: "note",
+                ids: [n1.documentId, n2.documentId],
+                message: `Likely duplicate notes: "${n1.title}" and "${n2.title}"`,
+                suggestedFix: `Review and merge or supersede one: remember with onDuplicate: 'supersede'`
+              });
+            }
+          }
+        }
+      }
+      if (checksToRun.includes("missing_fields")) {
+        const todoUid = getUid("todo");
+        const todos = await strapi22.documents(todoUid).findMany({
+          limit: 500
+        });
+        for (const todo2 of todos) {
+          if (!todo2.priority) {
+            findings.push({
+              severity: "WARN",
+              kind: "missing_priority",
+              type: "todo",
+              ids: [todo2.documentId],
+              message: `Todo "${todo2.title}" is missing priority`,
+              suggestedFix: `Set priority: update_todo with priority: 'P2'`
+            });
+          }
+          if (!todo2.status) {
+            findings.push({
+              severity: "WARN",
+              kind: "missing_status",
+              type: "todo",
+              ids: [todo2.documentId],
+              message: `Todo "${todo2.title}" is missing status`,
+              suggestedFix: `Set status: update_todo with status: 'inbox'`
+            });
+          }
+          if (todo2.status === "done" && !todo2.completedAt) {
+            findings.push({
+              severity: "WARN",
+              kind: "missing_completed_at",
+              type: "todo",
+              ids: [todo2.documentId],
+              message: `Done todo "${todo2.title}" is missing completedAt`,
+              suggestedFix: `Set completedAt: update_todo or use complete_todo`
+            });
+          }
+          if (todo2.status === "waiting" && !todo2.waitingOn) {
+            findings.push({
+              severity: "WARN",
+              kind: "missing_waiting_on",
+              type: "todo",
+              ids: [todo2.documentId],
+              message: `Waiting todo "${todo2.title}" is missing waitingOn`,
+              suggestedFix: `Set waitingOn: update_todo with waitingOn: '<description>'`
+            });
+          }
+        }
+      }
+      if (checksToRun.includes("stale_notes")) {
+        const noteUid = getUid("note");
+        const notes = await strapi22.documents(noteUid).findMany({
+          filters: {
+            durability: { $eq: "temporary" }
+          },
+          limit: 500
+        });
+        const now = /* @__PURE__ */ new Date();
+        for (const note2 of notes) {
+          if (note2.verifiedAt) {
+            const verifiedDate = new Date(note2.verifiedAt);
+            const ageInDays = (now.getTime() - verifiedDate.getTime()) / (1e3 * 60 * 60 * 24);
+            if (ageInDays > 90) {
+              findings.push({
+                severity: "WARN",
+                kind: "stale_temporary_note",
+                type: "note",
+                ids: [note2.documentId],
+                message: `Temporary note "${note2.title}" verified ${Math.floor(ageInDays)} days ago (>90 days)`,
+                suggestedFix: `Re-verify using howToRecheck, or change durability to 'durable', or delete`
+              });
+            }
+          }
+        }
+      }
+      if (checksToRun.includes("orphans")) {
+        const noteUid = getUid("note");
+        const notes = await strapi22.documents(noteUid).findMany({
+          populate: ["people", "projects", "sources", "decisions", "relatedTodos"],
+          limit: 500
+        });
+        for (const note2 of notes) {
+          const hasPeople = Array.isArray(note2.people) && note2.people.length > 0;
+          const hasProjects = Array.isArray(note2.projects) && note2.projects.length > 0;
+          const hasSources = Array.isArray(note2.sources) && note2.sources.length > 0;
+          const hasDecisions = Array.isArray(note2.decisions) && note2.decisions.length > 0;
+          const hasTodos = Array.isArray(note2.relatedTodos) && note2.relatedTodos.length > 0;
+          if (!hasPeople && !hasProjects && !hasSources && !hasDecisions && !hasTodos) {
+            findings.push({
+              severity: "WARN",
+              kind: "orphan_note",
+              type: "note",
+              ids: [note2.documentId],
+              message: `Note "${note2.title}" has no relations or links`,
+              suggestedFix: `Link to people/projects/sources using link tool, or delete if obsolete`
+            });
+          }
+        }
+      }
+      if (checksToRun.includes("broken_relations")) {
+        const noteUid = getUid("note");
+        const notes = await strapi22.documents(noteUid).findMany({
+          populate: ["people", "projects", "sources", "decisions", "relatedTodos"],
+          limit: 500
+        });
+        for (const note2 of notes) {
+          const relations = [
+            ...note2.people || [],
+            ...note2.projects || [],
+            ...note2.sources || [],
+            ...note2.decisions || [],
+            ...note2.relatedTodos || []
+          ];
+          for (const rel of relations) {
+            if (!rel || !rel.documentId) {
+              findings.push({
+                severity: "WARN",
+                kind: "broken_relation",
+                type: "note",
+                ids: [note2.documentId],
+                message: `Note "${note2.title}" has a broken relation`,
+                suggestedFix: `Remove broken relation using link tool with operation: 'disconnect'`
+              });
+              break;
+            }
+          }
+        }
+      }
+      if (checksToRun.includes("old_capabilities")) {
+        const capabilityUid = getUid("capability");
+        const capabilities = await strapi22.documents(capabilityUid).findMany({
+          limit: 500
+        });
+        const now = /* @__PURE__ */ new Date();
+        for (const capability2 of capabilities) {
+          if (capability2.verifiedAt) {
+            const verifiedDate = new Date(capability2.verifiedAt);
+            const ageInDays = (now.getTime() - verifiedDate.getTime()) / (1e3 * 60 * 60 * 24);
+            if (ageInDays > 90) {
+              findings.push({
+                severity: "WARN",
+                kind: "old_capability",
+                type: "capability",
+                ids: [capability2.documentId],
+                message: `Capability "${capability2.system}: ${capability2.capability}" verified ${Math.floor(ageInDays)} days ago (>90 days)`,
+                suggestedFix: `Re-verify using howVerified and update with record_capability`
+              });
+            }
+          }
+        }
+      }
+      if (checksToRun.includes("open_retros")) {
+        const retroUid = getUid("retro");
+        const retros = await strapi22.documents(retroUid).findMany({
+          filters: {
+            status: { $eq: "open" }
+          },
+          limit: 500
+        });
+        const now = /* @__PURE__ */ new Date();
+        for (const retro2 of retros) {
+          if (retro2.date) {
+            const retroDate = new Date(retro2.date);
+            const ageInDays = (now.getTime() - retroDate.getTime()) / (1e3 * 60 * 60 * 24);
+            if (ageInDays > 14) {
+              findings.push({
+                severity: "WARN",
+                kind: "old_open_retro",
+                type: "retro",
+                ids: [retro2.documentId],
+                message: `Retro "${retro2.title}" has been open for ${Math.floor(ageInDays)} days (>14 days)`,
+                suggestedFix: `Review and update status to 'fixed', 'declined', or 'wontfix' using update_retro`
+              });
+            }
+          }
+        }
+      }
+      if (checksToRun.includes("sanity")) {
+        const types = ["note", "todo", "person", "project", "retro", "gap", "capability", "rule"];
+        for (const type of types) {
+          const uid = getUid(type);
+          const results = await strapi22.documents(uid).findMany({ limit: 1 });
+          if (results.length === 0) {
+            const rawQuery = await strapi22.db.query(uid).count();
+            if (rawQuery > 0) {
+              findings.push({
+                severity: "BLOCK",
+                kind: "sanity_mismatch",
+                type,
+                ids: [],
+                message: `Collection ${type} returns 0 rows but raw count is ${rawQuery}`,
+                suggestedFix: `Check database permissions and Strapi document service configuration`
+              });
+            }
+          }
+        }
+      }
+      const summary = {
+        total: findings.length,
+        blocks: findings.filter((f) => f.severity === "BLOCK").length,
+        warns: findings.filter((f) => f.severity === "WARN").length
+      };
+      const output = stripNullish({
+        findings,
+        summary
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const healthCheck = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$3
+}, Symbol.toStringTag, { value: "Module" }));
+const register$2 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "update_retro",
+    title: "Update Retro",
+    description: "Update an existing retro record. Change status to fixed/declined/wontfix, update fix details, or modify other fields.",
+    resolveInputSchema: () => object({
+      documentId: string().describe("documentId of the retro to update"),
+      title: string().optional().describe("Updated title"),
+      task: string().optional().describe("Updated task description"),
+      failure: string().optional().describe("Updated failure description"),
+      fix: string().optional().describe("Updated fix description"),
+      fixLocation: string().optional().describe("Updated fix location"),
+      status: _enum(["open", "fixed", "declined", "wontfix"]).optional().describe("Updated status"),
+      date: string().optional().describe("Updated date (ISO format)")
+    }),
+    resolveOutputSchema: () => object({
+      documentId: string(),
+      title: string(),
+      status: string(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("retro.update") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const uid = getUid("retro");
+      const updates = {};
+      if (args.title !== void 0) updates.title = args.title;
+      if (args.task !== void 0) updates.task = args.task;
+      if (args.failure !== void 0) updates.failure = args.failure;
+      if (args.fix !== void 0) updates.fix = args.fix;
+      if (args.fixLocation !== void 0) updates.fixLocation = args.fixLocation;
+      if (args.status !== void 0) updates.status = args.status;
+      if (args.date !== void 0) updates.date = args.date;
+      const result = await strapi22.documents(uid).update({
+        documentId: args.documentId,
+        data: updates
+      });
+      const output = stripNullish({
+        documentId: result.documentId,
+        title: result.title,
+        status: result.status,
+        message: "Retro updated successfully"
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const updateRetro = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$2
+}, Symbol.toStringTag, { value: "Module" }));
+const register$1 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "update_gap",
+    title: "Update Gap",
+    description: "Update an existing gap record. Change status to built/wontfix, update what was needed, or modify other fields.",
+    resolveInputSchema: () => object({
+      documentId: string().describe("documentId of the gap to update"),
+      title: string().optional().describe("Updated title"),
+      request: string().optional().describe("Updated request description"),
+      whatWasNeeded: string().optional().describe("Updated description of what was needed"),
+      status: _enum(["open", "built", "wontfix"]).optional().describe("Updated status"),
+      date: string().optional().describe("Updated date (ISO format)")
+    }),
+    resolveOutputSchema: () => object({
+      documentId: string(),
+      title: string(),
+      status: string(),
+      count: number(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("gap.update") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const uid = getUid("gap");
+      const updates = {};
+      if (args.title !== void 0) updates.title = args.title;
+      if (args.request !== void 0) updates.request = args.request;
+      if (args.whatWasNeeded !== void 0) updates.whatWasNeeded = args.whatWasNeeded;
+      if (args.status !== void 0) updates.status = args.status;
+      if (args.date !== void 0) updates.date = args.date;
+      const result = await strapi22.documents(uid).update({
+        documentId: args.documentId,
+        data: updates
+      });
+      const output = stripNullish({
+        documentId: result.documentId,
+        title: result.title,
+        status: result.status,
+        count: result.count,
+        message: "Gap updated successfully"
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const updateGap = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$1
+}, Symbol.toStringTag, { value: "Module" }));
+const register = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "get_briefing",
+    title: "Get Briefing",
+    description: "Get a compact session briefing with pinned/recent lessons, open retros, open gaps, P0/P1/overdue todos, and recent cannot capabilities.",
+    resolveInputSchema: () => object({
+      lessonLimit: number().optional().describe("Max number of lessons to return (default: 10)"),
+      todoLimit: number().optional().describe("Max number of todos to return (default: 10)")
+    }),
+    resolveOutputSchema: () => object({
+      lessons: array(object({
+        documentId: string(),
+        title: string(),
+        summary: string().optional(),
+        lesson: string().optional(),
+        pinned: boolean().optional()
+      })),
+      openRetros: array(object({
+        documentId: string(),
+        title: string(),
+        date: string().optional(),
+        task: string().optional(),
+        failure: string().optional()
+      })),
+      openGaps: array(object({
+        documentId: string(),
+        title: string(),
+        count: number(),
+        request: string().optional(),
+        whatWasNeeded: string().optional()
+      })),
+      urgentTodos: array(object({
+        documentId: string(),
+        title: string(),
+        priority: string(),
+        status: string(),
+        dueDate: string().optional()
+      })),
+      recentCannotCapabilities: array(object({
+        documentId: string(),
+        system: string(),
+        capability: string(),
+        verifiedAt: string().optional(),
+        notes: string().optional()
+      })),
+      summary: object({
+        lessonsCount: number(),
+        openRetrosCount: number(),
+        openGapsCount: number(),
+        urgentTodosCount: number(),
+        cannotCount: number()
+      })
+    }),
+    auth: {
+      policies: [{ action: getActionId("brief.read") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const lessonLimit = args.lessonLimit || 10;
+      const todoLimit = args.todoLimit || 10;
+      const noteUid = getUid("note");
+      const retroUid = getUid("retro");
+      const gapUid = getUid("gap");
+      const todoUid = getUid("todo");
+      const capabilityUid = getUid("capability");
+      const pinnedLessons = await strapi22.documents(noteUid).findMany({
+        filters: {
+          kind: { $eq: "lesson" },
+          pinned: { $eq: true }
+        },
+        limit: lessonLimit,
+        sort: ["updatedAt:desc"]
+      });
+      const remainingLessonSlots = lessonLimit - pinnedLessons.length;
+      let recentLessons = [];
+      if (remainingLessonSlots > 0) {
+        recentLessons = await strapi22.documents(noteUid).findMany({
+          filters: {
+            kind: { $eq: "lesson" },
+            pinned: { $ne: true }
+          },
+          limit: remainingLessonSlots,
+          sort: ["updatedAt:desc"]
+        });
+      }
+      const lessons = [...pinnedLessons, ...recentLessons].map((l) => stripNullish({
+        documentId: l.documentId,
+        title: l.title,
+        summary: l.summary,
+        lesson: typeof l.body === "string" ? l.body.substring(0, 200) : void 0,
+        pinned: l.pinned
+      }));
+      const openRetros = await strapi22.documents(retroUid).findMany({
+        filters: {
+          status: { $eq: "open" }
+        },
+        limit: 20,
+        sort: ["date:desc"]
+      });
+      const retros = openRetros.map((r) => stripNullish({
+        documentId: r.documentId,
+        title: r.title,
+        date: r.date,
+        task: r.task,
+        failure: r.failure
+      }));
+      const openGaps = await strapi22.documents(gapUid).findMany({
+        filters: {
+          status: { $eq: "open" }
+        },
+        limit: 20,
+        sort: ["count:desc", "date:desc"]
+      });
+      const gaps = openGaps.map((g) => stripNullish({
+        documentId: g.documentId,
+        title: g.title,
+        count: g.count,
+        request: g.request,
+        whatWasNeeded: g.whatWasNeeded
+      }));
+      const now = /* @__PURE__ */ new Date();
+      const todos = await strapi22.documents(todoUid).findMany({
+        filters: {
+          status: { $in: ["inbox", "next", "doing", "waiting"] }
+        },
+        limit: 100,
+        sort: ["priority:asc", "dueDate:asc"]
+      });
+      const urgentTodos = todos.filter((t) => {
+        if (t.priority === "P0" || t.priority === "P1") return true;
+        if (t.dueDate) {
+          const dueDate = new Date(t.dueDate);
+          return dueDate < now;
+        }
+        return false;
+      }).slice(0, todoLimit).map((t) => stripNullish({
+        documentId: t.documentId,
+        title: t.title,
+        priority: t.priority,
+        status: t.status,
+        dueDate: t.dueDate
+      }));
+      const ninetyDaysAgo = /* @__PURE__ */ new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split("T")[0];
+      const capabilities = await strapi22.documents(capabilityUid).findMany({
+        filters: {
+          canDo: { $eq: false },
+          verifiedAt: { $gte: ninetyDaysAgoStr }
+        },
+        limit: 10,
+        sort: ["verifiedAt:desc"]
+      });
+      const cannotCapabilities = capabilities.map((c) => stripNullish({
+        documentId: c.documentId,
+        system: c.system,
+        capability: c.capability,
+        verifiedAt: c.verifiedAt,
+        notes: c.notes
+      }));
+      const output = stripNullish({
+        lessons,
+        openRetros: retros,
+        openGaps: gaps,
+        urgentTodos,
+        recentCannotCapabilities: cannotCapabilities,
+        summary: {
+          lessonsCount: lessons.length,
+          openRetrosCount: retros.length,
+          openGapsCount: gaps.length,
+          urgentTodosCount: urgentTodos.length,
+          cannotCount: cannotCapabilities.length
+        }
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const getBriefing = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
   register
 }, Symbol.toStringTag, { value: "Module" }));
 const tools = [
@@ -21793,8 +23299,10 @@ const tools = [
   forget,
   logRetro,
   listRetros,
+  updateRetro,
   logGap,
   listGaps,
+  updateGap,
   recordCapability,
   listCapabilities,
   addRule,
@@ -21803,7 +23311,14 @@ const tools = [
   updateTodo,
   listTodos,
   getTodo,
-  completeTodo
+  completeTodo,
+  addGoal,
+  listGoals,
+  logCheckin,
+  getGoalProgress,
+  updateGoal,
+  healthCheck,
+  getBriefing
 ];
 const registerMcpTools = (strapi2) => {
   if (!strapi2.ai?.mcp?.isEnabled()) {
@@ -21822,39 +23337,22 @@ const registerMcpTools = (strapi2) => {
   strapi2.log.info(`[paul-brain] Registered ${tools.length} MCP tools`);
 };
 const bootstrap = async ({ strapi: strapi2 }) => {
-  const actionProvider = strapi2.service("admin::permission").actionProvider;
-  const existingActions = PERMISSIONS.filter(
-    (permission) => actionProvider.has(`plugin::paul-brain.${permission.uid}`)
-  );
-  const newActions = PERMISSIONS.filter(
-    (permission) => !actionProvider.has(`plugin::paul-brain.${permission.uid}`)
-  );
-  if (newActions.length > 0) {
-    await actionProvider.registerMany(newActions);
-    strapi2.log.info(
-      `[paul-brain] Registered ${newActions.length} new permission actions`
-    );
-  }
-  if (existingActions.length > 0) {
-    strapi2.log.debug(
-      `[paul-brain] Skipped ${existingActions.length} already-registered permission actions`
-    );
-  }
   registerMcpTools(strapi2);
+  strapi2.log.info("[paul-brain] Bootstrap complete");
 };
-const kind$9 = "collectionType";
-const collectionName$9 = "paul_brain_notes";
-const info$9 = {
+const kind$b = "collectionType";
+const collectionName$b = "paul_brain_notes";
+const info$b = {
   singularName: "note",
   pluralName: "notes",
   displayName: "Note",
   description: "Brain notes: facts, preferences, ideas, todos, logs, and references"
 };
-const options$9 = {
+const options$b = {
   draftAndPublish: false
 };
-const pluginOptions$9 = {};
-const attributes$9 = {
+const pluginOptions$b = {};
+const attributes$b = {
   title: {
     type: "string",
     required: true
@@ -21957,30 +23455,35 @@ const attributes$9 = {
     relation: "manyToMany",
     target: "plugin::paul-brain.todo",
     mappedBy: "relatedNotes"
+  },
+  supersededBy: {
+    type: "relation",
+    relation: "oneToOne",
+    target: "plugin::paul-brain.note"
   }
 };
-const schema$9 = {
-  kind: kind$9,
-  collectionName: collectionName$9,
-  info: info$9,
-  options: options$9,
-  pluginOptions: pluginOptions$9,
-  attributes: attributes$9
+const schema$b = {
+  kind: kind$b,
+  collectionName: collectionName$b,
+  info: info$b,
+  options: options$b,
+  pluginOptions: pluginOptions$b,
+  attributes: attributes$b
 };
-const note = { schema: schema$9 };
-const kind$8 = "collectionType";
-const collectionName$8 = "paul_brain_people";
-const info$8 = {
+const note = { schema: schema$b };
+const kind$a = "collectionType";
+const collectionName$a = "paul_brain_people";
+const info$a = {
   singularName: "person",
   pluralName: "people",
   displayName: "Person",
   description: "People in Paul's network"
 };
-const options$8 = {
+const options$a = {
   draftAndPublish: false
 };
-const pluginOptions$8 = {};
-const attributes$8 = {
+const pluginOptions$a = {};
+const attributes$a = {
   name: {
     type: "string",
     required: true
@@ -22031,28 +23534,28 @@ const attributes$8 = {
     inversedBy: "people"
   }
 };
-const schema$8 = {
-  kind: kind$8,
-  collectionName: collectionName$8,
-  info: info$8,
-  options: options$8,
-  pluginOptions: pluginOptions$8,
-  attributes: attributes$8
+const schema$a = {
+  kind: kind$a,
+  collectionName: collectionName$a,
+  info: info$a,
+  options: options$a,
+  pluginOptions: pluginOptions$a,
+  attributes: attributes$a
 };
-const person = { schema: schema$8 };
-const kind$7 = "collectionType";
-const collectionName$7 = "paul_brain_projects";
-const info$7 = {
+const person = { schema: schema$a };
+const kind$9 = "collectionType";
+const collectionName$9 = "paul_brain_projects";
+const info$9 = {
   singularName: "project",
   pluralName: "projects",
   displayName: "Project",
   description: "Paul's projects and initiatives"
 };
-const options$7 = {
+const options$9 = {
   draftAndPublish: false
 };
-const pluginOptions$7 = {};
-const attributes$7 = {
+const pluginOptions$9 = {};
+const attributes$9 = {
   name: {
     type: "string",
     required: true
@@ -22124,28 +23627,28 @@ const attributes$7 = {
     mappedBy: "project"
   }
 };
-const schema$7 = {
-  kind: kind$7,
-  collectionName: collectionName$7,
-  info: info$7,
-  options: options$7,
-  pluginOptions: pluginOptions$7,
-  attributes: attributes$7
+const schema$9 = {
+  kind: kind$9,
+  collectionName: collectionName$9,
+  info: info$9,
+  options: options$9,
+  pluginOptions: pluginOptions$9,
+  attributes: attributes$9
 };
-const project = { schema: schema$7 };
-const kind$6 = "collectionType";
-const collectionName$6 = "paul_brain_decisions";
-const info$6 = {
+const project = { schema: schema$9 };
+const kind$8 = "collectionType";
+const collectionName$8 = "paul_brain_decisions";
+const info$8 = {
   singularName: "decision",
   pluralName: "decisions",
   displayName: "Decision",
   description: "Architecture decisions and key choices"
 };
-const options$6 = {
+const options$8 = {
   draftAndPublish: false
 };
-const pluginOptions$6 = {};
-const attributes$6 = {
+const pluginOptions$8 = {};
+const attributes$8 = {
   title: {
     type: "string",
     required: true
@@ -22203,28 +23706,28 @@ const attributes$6 = {
     mappedBy: "decisions"
   }
 };
-const schema$6 = {
-  kind: kind$6,
-  collectionName: collectionName$6,
-  info: info$6,
-  options: options$6,
-  pluginOptions: pluginOptions$6,
-  attributes: attributes$6
+const schema$8 = {
+  kind: kind$8,
+  collectionName: collectionName$8,
+  info: info$8,
+  options: options$8,
+  pluginOptions: pluginOptions$8,
+  attributes: attributes$8
 };
-const decision = { schema: schema$6 };
-const kind$5 = "collectionType";
-const collectionName$5 = "paul_brain_sources";
-const info$5 = {
+const decision = { schema: schema$8 };
+const kind$7 = "collectionType";
+const collectionName$7 = "paul_brain_sources";
+const info$7 = {
   singularName: "source",
   pluralName: "sources",
   displayName: "Source",
   description: "External sources: videos, articles, transcripts, chats"
 };
-const options$5 = {
+const options$7 = {
   draftAndPublish: false
 };
-const pluginOptions$5 = {};
-const attributes$5 = {
+const pluginOptions$7 = {};
+const attributes$7 = {
   title: {
     type: "string",
     required: true
@@ -22269,28 +23772,28 @@ const attributes$5 = {
     mappedBy: "sources"
   }
 };
-const schema$5 = {
-  kind: kind$5,
-  collectionName: collectionName$5,
-  info: info$5,
-  options: options$5,
-  pluginOptions: pluginOptions$5,
-  attributes: attributes$5
+const schema$7 = {
+  kind: kind$7,
+  collectionName: collectionName$7,
+  info: info$7,
+  options: options$7,
+  pluginOptions: pluginOptions$7,
+  attributes: attributes$7
 };
-const source = { schema: schema$5 };
-const kind$4 = "collectionType";
-const collectionName$4 = "paul_brain_retros";
-const info$4 = {
+const source = { schema: schema$7 };
+const kind$6 = "collectionType";
+const collectionName$6 = "paul_brain_retros";
+const info$6 = {
   singularName: "retro",
   pluralName: "retros",
   displayName: "Retro",
   description: "Failure on real work + fix"
 };
-const options$4 = {
+const options$6 = {
   draftAndPublish: false
 };
-const pluginOptions$4 = {};
-const attributes$4 = {
+const pluginOptions$6 = {};
+const attributes$6 = {
   title: {
     type: "string",
     required: true
@@ -22318,7 +23821,9 @@ const attributes$4 = {
     type: "enumeration",
     "enum": [
       "open",
-      "fixed"
+      "fixed",
+      "declined",
+      "wontfix"
     ],
     "default": "open"
   },
@@ -22329,28 +23834,28 @@ const attributes$4 = {
     inversedBy: "retros"
   }
 };
-const schema$4 = {
-  kind: kind$4,
-  collectionName: collectionName$4,
-  info: info$4,
-  options: options$4,
-  pluginOptions: pluginOptions$4,
-  attributes: attributes$4
+const schema$6 = {
+  kind: kind$6,
+  collectionName: collectionName$6,
+  info: info$6,
+  options: options$6,
+  pluginOptions: pluginOptions$6,
+  attributes: attributes$6
 };
-const retro = { schema: schema$4 };
-const kind$3 = "collectionType";
-const collectionName$3 = "paul_brain_gaps";
-const info$3 = {
+const retro = { schema: schema$6 };
+const kind$5 = "collectionType";
+const collectionName$5 = "paul_brain_gaps";
+const info$5 = {
   singularName: "gap",
   pluralName: "gaps",
   displayName: "Gap",
   description: "Request nothing handled well"
 };
-const options$3 = {
+const options$5 = {
   draftAndPublish: false
 };
-const pluginOptions$3 = {};
-const attributes$3 = {
+const pluginOptions$5 = {};
+const attributes$5 = {
   title: {
     type: "string",
     required: true
@@ -22380,30 +23885,37 @@ const attributes$3 = {
       "wontfix"
     ],
     "default": "open"
+  },
+  firstSeen: {
+    type: "date"
+  },
+  seenDates: {
+    type: "json",
+    "default": []
   }
 };
-const schema$3 = {
-  kind: kind$3,
-  collectionName: collectionName$3,
-  info: info$3,
-  options: options$3,
-  pluginOptions: pluginOptions$3,
-  attributes: attributes$3
+const schema$5 = {
+  kind: kind$5,
+  collectionName: collectionName$5,
+  info: info$5,
+  options: options$5,
+  pluginOptions: pluginOptions$5,
+  attributes: attributes$5
 };
-const gap = { schema: schema$3 };
-const kind$2 = "collectionType";
-const collectionName$2 = "paul_brain_capabilities";
-const info$2 = {
+const gap = { schema: schema$5 };
+const kind$4 = "collectionType";
+const collectionName$4 = "paul_brain_capabilities";
+const info$4 = {
   singularName: "capability",
   pluralName: "capabilities",
   displayName: "Capability",
   description: "What a system can and CANNOT do, probed and dated"
 };
-const options$2 = {
+const options$4 = {
   draftAndPublish: false
 };
-const pluginOptions$2 = {};
-const attributes$2 = {
+const pluginOptions$4 = {};
+const attributes$4 = {
   system: {
     type: "string",
     required: true
@@ -22426,28 +23938,28 @@ const attributes$2 = {
     type: "text"
   }
 };
-const schema$2 = {
-  kind: kind$2,
-  collectionName: collectionName$2,
-  info: info$2,
-  options: options$2,
-  pluginOptions: pluginOptions$2,
-  attributes: attributes$2
+const schema$4 = {
+  kind: kind$4,
+  collectionName: collectionName$4,
+  info: info$4,
+  options: options$4,
+  pluginOptions: pluginOptions$4,
+  attributes: attributes$4
 };
-const capability = { schema: schema$2 };
-const kind$1 = "collectionType";
-const collectionName$1 = "paul_brain_rules";
-const info$1 = {
+const capability = { schema: schema$4 };
+const kind$3 = "collectionType";
+const collectionName$3 = "paul_brain_rules";
+const info$3 = {
   singularName: "rule",
   pluralName: "rules",
   displayName: "Rule",
   description: "Deterministic routing/handling rules editable in admin"
 };
-const options$1 = {
+const options$3 = {
   draftAndPublish: false
 };
-const pluginOptions$1 = {};
-const attributes$1 = {
+const pluginOptions$3 = {};
+const attributes$3 = {
   name: {
     type: "string",
     required: true
@@ -22469,28 +23981,28 @@ const attributes$1 = {
     "default": true
   }
 };
-const schema$1 = {
-  kind: kind$1,
-  collectionName: collectionName$1,
-  info: info$1,
-  options: options$1,
-  pluginOptions: pluginOptions$1,
-  attributes: attributes$1
+const schema$3 = {
+  kind: kind$3,
+  collectionName: collectionName$3,
+  info: info$3,
+  options: options$3,
+  pluginOptions: pluginOptions$3,
+  attributes: attributes$3
 };
-const rule = { schema: schema$1 };
-const kind = "collectionType";
-const collectionName = "paul_brain_todos";
-const info = {
+const rule = { schema: schema$3 };
+const kind$2 = "collectionType";
+const collectionName$2 = "paul_brain_todos";
+const info$2 = {
   singularName: "todo",
   pluralName: "todos",
   displayName: "Todo",
   description: "Task management for Paul's work"
 };
-const options = {
+const options$2 = {
   draftAndPublish: false
 };
-const pluginOptions = {};
-const attributes = {
+const pluginOptions$2 = {};
+const attributes$2 = {
   title: {
     type: "string",
     required: true
@@ -22503,7 +24015,8 @@ const attributes = {
       "doing",
       "waiting",
       "done",
-      "dropped"
+      "dropped",
+      "superseded"
     ],
     "default": "inbox"
   },
@@ -22574,6 +24087,136 @@ const attributes = {
   },
   closingNote: {
     type: "text"
+  },
+  supersededBy: {
+    type: "relation",
+    relation: "oneToOne",
+    target: "plugin::paul-brain.todo"
+  }
+};
+const schema$2 = {
+  kind: kind$2,
+  collectionName: collectionName$2,
+  info: info$2,
+  options: options$2,
+  pluginOptions: pluginOptions$2,
+  attributes: attributes$2
+};
+const todo = { schema: schema$2 };
+const kind$1 = "collectionType";
+const collectionName$1 = "paul_brain_goals";
+const info$1 = {
+  singularName: "goal",
+  pluralName: "goals",
+  displayName: "Goal",
+  description: "Goals with daily check-ins and streak tracking"
+};
+const options$1 = {
+  draftAndPublish: false
+};
+const pluginOptions$1 = {};
+const attributes$1 = {
+  title: {
+    type: "string",
+    required: true
+  },
+  description: {
+    type: "text"
+  },
+  category: {
+    type: "enumeration",
+    "enum": [
+      "health",
+      "fitness",
+      "work",
+      "learning",
+      "personal",
+      "other"
+    ]
+  },
+  cadence: {
+    type: "enumeration",
+    "enum": [
+      "daily",
+      "weekly"
+    ],
+    "default": "daily"
+  },
+  target: {
+    type: "string"
+  },
+  status: {
+    type: "enumeration",
+    "enum": [
+      "active",
+      "paused",
+      "done",
+      "dropped"
+    ],
+    "default": "active"
+  },
+  startDate: {
+    type: "date"
+  },
+  currentStreak: {
+    type: "integer",
+    "default": 0
+  },
+  bestStreak: {
+    type: "integer",
+    "default": 0
+  },
+  lastCheckinDate: {
+    type: "date"
+  },
+  checkins: {
+    type: "relation",
+    relation: "oneToMany",
+    target: "plugin::paul-brain.goal-checkin",
+    mappedBy: "goal"
+  }
+};
+const schema$1 = {
+  kind: kind$1,
+  collectionName: collectionName$1,
+  info: info$1,
+  options: options$1,
+  pluginOptions: pluginOptions$1,
+  attributes: attributes$1
+};
+const goal = { schema: schema$1 };
+const kind = "collectionType";
+const collectionName = "paul_brain_goal_checkins";
+const info = {
+  singularName: "goal-checkin",
+  pluralName: "goal-checkins",
+  displayName: "Goal Checkin",
+  description: "Daily or weekly check-ins for goals"
+};
+const options = {
+  draftAndPublish: false
+};
+const pluginOptions = {};
+const attributes = {
+  goal: {
+    type: "relation",
+    relation: "manyToOne",
+    target: "plugin::paul-brain.goal",
+    inversedBy: "checkins"
+  },
+  date: {
+    type: "date",
+    required: true
+  },
+  met: {
+    type: "boolean",
+    required: true
+  },
+  note: {
+    type: "text"
+  },
+  loggedBy: {
+    type: "string"
   }
 };
 const schema = {
@@ -22584,7 +24227,7 @@ const schema = {
   pluginOptions,
   attributes
 };
-const todo = { schema };
+const goalCheckin = { schema };
 const contentTypes = {
   note,
   person,
@@ -22595,7 +24238,9 @@ const contentTypes = {
   gap,
   capability,
   rule,
-  todo
+  todo,
+  goal,
+  "goal-checkin": goalCheckin
 };
 const PLUGIN_NAME = "paul-brain";
 const brain = ({ strapi: strapi2 }) => ({
@@ -22752,13 +24397,60 @@ ${data.body}`;
       limit: 1
     });
     return entities.length > 0 ? entities[0].documentId : null;
+  },
+  normalizeTitle(title) {
+    return title.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
+  },
+  isSimilar(title1, title2) {
+    const norm1 = this.normalizeTitle(title1);
+    const norm2 = this.normalizeTitle(title2);
+    if (norm1 === norm2) return true;
+    const words1 = norm1.split(" ");
+    const words2 = norm2.split(" ");
+    const commonWords = words1.filter((w) => words2.includes(w) && w.length > 3);
+    const similarity = 2 * commonWords.length / (words1.length + words2.length);
+    return similarity > 0.7;
+  },
+  async findDuplicateTodos(title, dueDate, projectId) {
+    const uid = `plugin::${PLUGIN_NAME}.todo`;
+    const todos = await strapi2.documents(uid).findMany({
+      filters: {
+        status: { $notIn: ["done", "dropped", "superseded"] }
+      },
+      limit: 100
+    });
+    const candidates = [];
+    for (const todo2 of todos) {
+      if (this.isSimilar(title, todo2.title)) {
+        const sameDueDate = dueDate && todo2.dueDate && dueDate === todo2.dueDate;
+        const sameProject = projectId && todo2.project?.documentId === projectId;
+        if (sameDueDate || sameProject || !dueDate) {
+          candidates.push(todo2);
+        }
+      }
+    }
+    return candidates;
+  },
+  async findDuplicateNotes(title) {
+    const uid = `plugin::${PLUGIN_NAME}.note`;
+    const slug = this.slugify(title);
+    const notes = await strapi2.documents(uid).findMany({
+      limit: 100
+    });
+    const candidates = [];
+    for (const note2 of notes) {
+      if (note2.slug === slug || this.isSimilar(title, note2.title)) {
+        candidates.push(note2);
+      }
+    }
+    return candidates;
   }
 });
 const services = {
   brain
 };
 const index = {
-  register: register$m,
+  register: register$v,
   bootstrap,
   contentTypes,
   services
