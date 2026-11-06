@@ -2,7 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish } from '../utils';
+import { stripNullish, getTodayPST } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -76,7 +76,7 @@ export const register = (strapi: Core.Strapi) => {
         cadence: args.cadence || 'daily',
         target: args.target,
         status: 'active',
-        startDate: args.startDate || new Date().toISOString().split('T')[0],
+        startDate: args.startDate || getTodayPST(),
         currentStreak: 0,
         bestStreak: 0,
       };

@@ -3,89 +3,110 @@ import { PLUGIN_NAME } from './types';
 export { PLUGIN_NAME };
 
 export const PERMISSIONS = [
+  // Memory subcategory
   {
     section: 'plugins',
     pluginName: PLUGIN_NAME,
+    subCategory: 'memory',
     uid: 'guide.read',
-    displayName: 'Read brain guide',
+    displayName: 'Read usage guide',
   },
   {
     section: 'plugins',
     pluginName: PLUGIN_NAME,
-    uid: 'read',
-    displayName: 'Read brain (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo)',
-  },
-  {
-    section: 'plugins',
-    pluginName: PLUGIN_NAME,
-    uid: 'note.write',
-    displayName: 'Write notes (remember, update_note, link)',
-  },
-  {
-    section: 'plugins',
-    pluginName: PLUGIN_NAME,
-    uid: 'decision.write',
-    displayName: 'Write decisions (log_decision)',
-  },
-  {
-    section: 'plugins',
-    pluginName: PLUGIN_NAME,
-    uid: 'health.read',
-    displayName: 'Read health diagnostics (health_check)',
-  },
-  {
-    section: 'plugins',
-    pluginName: PLUGIN_NAME,
-    uid: 'meta.write',
-    displayName: 'Write meta (log_retro, log_gap, record_capability)',
-  },
-  {
-    section: 'plugins',
-    pluginName: PLUGIN_NAME,
-    uid: 'retro.update',
-    displayName: 'Update retros (update_retro)',
-  },
-  {
-    section: 'plugins',
-    pluginName: PLUGIN_NAME,
-    uid: 'gap.update',
-    displayName: 'Update gaps (update_gap)',
-  },
-  {
-    section: 'plugins',
-    pluginName: PLUGIN_NAME,
+    subCategory: 'memory',
     uid: 'brief.read',
-    displayName: 'Read briefing (get_briefing)',
+    displayName: 'Read session briefing',
   },
   {
     section: 'plugins',
     pluginName: PLUGIN_NAME,
-    uid: 'rule.write',
-    displayName: 'Write rules (add_rule)',
+    subCategory: 'memory',
+    uid: 'read',
+    displayName: 'Read memory',
   },
   {
     section: 'plugins',
     pluginName: PLUGIN_NAME,
+    subCategory: 'memory',
+    uid: 'note.write',
+    displayName: 'Write notes and links',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'memory',
+    uid: 'decision.write',
+    displayName: 'Log decisions',
+  },
+  
+  // Tasks and goals subcategory
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'tasks and goals',
     uid: 'todo.write',
-    displayName: 'Write todos (add_todo, update_todo, complete_todo)',
+    displayName: 'Manage to-dos',
   },
   {
     section: 'plugins',
     pluginName: PLUGIN_NAME,
+    subCategory: 'tasks and goals',
     uid: 'goal.read',
-    displayName: 'Read goals (list_goals, get_goal_progress)',
+    displayName: 'Read goals',
   },
   {
     section: 'plugins',
     pluginName: PLUGIN_NAME,
+    subCategory: 'tasks and goals',
     uid: 'goal.write',
-    displayName: 'Write goals (add_goal, update_goal, log_checkin)',
+    displayName: 'Manage goals and check-ins',
+  },
+  
+  // Diagnostics and ops subcategory
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'diagnostics and ops',
+    uid: 'health.read',
+    displayName: 'Run health checks',
   },
   {
     section: 'plugins',
     pluginName: PLUGIN_NAME,
+    subCategory: 'diagnostics and ops',
+    uid: 'meta.write',
+    displayName: 'Log retros and gaps',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'diagnostics and ops',
+    uid: 'retro.update',
+    displayName: 'Update retros',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'diagnostics and ops',
+    uid: 'gap.update',
+    displayName: 'Update gaps',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'diagnostics and ops',
+    uid: 'rule.write',
+    displayName: 'Manage routing rules',
+  },
+  
+  // Administration subcategory
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'administration',
     uid: 'forget',
-    displayName: 'Delete entities (forget)',
+    displayName: 'Delete records',
   },
 ];
 

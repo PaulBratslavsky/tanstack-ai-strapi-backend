@@ -25,89 +25,107 @@ const PLUGIN_NAME$1 = "paul-brain";
 const CONTENT_TYPES = ["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo"];
 const getUid = (type) => `plugin::${PLUGIN_NAME$1}.${type}`;
 const PERMISSIONS = [
+  // Memory subcategory
   {
     section: "plugins",
     pluginName: PLUGIN_NAME$1,
+    subCategory: "memory",
     uid: "guide.read",
-    displayName: "Read brain guide"
+    displayName: "Read usage guide"
   },
   {
     section: "plugins",
     pluginName: PLUGIN_NAME$1,
-    uid: "read",
-    displayName: "Read brain (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "note.write",
-    displayName: "Write notes (remember, update_note, link)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "decision.write",
-    displayName: "Write decisions (log_decision)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "health.read",
-    displayName: "Read health diagnostics (health_check)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "meta.write",
-    displayName: "Write meta (log_retro, log_gap, record_capability)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "retro.update",
-    displayName: "Update retros (update_retro)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
-    uid: "gap.update",
-    displayName: "Update gaps (update_gap)"
-  },
-  {
-    section: "plugins",
-    pluginName: PLUGIN_NAME$1,
+    subCategory: "memory",
     uid: "brief.read",
-    displayName: "Read briefing (get_briefing)"
+    displayName: "Read session briefing"
   },
   {
     section: "plugins",
     pluginName: PLUGIN_NAME$1,
-    uid: "rule.write",
-    displayName: "Write rules (add_rule)"
+    subCategory: "memory",
+    uid: "read",
+    displayName: "Read memory"
   },
   {
     section: "plugins",
     pluginName: PLUGIN_NAME$1,
+    subCategory: "memory",
+    uid: "note.write",
+    displayName: "Write notes and links"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "memory",
+    uid: "decision.write",
+    displayName: "Log decisions"
+  },
+  // Tasks and goals subcategory
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "tasks and goals",
     uid: "todo.write",
-    displayName: "Write todos (add_todo, update_todo, complete_todo)"
+    displayName: "Manage to-dos"
   },
   {
     section: "plugins",
     pluginName: PLUGIN_NAME$1,
+    subCategory: "tasks and goals",
     uid: "goal.read",
-    displayName: "Read goals (list_goals, get_goal_progress)"
+    displayName: "Read goals"
   },
   {
     section: "plugins",
     pluginName: PLUGIN_NAME$1,
+    subCategory: "tasks and goals",
     uid: "goal.write",
-    displayName: "Write goals (add_goal, update_goal, log_checkin)"
+    displayName: "Manage goals and check-ins"
+  },
+  // Diagnostics and ops subcategory
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "diagnostics and ops",
+    uid: "health.read",
+    displayName: "Run health checks"
   },
   {
     section: "plugins",
     pluginName: PLUGIN_NAME$1,
+    subCategory: "diagnostics and ops",
+    uid: "meta.write",
+    displayName: "Log retros and gaps"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "diagnostics and ops",
+    uid: "retro.update",
+    displayName: "Update retros"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "diagnostics and ops",
+    uid: "gap.update",
+    displayName: "Update gaps"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "diagnostics and ops",
+    uid: "rule.write",
+    displayName: "Manage routing rules"
+  },
+  // Administration subcategory
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "administration",
     uid: "forget",
-    displayName: "Delete entities (forget)"
+    displayName: "Delete records"
   }
 ];
 const getActionId = (uid) => `plugin::${PLUGIN_NAME$1}.${uid}`;
@@ -20180,7 +20198,7 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.4.0";
+const PLUGIN_VERSION = "1.4.1";
 const register$u = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
@@ -20234,6 +20252,14 @@ function stripNullish(obj) {
     return cleaned;
   }
   return obj;
+}
+function getTodayPST() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(/* @__PURE__ */ new Date());
 }
 const register$t = (strapi2) => {
   strapi2.ai.mcp.registerTool({
@@ -21107,7 +21133,7 @@ const register$j = (strapi2) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
       const uid = getUid("gap");
       const slug = brainService.slugify(args.title);
-      const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const today = getTodayPST();
       const existing = await strapi22.documents(uid).findMany({
         filters: {
           slug: { $eq: slug },
@@ -21894,7 +21920,7 @@ const register$b = (strapi2) => {
         filters2.dueDate = { $lt: args.dueBefore };
       }
       if (args.overdue) {
-        const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+        const today = getTodayPST();
         filters2.dueDate = { $lt: today };
         filters2.status = { $notIn: ["done", "dropped"] };
       }
@@ -22190,7 +22216,7 @@ const register$8 = (strapi2) => {
         cadence: args.cadence || "daily",
         target: args.target,
         status: "active",
-        startDate: args.startDate || (/* @__PURE__ */ new Date()).toISOString().split("T")[0],
+        startDate: args.startDate || getTodayPST(),
         currentStreak: 0,
         bestStreak: 0
       };
@@ -22303,9 +22329,9 @@ function calculateStreaks(checkins, cadence) {
   }
   const sortedCheckins = [...checkins].sort((a, b) => b.date.localeCompare(a.date));
   const latestCheckin = sortedCheckins[0];
-  const latestDate = new Date(latestCheckin.date);
-  const today = /* @__PURE__ */ new Date();
-  today.setHours(0, 0, 0, 0);
+  const latestDate = /* @__PURE__ */ new Date(latestCheckin.date + "T00:00:00");
+  const todayPST = getTodayPST();
+  const today = /* @__PURE__ */ new Date(todayPST + "T00:00:00");
   const daysDiff = Math.floor((today.getTime() - latestDate.getTime()) / (1e3 * 60 * 60 * 24));
   let currentStreak = 0;
   if (cadence === "daily") {
@@ -22384,7 +22410,7 @@ const register$6 = (strapi2) => {
     description: "Log a check-in for a goal. Updates existing check-in for the same date. Recomputes currentStreak (consecutive met days ending on latest check-in) and bestStreak. For daily goals, missed/unlogged days break the streak.",
     resolveInputSchema: () => object({
       goal: string().describe("Goal documentId or title"),
-      date: string().optional().describe("Check-in date (ISO format, defaults to today in America/Los_Angeles)"),
+      date: string().optional().describe("Check-in date (YYYY-MM-DD, defaults to today in America/Los_Angeles)"),
       met: boolean().describe("Whether the goal was met"),
       note: string().optional().describe("Optional note"),
       loggedBy: string().optional().describe("Who logged this check-in")
@@ -22416,12 +22442,7 @@ const register$6 = (strapi2) => {
         throw new Error(`Goal not found: ${args.goal}`);
       }
       const goal2 = goals[0];
-      const checkinDate = args.date || (/* @__PURE__ */ new Date()).toLocaleString("en-US", {
-        timeZone: "America/Los_Angeles",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-      }).split(",")[0].split("/").reverse().join("-").replace(/(\d+)-(\d+)-(\d+)/, "$1-$3-$2");
+      const checkinDate = args.date || getTodayPST();
       const existingCheckins = await strapi22.documents(checkinUid).findMany({
         filters: {
           goal: { documentId: { $eq: goal2.documentId } },
