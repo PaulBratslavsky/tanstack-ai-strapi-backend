@@ -20186,7 +20186,7 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.4.1";
+const PLUGIN_VERSION = "1.4.2";
 const register$u = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
@@ -20248,6 +20248,16 @@ function getTodayPST() {
     month: "2-digit",
     day: "2-digit"
   }).format(/* @__PURE__ */ new Date());
+}
+function getDaysAgoPST(days) {
+  const d = /* @__PURE__ */ new Date(getTodayPST() + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+function diffDays(laterDateStr, earlierDateStr) {
+  const later = /* @__PURE__ */ new Date(laterDateStr + "T00:00:00Z");
+  const earlier = /* @__PURE__ */ new Date(earlierDateStr + "T00:00:00Z");
+  return Math.round((later.getTime() - earlier.getTime()) / 864e5);
 }
 const register$t = (strapi2) => {
   strapi2.ai.mcp.registerTool({
@@ -20971,7 +20981,7 @@ const register$l = (strapi2) => {
     description: "Create a retro record (failure on real work + fix). Optionally link to project. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       title: string().describe("Retro title"),
-      date: string().optional().describe("Date of failure (ISO format)"),
+      date: string().optional().describe("Date of failure (YYYY-MM-DD, defaults to today in America/Los_Angeles)"),
       task: string().optional().describe("What task was being attempted"),
       failure: string().describe("What went wrong"),
       fix: string().describe("How it was fixed"),
@@ -20994,7 +21004,7 @@ const register$l = (strapi2) => {
       const data = {
         title: args.title,
         slug,
-        date: args.date || (/* @__PURE__ */ new Date()).toISOString(),
+        date: args.date ? args.date.slice(0, 10) : getTodayPST(),
         task: args.task,
         failure: args.failure,
         fix: args.fix,
@@ -21267,7 +21277,7 @@ const register$h = (strapi2) => {
       system: string().describe('System name (e.g., "strapi", "mcp", "cursor-agent")'),
       capability: string().describe("What capability is being tested"),
       canDo: boolean().describe("Whether the system CAN do this"),
-      verifiedAt: string().optional().describe("When this was verified (ISO format)"),
+      verifiedAt: string().optional().describe("When this was verified (YYYY-MM-DD, defaults to today in America/Los_Angeles)"),
       howVerified: string().optional().describe("How this was verified"),
       notes: string().optional().describe("Additional notes")
     }),
@@ -21295,7 +21305,7 @@ const register$h = (strapi2) => {
         system: args.system,
         capability: args.capability,
         canDo: args.canDo,
-        verifiedAt: args.verifiedAt || (/* @__PURE__ */ new Date()).toISOString(),
+        verifiedAt: args.verifiedAt ? args.verifiedAt.slice(0, 10) : getTodayPST(),
         howVerified: args.howVerified,
         notes: args.notes
       };
@@ -21918,12 +21928,10 @@ const register$b = (strapi2) => {
         limit: limit * 2
       });
       if (args.waitingOlderThanDays !== void 0) {
-        const cutoffDate = /* @__PURE__ */ new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - args.waitingOlderThanDays);
-        const cutoffISO = cutoffDate.toISOString();
+        const cutoffDate = getDaysAgoPST(args.waitingOlderThanDays);
         todos = todos.filter((todo2) => {
           if (todo2.status !== "waiting") return false;
-          return todo2.updatedAt < cutoffISO;
+          return todo2.updatedAt && todo2.updatedAt.slice(0, 10) < cutoffDate;
         });
       }
       const priorityOrder = { P0: 0, P1: 1, P2: 2, P3: 3 };
@@ -22278,19 +22286,31 @@ const register$7 = (strapi2) => {
         limit,
         sort: { createdAt: "desc" }
       });
-      const formattedGoals = goals.map((goal2) => ({
-        documentId: goal2.documentId,
-        title: goal2.title,
-        description: goal2.description,
-        category: goal2.category,
-        cadence: goal2.cadence,
-        target: goal2.target,
-        status: goal2.status,
-        startDate: goal2.startDate,
-        currentStreak: goal2.currentStreak,
-        bestStreak: goal2.bestStreak,
-        lastCheckinDate: goal2.lastCheckinDate
-      }));
+      const todayPST = getTodayPST();
+      const formattedGoals = goals.map((goal2) => {
+        let currentStreak = goal2.currentStreak;
+        if (currentStreak > 0 && goal2.lastCheckinDate) {
+          const daysSinceLastCheckin = diffDays(todayPST, goal2.lastCheckinDate);
+          if (goal2.cadence === "daily" && daysSinceLastCheckin > 1) {
+            currentStreak = 0;
+          } else if (goal2.cadence === "weekly" && daysSinceLastCheckin > 7) {
+            currentStreak = 0;
+          }
+        }
+        return {
+          documentId: goal2.documentId,
+          title: goal2.title,
+          description: goal2.description,
+          category: goal2.category,
+          cadence: goal2.cadence,
+          target: goal2.target,
+          status: goal2.status,
+          startDate: goal2.startDate,
+          currentStreak,
+          bestStreak: goal2.bestStreak,
+          lastCheckinDate: goal2.lastCheckinDate
+        };
+      });
       const output = stripNullish({
         goals: formattedGoals,
         count: formattedGoals.length
@@ -22317,10 +22337,8 @@ function calculateStreaks(checkins, cadence) {
   }
   const sortedCheckins = [...checkins].sort((a, b) => b.date.localeCompare(a.date));
   const latestCheckin = sortedCheckins[0];
-  const latestDate = /* @__PURE__ */ new Date(latestCheckin.date + "T00:00:00Z");
   const todayPST = getTodayPST();
-  const today = /* @__PURE__ */ new Date(todayPST + "T00:00:00Z");
-  const daysDiff = Math.floor((today.getTime() - latestDate.getTime()) / (1e3 * 60 * 60 * 24));
+  const daysDiff = diffDays(todayPST, latestCheckin.date);
   let currentStreak = 0;
   if (cadence === "daily") {
     if (daysDiff > 1) {
@@ -22332,9 +22350,7 @@ function calculateStreaks(checkins, cadence) {
         if (i === 0) {
           currentStreak = 1;
         } else {
-          const prevDate = /* @__PURE__ */ new Date(sortedCheckins[i - 1].date + "T00:00:00Z");
-          const currDate = /* @__PURE__ */ new Date(checkin.date + "T00:00:00Z");
-          const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1e3 * 60 * 60 * 24));
+          const diff = diffDays(sortedCheckins[i - 1].date, checkin.date);
           if (diff === 1) {
             currentStreak++;
           } else {
@@ -22353,9 +22369,7 @@ function calculateStreaks(checkins, cadence) {
         if (i === 0) {
           currentStreak = 1;
         } else {
-          const prevDate = /* @__PURE__ */ new Date(sortedCheckins[i - 1].date + "T00:00:00Z");
-          const currDate = /* @__PURE__ */ new Date(checkin.date + "T00:00:00Z");
-          const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1e3 * 60 * 60 * 24));
+          const diff = diffDays(sortedCheckins[i - 1].date, checkin.date);
           if (diff >= 6 && diff <= 8) {
             currentStreak++;
           } else {
@@ -22373,9 +22387,7 @@ function calculateStreaks(checkins, cadence) {
       if (i === sortedCheckins.length - 1) {
         tempStreak = 1;
       } else {
-        const currDate = /* @__PURE__ */ new Date(checkin.date + "T00:00:00Z");
-        const prevDate = /* @__PURE__ */ new Date(sortedCheckins[i + 1].date + "T00:00:00Z");
-        const diff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1e3 * 60 * 60 * 24));
+        const diff = diffDays(checkin.date, sortedCheckins[i + 1].date);
         if (cadence === "daily" && diff === 1) {
           tempStreak++;
         } else if (cadence === "weekly" && diff >= 6 && diff <= 8) {
@@ -22496,6 +22508,7 @@ const register$6 = (strapi2) => {
 };
 const logCheckin = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  calculateStreaks,
   register: register$6
 }, Symbol.toStringTag, { value: "Module" }));
 const register$5 = (strapi2) => {
@@ -22555,11 +22568,11 @@ const register$5 = (strapi2) => {
         note: c.note,
         loggedBy: c.loggedBy
       }));
-      const now = /* @__PURE__ */ new Date();
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3);
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1e3);
-      const checkins7Days = allCheckins.filter((c) => new Date(c.date) >= sevenDaysAgo);
-      const checkins30Days = allCheckins.filter((c) => new Date(c.date) >= thirtyDaysAgo);
+      const { currentStreak, bestStreak } = calculateStreaks(allCheckins, goal2.cadence);
+      const sevenDaysAgoStr = getDaysAgoPST(7);
+      const thirtyDaysAgoStr = getDaysAgoPST(30);
+      const checkins7Days = allCheckins.filter((c) => c.date >= sevenDaysAgoStr);
+      const checkins30Days = allCheckins.filter((c) => c.date >= thirtyDaysAgoStr);
       let metRateLast7Days = null;
       if (checkins7Days.length > 0) {
         const metCount = checkins7Days.filter((c) => c.met).length;
@@ -22574,8 +22587,8 @@ const register$5 = (strapi2) => {
         goalId: goal2.documentId,
         title: goal2.title,
         status: goal2.status,
-        currentStreak: goal2.currentStreak,
-        bestStreak: goal2.bestStreak,
+        currentStreak,
+        bestStreak,
         metRateLast7Days,
         metRateLast30Days,
         recentCheckins
@@ -22836,11 +22849,10 @@ const register$3 = (strapi2) => {
           },
           limit: 500
         });
-        const now = /* @__PURE__ */ new Date();
+        const todayPST = getTodayPST();
         for (const note2 of notes) {
           if (note2.verifiedAt) {
-            const verifiedDate = new Date(note2.verifiedAt);
-            const ageInDays = (now.getTime() - verifiedDate.getTime()) / (1e3 * 60 * 60 * 24);
+            const ageInDays = diffDays(todayPST, note2.verifiedAt.slice(0, 10));
             if (ageInDays > 90) {
               findings.push({
                 severity: "WARN",
@@ -22912,11 +22924,10 @@ const register$3 = (strapi2) => {
         const capabilities = await strapi22.documents(capabilityUid).findMany({
           limit: 500
         });
-        const now = /* @__PURE__ */ new Date();
+        const todayPST = getTodayPST();
         for (const capability2 of capabilities) {
           if (capability2.verifiedAt) {
-            const verifiedDate = new Date(capability2.verifiedAt);
-            const ageInDays = (now.getTime() - verifiedDate.getTime()) / (1e3 * 60 * 60 * 24);
+            const ageInDays = diffDays(todayPST, capability2.verifiedAt.slice(0, 10));
             if (ageInDays > 90) {
               findings.push({
                 severity: "WARN",
@@ -22938,11 +22949,10 @@ const register$3 = (strapi2) => {
           },
           limit: 500
         });
-        const now = /* @__PURE__ */ new Date();
+        const todayPST = getTodayPST();
         for (const retro2 of retros) {
           if (retro2.date) {
-            const retroDate = new Date(retro2.date);
-            const ageInDays = (now.getTime() - retroDate.getTime()) / (1e3 * 60 * 60 * 24);
+            const ageInDays = diffDays(todayPST, retro2.date.slice(0, 10));
             if (ageInDays > 14) {
               findings.push({
                 severity: "WARN",
@@ -23238,7 +23248,7 @@ const register = (strapi2) => {
         request: g.request,
         whatWasNeeded: g.whatWasNeeded
       }));
-      const now = /* @__PURE__ */ new Date();
+      const todayPST = getTodayPST();
       const todos = await strapi22.documents(todoUid).findMany({
         filters: {
           status: { $in: ["inbox", "next", "doing", "waiting"] }
@@ -23249,8 +23259,7 @@ const register = (strapi2) => {
       const urgentTodos = todos.filter((t) => {
         if (t.priority === "P0" || t.priority === "P1") return true;
         if (t.dueDate) {
-          const dueDate = new Date(t.dueDate);
-          return dueDate < now;
+          return t.dueDate < todayPST;
         }
         return false;
       }).slice(0, todoLimit).map((t) => stripNullish({
@@ -23260,9 +23269,7 @@ const register = (strapi2) => {
         status: t.status,
         dueDate: t.dueDate
       }));
-      const ninetyDaysAgo = /* @__PURE__ */ new Date();
-      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-      const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split("T")[0];
+      const ninetyDaysAgoStr = getDaysAgoPST(90);
       const capabilities = await strapi22.documents(capabilityUid).findMany({
         filters: {
           canDo: { $eq: false },

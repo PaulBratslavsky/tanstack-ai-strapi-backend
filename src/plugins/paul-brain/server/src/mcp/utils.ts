@@ -44,3 +44,30 @@ export function getTodayPST(): string {
     day: '2-digit',
   }).format(new Date());
 }
+
+/**
+ * Get a date N days ago in YYYY-MM-DD format, relative to America/Los_Angeles timezone.
+ * Uses UTC-midnight arithmetic so DST transitions never shift calendar dates.
+ * 
+ * @param days - Number of days to subtract from today
+ * @returns Date as YYYY-MM-DD string
+ */
+export function getDaysAgoPST(days: number): string {
+  const d = new Date(getTodayPST() + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Calculate the number of days between two YYYY-MM-DD date strings.
+ * Uses UTC midnight for both dates to avoid DST issues.
+ * 
+ * @param laterDateStr - Later date in YYYY-MM-DD format
+ * @param earlierDateStr - Earlier date in YYYY-MM-DD format
+ * @returns Number of days between the dates (positive if later > earlier)
+ */
+export function diffDays(laterDateStr: string, earlierDateStr: string): number {
+  const later = new Date(laterDateStr + 'T00:00:00Z');
+  const earlier = new Date(earlierDateStr + 'T00:00:00Z');
+  return Math.round((later.getTime() - earlier.getTime()) / 86400000);
+}

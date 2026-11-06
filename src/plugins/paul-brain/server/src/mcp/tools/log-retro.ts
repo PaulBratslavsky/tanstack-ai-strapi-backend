@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
+import { getTodayPST } from '../utils';
 import type { BrainService } from '../../services/brain';
 
 export const register = (strapi: Core.Strapi) => {
@@ -12,7 +13,7 @@ export const register = (strapi: Core.Strapi) => {
     
     resolveInputSchema: () => z.object({
       title: z.string().describe('Retro title'),
-      date: z.string().optional().describe('Date of failure (ISO format)'),
+      date: z.string().optional().describe('Date of failure (YYYY-MM-DD, defaults to today in America/Los_Angeles)'),
       task: z.string().optional().describe('What task was being attempted'),
       failure: z.string().describe('What went wrong'),
       fix: z.string().describe('How it was fixed'),
@@ -40,7 +41,7 @@ export const register = (strapi: Core.Strapi) => {
       const data: any = {
         title: args.title,
         slug,
-        date: args.date || new Date().toISOString(),
+        date: args.date ? args.date.slice(0, 10) : getTodayPST(),
         task: args.task,
         failure: args.failure,
         fix: args.fix,

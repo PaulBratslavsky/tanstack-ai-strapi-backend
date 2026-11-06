@@ -2,7 +2,8 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish } from '../utils';
+import { stripNullish, getDaysAgoPST } from '../utils';
+import { calculateStreaks } from './log-checkin';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -71,12 +72,14 @@ export const register = (strapi: Core.Strapi) => {
         loggedBy: c.loggedBy,
       }));
 
-      const now = new Date();
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      // Recompute streaks live so currentStreak reflects getTodayPST() even before a new check-in is logged
+      const { currentStreak, bestStreak } = calculateStreaks(allCheckins, goal.cadence);
 
-      const checkins7Days = allCheckins.filter(c => new Date(c.date) >= sevenDaysAgo);
-      const checkins30Days = allCheckins.filter(c => new Date(c.date) >= thirtyDaysAgo);
+      const sevenDaysAgoStr = getDaysAgoPST(7);
+      const thirtyDaysAgoStr = getDaysAgoPST(30);
+
+      const checkins7Days = allCheckins.filter(c => c.date >= sevenDaysAgoStr);
+      const checkins30Days = allCheckins.filter(c => c.date >= thirtyDaysAgoStr);
 
       let metRateLast7Days = null;
       if (checkins7Days.length > 0) {
@@ -94,8 +97,8 @@ export const register = (strapi: Core.Strapi) => {
         goalId: goal.documentId,
         title: goal.title,
         status: goal.status,
-        currentStreak: goal.currentStreak,
-        bestStreak: goal.bestStreak,
+        currentStreak,
+        bestStreak,
         metRateLast7Days,
         metRateLast30Days,
         recentCheckins,

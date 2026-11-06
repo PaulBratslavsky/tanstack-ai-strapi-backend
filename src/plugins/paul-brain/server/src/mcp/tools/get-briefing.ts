@@ -2,7 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish } from '../utils';
+import { stripNullish, getTodayPST, getDaysAgoPST } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -141,7 +141,7 @@ export const register = (strapi: Core.Strapi) => {
       }));
 
       // Get P0/P1 and overdue todos
-      const now = new Date();
+      const todayPST = getTodayPST();
       const todos = await strapi.documents(todoUid).findMany({
         filters: {
           status: { $in: ['inbox', 'next', 'doing', 'waiting'] },
@@ -154,8 +154,7 @@ export const register = (strapi: Core.Strapi) => {
         .filter(t => {
           if (t.priority === 'P0' || t.priority === 'P1') return true;
           if (t.dueDate) {
-            const dueDate = new Date(t.dueDate);
-            return dueDate < now;
+            return t.dueDate < todayPST;
           }
           return false;
         })
@@ -169,9 +168,7 @@ export const register = (strapi: Core.Strapi) => {
         }));
 
       // Get recent 'cannot' capabilities (within last 90 days)
-      const ninetyDaysAgo = new Date();
-      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-      const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split('T')[0];
+      const ninetyDaysAgoStr = getDaysAgoPST(90);
 
       const capabilities = await strapi.documents(capabilityUid).findMany({
         filters: {
