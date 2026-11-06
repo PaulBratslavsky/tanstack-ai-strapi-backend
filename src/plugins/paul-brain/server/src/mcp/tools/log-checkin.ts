@@ -2,7 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish } from '../utils';
+import { stripNullish, getTodayPST } from '../utils';
 
 function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { currentStreak: number; bestStreak: number } {
   if (checkins.length === 0) {
@@ -12,9 +12,9 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
   const sortedCheckins = [...checkins].sort((a, b) => b.date.localeCompare(a.date));
   
   const latestCheckin = sortedCheckins[0];
-  const latestDate = new Date(latestCheckin.date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const latestDate = new Date(latestCheckin.date + 'T00:00:00Z');
+  const todayPST = getTodayPST();
+  const today = new Date(todayPST + 'T00:00:00Z');
   
   const daysDiff = Math.floor((today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
   
@@ -30,8 +30,8 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
         if (i === 0) {
           currentStreak = 1;
         } else {
-          const prevDate = new Date(sortedCheckins[i - 1].date);
-          const currDate = new Date(checkin.date);
+          const prevDate = new Date(sortedCheckins[i - 1].date + 'T00:00:00Z');
+          const currDate = new Date(checkin.date + 'T00:00:00Z');
           const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1000 * 60 * 60 * 24));
           
           if (diff === 1) {
@@ -53,8 +53,8 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
         if (i === 0) {
           currentStreak = 1;
         } else {
-          const prevDate = new Date(sortedCheckins[i - 1].date);
-          const currDate = new Date(checkin.date);
+          const prevDate = new Date(sortedCheckins[i - 1].date + 'T00:00:00Z');
+          const currDate = new Date(checkin.date + 'T00:00:00Z');
           const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1000 * 60 * 60 * 24));
           
           if (diff >= 6 && diff <= 8) {
@@ -77,8 +77,8 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
       if (i === sortedCheckins.length - 1) {
         tempStreak = 1;
       } else {
-        const currDate = new Date(checkin.date);
-        const prevDate = new Date(sortedCheckins[i + 1].date);
+        const currDate = new Date(checkin.date + 'T00:00:00Z');
+        const prevDate = new Date(sortedCheckins[i + 1].date + 'T00:00:00Z');
         const diff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
         
         if (cadence === 'daily' && diff === 1) {
@@ -106,7 +106,7 @@ export const register = (strapi: Core.Strapi) => {
     
     resolveInputSchema: () => z.object({
       goal: z.string().describe('Goal documentId or title'),
-      date: z.string().optional().describe('Check-in date (ISO format, defaults to today in America/Los_Angeles)'),
+      date: z.string().optional().describe('Check-in date (YYYY-MM-DD, defaults to today in America/Los_Angeles)'),
       met: z.boolean().describe('Whether the goal was met'),
       note: z.string().optional().describe('Optional note'),
       loggedBy: z.string().optional().describe('Who logged this check-in'),
@@ -145,12 +145,7 @@ export const register = (strapi: Core.Strapi) => {
 
       const goal = goals[0];
       
-      const checkinDate = args.date || new Date().toLocaleString('en-US', { 
-        timeZone: 'America/Los_Angeles',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }).split(',')[0].split('/').reverse().join('-').replace(/(\d+)-(\d+)-(\d+)/, '$1-$3-$2');
+      const checkinDate = args.date || getTodayPST();
 
       const existingCheckins = await strapi.documents(checkinUid).findMany({
         filters: {

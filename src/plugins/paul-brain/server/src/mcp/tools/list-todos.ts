@@ -2,7 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish } from '../utils';
+import { stripNullish, getTodayPST } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -84,7 +84,7 @@ export const register = (strapi: Core.Strapi) => {
       }
       
       if (args.overdue) {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayPST();
         filters.dueDate = { $lt: today };
         filters.status = { $notIn: ['done', 'dropped'] };
       }

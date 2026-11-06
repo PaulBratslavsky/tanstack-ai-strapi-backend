@@ -2,7 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish } from '../utils';
+import { stripNullish, getTodayPST } from '../utils';
 import type { BrainService } from '../../services/brain';
 
 export const register = (strapi: Core.Strapi) => {
@@ -38,7 +38,7 @@ export const register = (strapi: Core.Strapi) => {
       const uid = getUid('gap');
       
       const slug = brainService.slugify(args.title);
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayPST();
       
       const existing = await strapi.documents(uid).findMany({
         filters: {

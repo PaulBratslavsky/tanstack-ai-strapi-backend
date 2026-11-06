@@ -28,3 +28,19 @@ export function stripNullish<T>(obj: T): T {
 
   return obj;
 }
+
+/**
+ * Get today's date in YYYY-MM-DD format for America/Los_Angeles timezone.
+ * This ensures consistent date handling for goals, todos, and check-ins
+ * even when the server is running in UTC.
+ * 
+ * @returns Today's date as YYYY-MM-DD string in America/Los_Angeles timezone
+ */
+export function getTodayPST(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
