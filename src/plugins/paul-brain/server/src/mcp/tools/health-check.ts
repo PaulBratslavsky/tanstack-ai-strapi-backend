@@ -2,7 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish } from '../utils';
+import { stripNullish, getTodayPST, diffDays } from '../utils';
 
 interface Finding {
   severity: 'BLOCK' | 'WARN';
@@ -208,11 +208,10 @@ export const register = (strapi: Core.Strapi) => {
           limit: 500,
         });
 
-        const now = new Date();
+        const todayPST = getTodayPST();
         for (const note of notes) {
           if (note.verifiedAt) {
-            const verifiedDate = new Date(note.verifiedAt);
-            const ageInDays = (now.getTime() - verifiedDate.getTime()) / (1000 * 60 * 60 * 24);
+            const ageInDays = diffDays(todayPST, note.verifiedAt.slice(0, 10));
             
             if (ageInDays > 90) {
               findings.push({
@@ -296,11 +295,10 @@ export const register = (strapi: Core.Strapi) => {
           limit: 500,
         });
 
-        const now = new Date();
+        const todayPST = getTodayPST();
         for (const capability of capabilities) {
           if (capability.verifiedAt) {
-            const verifiedDate = new Date(capability.verifiedAt);
-            const ageInDays = (now.getTime() - verifiedDate.getTime()) / (1000 * 60 * 60 * 24);
+            const ageInDays = diffDays(todayPST, capability.verifiedAt.slice(0, 10));
             
             if (ageInDays > 90) {
               findings.push({
@@ -326,11 +324,10 @@ export const register = (strapi: Core.Strapi) => {
           limit: 500,
         });
 
-        const now = new Date();
+        const todayPST = getTodayPST();
         for (const retro of retros) {
           if (retro.date) {
-            const retroDate = new Date(retro.date);
-            const ageInDays = (now.getTime() - retroDate.getTime()) / (1000 * 60 * 60 * 24);
+            const ageInDays = diffDays(todayPST, retro.date.slice(0, 10));
             
             if (ageInDays > 14) {
               findings.push({

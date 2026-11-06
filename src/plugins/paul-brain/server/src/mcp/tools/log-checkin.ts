@@ -2,9 +2,9 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish, getTodayPST } from '../utils';
+import { stripNullish, getTodayPST, diffDays } from '../utils';
 
-function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { currentStreak: number; bestStreak: number } {
+export function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { currentStreak: number; bestStreak: number } {
   if (checkins.length === 0) {
     return { currentStreak: 0, bestStreak: 0 };
   }
@@ -12,11 +12,9 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
   const sortedCheckins = [...checkins].sort((a, b) => b.date.localeCompare(a.date));
   
   const latestCheckin = sortedCheckins[0];
-  const latestDate = new Date(latestCheckin.date + 'T00:00:00Z');
   const todayPST = getTodayPST();
-  const today = new Date(todayPST + 'T00:00:00Z');
   
-  const daysDiff = Math.floor((today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
+  const daysDiff = diffDays(todayPST, latestCheckin.date);
   
   let currentStreak = 0;
   if (cadence === 'daily') {
@@ -30,9 +28,7 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
         if (i === 0) {
           currentStreak = 1;
         } else {
-          const prevDate = new Date(sortedCheckins[i - 1].date + 'T00:00:00Z');
-          const currDate = new Date(checkin.date + 'T00:00:00Z');
-          const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1000 * 60 * 60 * 24));
+          const diff = diffDays(sortedCheckins[i - 1].date, checkin.date);
           
           if (diff === 1) {
             currentStreak++;
@@ -53,9 +49,7 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
         if (i === 0) {
           currentStreak = 1;
         } else {
-          const prevDate = new Date(sortedCheckins[i - 1].date + 'T00:00:00Z');
-          const currDate = new Date(checkin.date + 'T00:00:00Z');
-          const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1000 * 60 * 60 * 24));
+          const diff = diffDays(sortedCheckins[i - 1].date, checkin.date);
           
           if (diff >= 6 && diff <= 8) {
             currentStreak++;
@@ -77,9 +71,7 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
       if (i === sortedCheckins.length - 1) {
         tempStreak = 1;
       } else {
-        const currDate = new Date(checkin.date + 'T00:00:00Z');
-        const prevDate = new Date(sortedCheckins[i + 1].date + 'T00:00:00Z');
-        const diff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+        const diff = diffDays(checkin.date, sortedCheckins[i + 1].date);
         
         if (cadence === 'daily' && diff === 1) {
           tempStreak++;

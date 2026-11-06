@@ -2,7 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish, getTodayPST } from '../utils';
+import { stripNullish, getTodayPST, getDaysAgoPST } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -96,13 +96,11 @@ export const register = (strapi: Core.Strapi) => {
       });
 
       if (args.waitingOlderThanDays !== undefined) {
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - args.waitingOlderThanDays);
-        const cutoffISO = cutoffDate.toISOString();
+        const cutoffDate = getDaysAgoPST(args.waitingOlderThanDays);
         
         todos = todos.filter(todo => {
           if (todo.status !== 'waiting') return false;
-          return todo.updatedAt < cutoffISO;
+          return todo.updatedAt && todo.updatedAt.slice(0, 10) < cutoffDate;
         });
       }
 

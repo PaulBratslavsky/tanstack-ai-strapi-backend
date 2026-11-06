@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
+import { getTodayPST } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -13,7 +14,7 @@ export const register = (strapi: Core.Strapi) => {
       system: z.string().describe('System name (e.g., "strapi", "mcp", "cursor-agent")'),
       capability: z.string().describe('What capability is being tested'),
       canDo: z.boolean().describe('Whether the system CAN do this'),
-      verifiedAt: z.string().optional().describe('When this was verified (ISO format)'),
+      verifiedAt: z.string().optional().describe('When this was verified (YYYY-MM-DD, defaults to today in America/Los_Angeles)'),
       howVerified: z.string().optional().describe('How this was verified'),
       notes: z.string().optional().describe('Additional notes'),
     }),
@@ -47,7 +48,7 @@ export const register = (strapi: Core.Strapi) => {
         system: args.system,
         capability: args.capability,
         canDo: args.canDo,
-        verifiedAt: args.verifiedAt || new Date().toISOString(),
+        verifiedAt: args.verifiedAt ? args.verifiedAt.slice(0, 10) : getTodayPST(),
         howVerified: args.howVerified,
         notes: args.notes,
       };

@@ -2,7 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
-import { stripNullish } from '../utils';
+import { stripNullish, getTodayPST, diffDays } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -57,19 +57,35 @@ export const register = (strapi: Core.Strapi) => {
         sort: { createdAt: 'desc' },
       });
 
-      const formattedGoals = goals.map(goal => ({
-        documentId: goal.documentId,
-        title: goal.title,
-        description: goal.description,
-        category: goal.category,
-        cadence: goal.cadence,
-        target: goal.target,
-        status: goal.status,
-        startDate: goal.startDate,
-        currentStreak: goal.currentStreak,
-        bestStreak: goal.bestStreak,
-        lastCheckinDate: goal.lastCheckinDate,
-      }));
+      const todayPST = getTodayPST();
+
+      const formattedGoals = goals.map(goal => {
+        let currentStreak = goal.currentStreak;
+        
+        // Check if streak has lapsed in Pacific Time without needing a write
+        if (currentStreak > 0 && goal.lastCheckinDate) {
+          const daysSinceLastCheckin = diffDays(todayPST, goal.lastCheckinDate);
+          if (goal.cadence === 'daily' && daysSinceLastCheckin > 1) {
+            currentStreak = 0;
+          } else if (goal.cadence === 'weekly' && daysSinceLastCheckin > 7) {
+            currentStreak = 0;
+          }
+        }
+        
+        return {
+          documentId: goal.documentId,
+          title: goal.title,
+          description: goal.description,
+          category: goal.category,
+          cadence: goal.cadence,
+          target: goal.target,
+          status: goal.status,
+          startDate: goal.startDate,
+          currentStreak,
+          bestStreak: goal.bestStreak,
+          lastCheckinDate: goal.lastCheckinDate,
+        };
+      });
 
       const output = stripNullish({
         goals: formattedGoals,
