@@ -12,9 +12,9 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
   const sortedCheckins = [...checkins].sort((a, b) => b.date.localeCompare(a.date));
   
   const latestCheckin = sortedCheckins[0];
-  const latestDate = new Date(latestCheckin.date + 'T00:00:00');
+  const latestDate = new Date(latestCheckin.date + 'T00:00:00Z');
   const todayPST = getTodayPST();
-  const today = new Date(todayPST + 'T00:00:00');
+  const today = new Date(todayPST + 'T00:00:00Z');
   
   const daysDiff = Math.floor((today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
   
@@ -30,8 +30,8 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
         if (i === 0) {
           currentStreak = 1;
         } else {
-          const prevDate = new Date(sortedCheckins[i - 1].date);
-          const currDate = new Date(checkin.date);
+          const prevDate = new Date(sortedCheckins[i - 1].date + 'T00:00:00Z');
+          const currDate = new Date(checkin.date + 'T00:00:00Z');
           const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1000 * 60 * 60 * 24));
           
           if (diff === 1) {
@@ -53,8 +53,8 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
         if (i === 0) {
           currentStreak = 1;
         } else {
-          const prevDate = new Date(sortedCheckins[i - 1].date);
-          const currDate = new Date(checkin.date);
+          const prevDate = new Date(sortedCheckins[i - 1].date + 'T00:00:00Z');
+          const currDate = new Date(checkin.date + 'T00:00:00Z');
           const diff = Math.floor((prevDate.getTime() - currDate.getTime()) / (1000 * 60 * 60 * 24));
           
           if (diff >= 6 && diff <= 8) {
@@ -77,8 +77,8 @@ function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { curre
       if (i === sortedCheckins.length - 1) {
         tempStreak = 1;
       } else {
-        const currDate = new Date(checkin.date);
-        const prevDate = new Date(sortedCheckins[i + 1].date);
+        const currDate = new Date(checkin.date + 'T00:00:00Z');
+        const prevDate = new Date(sortedCheckins[i + 1].date + 'T00:00:00Z');
         const diff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
         
         if (cadence === 'daily' && diff === 1) {
