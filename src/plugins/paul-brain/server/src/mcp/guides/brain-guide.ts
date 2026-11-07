@@ -91,6 +91,15 @@ Get a compact session briefing to start every session.
 - Recent 'cannot' capabilities (last 90 days)
 - Call this first to load context
 
+### kb_stats
+Get knowledge base statistics to understand what's in the brain.
+- Returns counts per content type (note, person, project, etc.)
+- Notes broken down by kind and tag
+- Video notes vs transcripts: shows which YouTube transcripts lack notes
+- Orphan counts: notes without links, people/projects/sources without notes
+- Use before major operations to understand KB state
+- Check regularly to find transcripts that need notes
+
 ### health_check
 Run diagnostic checks on brain data.
 - Checks for duplicates, missing fields, stale data, orphans, broken relations
@@ -108,13 +117,18 @@ Create a new note with duplicate detection.
 - Use \`createMissing: true\` to auto-create linked entities by name
 
 ### recall
-Search across all brain types with ranked results.
+Search across all brain types with ranked results (searches note body/content and tags).
 - Use specific queries: "strapi mcp tools" not just "strapi"
 - Filter by type: \`["note", "person"]\`
-- Filter by tags: \`["strapi", "mcp"]\`
+- Filter by kind: \`"video"\`, \`"lesson"\`, \`"fact"\`, etc.
+- Filter by tag: \`"strapi"\` (single tag)
+- Filter by videoId: find notes for a specific YouTube video
+- Filter by sourceId: find notes linked to a specific source
 - Results are ranked: title match > alias/tag match > body match
 - Pinned notes rank higher
 - Recent items rank higher
+- Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
+- Always search before creating notes to avoid duplicates
 
 ### get_entity
 Fetch one entity by type + documentId or slug.
@@ -132,10 +146,32 @@ Patch a note's fields.
 - Use \`appendBody\` instead of \`body\` to add without overwriting
 - Use \`addTags\` / \`removeTags\` for tag operations
 
+### upsert_person
+Create or update a person (matches by slug/alias, updates or creates).
+- Fields: name, role, org, email, handles (JSON: {github, x, linkedin}), notes_md, last_contact
+- Idempotent: safe to call multiple times with same name
+- Returns created: true/false and documentId
+
+### upsert_source
+Create or update a source (matches by slug, videoId, or url).
+- Fields: title, type, url, videoId, external_id, excerpt, captured_on
+- Matches by slug (from title), videoId, or url
+- Updates matched source or creates new
+- Use for YouTube videos: pass videoId and url
+
+### update_source
+Update an existing source by documentId or slug.
+- Fields: title, type, url, videoId, external_id, excerpt, captured_on
+- All fields optional (only updates provided fields)
+- Use when you know the source exists
+
 ### link
 Connect or disconnect a note with people/projects/sources/decisions.
 - Pass documentIds or slugs
+- For sources: can also pass videoId or url to find/update the source
+- Automatically adds missing videoId/url to sources when provided
 - Use after creating stub entities with \`createMissing\`
+- Always link video notes to sources for better organization
 
 ### log_decision
 Create a decision record (context/decision/rationale).
@@ -263,24 +299,46 @@ Update goal fields.
 ## Best Practices
 
 1. **Start with briefing**: Call \`get_briefing\` at session start to load lessons, open issues, and urgent todos
-2. **Handle duplicates**: When \`remember\` or \`add_todo\` returns needsDecision with candidates, review and choose merge/new/supersede
-3. **Deduplication**: Let tools check for duplicates automatically — they'll ask when unsure
-4. **Tagging**: Tag liberally. Common tags: \`#strapi\`, \`#mcp\`, \`#cursor\`, \`#ai\`, \`#deployment\`, \`#bug\`, \`#feature\`
-5. **Linking**: Link notes to people/projects/sources — it enables context traversal
-6. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
-7. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
-8. **Pinning**: Pin critical notes so they rank higher in search
-9. **Source Bot**: Always set \`source_bot\` to identify which bot created a note
-10. **Write negatives**: Use \`record_capability\` with \`canDo: false\` to document what doesn't work
-11. **Log gaps**: When you can't handle something well, \`log_gap\` so we can build it later
-12. **Log retros**: When things fail in real work, \`log_retro\` with the fix for future reference
-13. **Close retros**: Use \`update_retro\` to mark status as fixed/declined/wontfix when resolved
-14. **Todo status workflow**: Bot-captured todos go to \`inbox\` for Paul to confirm → \`next\` → \`doing\` → \`done\`
-15. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
-16. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
-17. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
+2. **Check KB stats**: Use \`kb_stats\` to understand what's in the brain and find transcripts without notes
+3. **Search before writing**: Always \`recall\` before creating notes to avoid duplicates
+4. **Handle duplicates**: When \`remember\` or \`add_todo\` returns needsDecision with candidates, review and choose merge/new/supersede
+5. **Deduplication**: Let tools check for duplicates automatically — they'll ask when unsure
+6. **Tagging**: Tag liberally. Common tags: \`#strapi\`, \`#mcp\`, \`#cursor\`, \`#ai\`, \`#deployment\`, \`#bug\`, \`#feature\`
+7. **Linking**: Link notes to people/projects/sources — it enables context traversal
+8. **Video notes workflow**: For YouTube content:
+   - Check \`kb_stats\` to find transcripts without notes
+   - Create note with \`kind: "video"\` and \`videoId\`
+   - Link to source with \`link\` (pass videoId/url to find or update source)
+   - This enables joining with youtube-transcripts plugin data
+9. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
+10. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
+11. **Pinning**: Pin critical notes so they rank higher in search
+12. **Source Bot**: Always set \`source_bot\` to identify which bot created a note
+13. **Write negatives**: Use \`record_capability\` with \`canDo: false\` to document what doesn't work
+14. **Log gaps**: When you can't handle something well, \`log_gap\` so we can build it later
+15. **Log retros**: When things fail in real work, \`log_retro\` with the fix for future reference
+16. **Close retros**: Use \`update_retro\` to mark status as fixed/declined/wontfix when resolved
+17. **Todo status workflow**: Bot-captured todos go to \`inbox\` for Paul to confirm → \`next\` → \`doing\` → \`done\`
+18. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
+19. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
+20. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
 
 ## Common Workflows
+
+### Knowledge Base Maintenance
+1. \`kb_stats\` to see overview and find gaps
+2. Check transcripts without notes (returned in kb_stats)
+3. Create video notes for important transcripts
+4. Review orphans (notes/sources without connections)
+
+### Processing YouTube Videos
+1. \`kb_stats\` to find transcripts without notes
+2. For each important video:
+   - \`recall\` by videoId to check if note exists
+   - \`upsert_source\` with title, type: "video", videoId, and url
+   - Create note with \`kind: "video"\`, \`videoId\`, and key insights
+   - \`link\` the note to source (pass videoId and url)
+   - Tag appropriately (\`#video\`, topic tags)
 
 ### Learning about a person
 1. \`recall\` with their name
@@ -293,14 +351,16 @@ Update goal fields.
 3. Link people involved
 
 ### Capturing a conversation
-1. \`remember\` key points as separate notes (kind: \`fact\` or \`preference\`)
-2. Link to source if it's a video/article
-3. Tag with relevant topics
+1. \`recall\` first to check for existing notes
+2. \`remember\` key points as separate notes (kind: \`fact\` or \`preference\`)
+3. Link to source if it's a video/article
+4. Tag with relevant topics
 
 ### Finding prior context
-1. \`recall\` with keywords + tags
-2. \`get_entity\` to get full details
-3. \`list_recent\` to see what was captured recently
+1. \`recall\` with keywords + tags (now searches body/content too)
+2. Use filters: kind, tag, videoId, sourceId
+3. \`get_entity\` to get full details
+4. \`list_recent\` to see what was captured recently
 
 ### Capturing a todo from an email/meeting
 1. \`add_todo\` with source=email/meeting, capturedBy set to bot name
@@ -324,9 +384,11 @@ Update goal fields.
 Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.guide.read\` — read this guide
 - \`plugin::paul-brain.read\` — recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo
+- \`plugin::paul-brain.stats.read\` — kb_stats
 - \`plugin::paul-brain.health.read\` — health_check
 - \`plugin::paul-brain.brief.read\` — get_briefing
 - \`plugin::paul-brain.note.write\` — remember, update_note, link
+- \`plugin::paul-brain.entity.write\` — upsert_person, upsert_source, update_source
 - \`plugin::paul-brain.decision.write\` — log_decision
 - \`plugin::paul-brain.meta.write\` — log_retro, log_gap, record_capability
 - \`plugin::paul-brain.retro.update\` — update_retro

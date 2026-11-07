@@ -109,6 +109,12 @@ export const register = (strapi: Core.Strapi) => {
             pinned: args.pinned,
             expires_on: args.expires_on,
           });
+          
+          // Apply links if createMissing is true
+          if (args.createMissing) {
+            await applyLinks(strapi, existing.documentId!, args, brainService);
+          }
+          
           message = 'Merged with existing note';
         } else if (mode === 'supersede') {
           // Create new note and mark old as superseded
@@ -168,6 +174,70 @@ export const register = (strapi: Core.Strapi) => {
     },
   });
 };
+
+async function applyLinks(strapi: Core.Strapi, noteDocId: string, args: any, brainService: BrainService) {
+  const uid = getUid('note');
+  
+  if (args.link_people) {
+    const peopleIds = await Promise.all(
+      args.link_people.map(async (name) => {
+        const personSlug = brainService.slugify(name);
+        const existingPerson = await brainService.findBySlugOrAlias('person', personSlug);
+        if (existingPerson.exists) {
+          return existingPerson.documentId;
+        }
+        const newPerson = await strapi.documents(getUid('person')).create({
+          data: { name, slug: personSlug },
+        });
+        return newPerson.documentId;
+      })
+    );
+    await strapi.documents(uid).update({
+      documentId: noteDocId,
+      data: { people: { connect: peopleIds.map(id => ({ documentId: id })) } },
+    });
+  }
+
+  if (args.link_projects) {
+    const projectIds = await Promise.all(
+      args.link_projects.map(async (name) => {
+        const projectSlug = brainService.slugify(name);
+        const existingProject = await brainService.findBySlugOrAlias('project', projectSlug);
+        if (existingProject.exists) {
+          return existingProject.documentId;
+        }
+        const newProject = await strapi.documents(getUid('project')).create({
+          data: { name, slug: projectSlug },
+        });
+        return newProject.documentId;
+      })
+    );
+    await strapi.documents(uid).update({
+      documentId: noteDocId,
+      data: { projects: { connect: projectIds.map(id => ({ documentId: id })) } },
+    });
+  }
+
+  if (args.link_sources) {
+    const sourceIds = await Promise.all(
+      args.link_sources.map(async (title) => {
+        const sourceSlug = brainService.slugify(title);
+        const existingSource = await brainService.findBySlugOrAlias('source', sourceSlug);
+        if (existingSource.exists) {
+          return existingSource.documentId;
+        }
+        const newSource = await strapi.documents(getUid('source')).create({
+          data: { title, slug: sourceSlug },
+        });
+        return newSource.documentId;
+      })
+    );
+    await strapi.documents(uid).update({
+      documentId: noteDocId,
+      data: { sources: { connect: sourceIds.map(id => ({ documentId: id })) } },
+    });
+  }
+}
 
 async function createNewNote(strapi: Core.Strapi, uid: string, args: any, slug: string, brainService: BrainService) {
   const data: any = {

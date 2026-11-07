@@ -3,7 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { BRAIN_GUIDE } from '../guides/brain-guide';
 
-const PLUGIN_VERSION = '1.4.2';
+const PLUGIN_VERSION = '1.5.0';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({

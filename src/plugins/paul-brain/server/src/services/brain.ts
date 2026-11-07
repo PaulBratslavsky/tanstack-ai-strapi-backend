@@ -16,7 +16,10 @@ interface DedupeResult {
 interface SearchOptions {
   query: string;
   types?: string[];
-  tags?: string[];
+  kind?: string;
+  tag?: string;
+  videoId?: string;
+  sourceId?: string;
   since?: string;
   limit?: number;
 }
@@ -30,6 +33,8 @@ interface SearchResult {
   snippet: string;
   score: number;
   updatedAt: string;
+  linkedSourceIds?: string[];
+  linkedPersonIds?: string[];
 }
 
 const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
@@ -107,7 +112,7 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
   },
 
   async search(options: SearchOptions): Promise<SearchResult[]> {
-    const { query, types = ['note', 'person', 'project', 'decision', 'source'], tags, since, limit = 25 } = options;
+    const { query, types = ['note', 'person', 'project', 'decision', 'source'], kind, tag, videoId, sourceId, since, limit = 25 } = options;
     
     const results: SearchResult[] = [];
     const queryLower = query.toLowerCase();
@@ -123,21 +128,41 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
           filters.updatedAt = { $gte: since };
         }
 
-        // Fetch without tags filter - we'll filter in JS to avoid Postgres jsonb LIKE incompatibility
+        if (type === 'note' && kind) {
+          filters.kind = { $eq: kind };
+        }
+
+        if (type === 'note' && videoId) {
+          filters.videoId = { $eq: videoId };
+        }
+
+        const populate = type === 'note' ? ['sources', 'people'] : undefined;
+
         const entities = await strapi.documents(uid).findMany({
           filters,
+          populate,
           limit: 100,
         });
 
         for (const entity of entities) {
-          // Apply tags filter in JS for DB-agnostic compatibility
-          if (tags && type === 'note') {
+          // Apply tag filter in JS for DB-agnostic compatibility
+          if (tag && type === 'note') {
             const entityTags = Array.isArray(entity.tags) ? entity.tags : [];
-            const tagsLower = tags.map((t: string) => t.toLowerCase());
             const hasMatchingTag = entityTags.some((t: string) => 
-              tagsLower.includes(t.toLowerCase())
+              t.toLowerCase() === tag.toLowerCase()
             );
             if (!hasMatchingTag) {
+              continue;
+            }
+          }
+
+          // Apply sourceId filter
+          if (sourceId && type === 'note') {
+            const sources = Array.isArray(entity.sources) ? entity.sources : [];
+            const hasMatchingSource = sources.some((s: any) => 
+              s.documentId === sourceId
+            );
+            if (!hasMatchingSource) {
               continue;
             }
           }
@@ -184,7 +209,7 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
               snippet = bodyText.substring(0, 150) + (bodyText.length > 150 ? '...' : '');
             }
 
-            results.push({
+            const result: SearchResult = {
               type,
               documentId: entity.documentId,
               slug: entity.slug,
@@ -193,7 +218,22 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
               snippet,
               score,
               updatedAt: entity.updatedAt,
-            });
+            };
+
+            if (type === 'note') {
+              const sources = Array.isArray(entity.sources) ? entity.sources : [];
+              const people = Array.isArray(entity.people) ? entity.people : [];
+              
+              if (sources.length > 0) {
+                result.linkedSourceIds = sources.map((s: any) => s.documentId);
+              }
+              
+              if (people.length > 0) {
+                result.linkedPersonIds = people.map((p: any) => p.documentId);
+              }
+            }
+
+            results.push(result);
           }
         }
       } catch (err) {

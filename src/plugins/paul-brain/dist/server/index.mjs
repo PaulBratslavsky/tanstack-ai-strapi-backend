@@ -32,6 +32,13 @@ const PERMISSIONS = [
     section: "plugins",
     pluginName: PLUGIN_NAME$1,
     subCategory: "memory",
+    uid: "stats.read",
+    displayName: "Read knowledge base statistics"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "memory",
     uid: "read",
     displayName: "Read memory"
   },
@@ -41,6 +48,13 @@ const PERMISSIONS = [
     subCategory: "memory",
     uid: "note.write",
     displayName: "Write notes and links"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "memory",
+    uid: "entity.write",
+    displayName: "Upsert and update entities (person, source)"
   },
   {
     section: "plugins",
@@ -117,7 +131,7 @@ const PERMISSIONS = [
   }
 ];
 const getActionId = (uid) => `plugin::${PLUGIN_NAME$1}.${uid}`;
-const register$v = ({ strapi: strapi2 }) => {
+const register$z = ({ strapi: strapi2 }) => {
   const actionProvider = strapi2.service("admin::permission").actionProvider;
   const existingActions = PERMISSIONS.filter(
     (permission) => actionProvider.has(`plugin::paul-brain.${permission.uid}`)
@@ -19938,6 +19952,15 @@ Get a compact session briefing to start every session.
 - Recent 'cannot' capabilities (last 90 days)
 - Call this first to load context
 
+### kb_stats
+Get knowledge base statistics to understand what's in the brain.
+- Returns counts per content type (note, person, project, etc.)
+- Notes broken down by kind and tag
+- Video notes vs transcripts: shows which YouTube transcripts lack notes
+- Orphan counts: notes without links, people/projects/sources without notes
+- Use before major operations to understand KB state
+- Check regularly to find transcripts that need notes
+
 ### health_check
 Run diagnostic checks on brain data.
 - Checks for duplicates, missing fields, stale data, orphans, broken relations
@@ -19955,13 +19978,18 @@ Create a new note with duplicate detection.
 - Use \`createMissing: true\` to auto-create linked entities by name
 
 ### recall
-Search across all brain types with ranked results.
+Search across all brain types with ranked results (searches note body/content and tags).
 - Use specific queries: "strapi mcp tools" not just "strapi"
 - Filter by type: \`["note", "person"]\`
-- Filter by tags: \`["strapi", "mcp"]\`
+- Filter by kind: \`"video"\`, \`"lesson"\`, \`"fact"\`, etc.
+- Filter by tag: \`"strapi"\` (single tag)
+- Filter by videoId: find notes for a specific YouTube video
+- Filter by sourceId: find notes linked to a specific source
 - Results are ranked: title match > alias/tag match > body match
 - Pinned notes rank higher
 - Recent items rank higher
+- Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
+- Always search before creating notes to avoid duplicates
 
 ### get_entity
 Fetch one entity by type + documentId or slug.
@@ -19979,10 +20007,32 @@ Patch a note's fields.
 - Use \`appendBody\` instead of \`body\` to add without overwriting
 - Use \`addTags\` / \`removeTags\` for tag operations
 
+### upsert_person
+Create or update a person (matches by slug/alias, updates or creates).
+- Fields: name, role, org, email, handles (JSON: {github, x, linkedin}), notes_md, last_contact
+- Idempotent: safe to call multiple times with same name
+- Returns created: true/false and documentId
+
+### upsert_source
+Create or update a source (matches by slug, videoId, or url).
+- Fields: title, type, url, videoId, external_id, excerpt, captured_on
+- Matches by slug (from title), videoId, or url
+- Updates matched source or creates new
+- Use for YouTube videos: pass videoId and url
+
+### update_source
+Update an existing source by documentId or slug.
+- Fields: title, type, url, videoId, external_id, excerpt, captured_on
+- All fields optional (only updates provided fields)
+- Use when you know the source exists
+
 ### link
 Connect or disconnect a note with people/projects/sources/decisions.
 - Pass documentIds or slugs
+- For sources: can also pass videoId or url to find/update the source
+- Automatically adds missing videoId/url to sources when provided
 - Use after creating stub entities with \`createMissing\`
+- Always link video notes to sources for better organization
 
 ### log_decision
 Create a decision record (context/decision/rationale).
@@ -20110,24 +20160,46 @@ Update goal fields.
 ## Best Practices
 
 1. **Start with briefing**: Call \`get_briefing\` at session start to load lessons, open issues, and urgent todos
-2. **Handle duplicates**: When \`remember\` or \`add_todo\` returns needsDecision with candidates, review and choose merge/new/supersede
-3. **Deduplication**: Let tools check for duplicates automatically — they'll ask when unsure
-4. **Tagging**: Tag liberally. Common tags: \`#strapi\`, \`#mcp\`, \`#cursor\`, \`#ai\`, \`#deployment\`, \`#bug\`, \`#feature\`
-5. **Linking**: Link notes to people/projects/sources — it enables context traversal
-6. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
-7. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
-8. **Pinning**: Pin critical notes so they rank higher in search
-9. **Source Bot**: Always set \`source_bot\` to identify which bot created a note
-10. **Write negatives**: Use \`record_capability\` with \`canDo: false\` to document what doesn't work
-11. **Log gaps**: When you can't handle something well, \`log_gap\` so we can build it later
-12. **Log retros**: When things fail in real work, \`log_retro\` with the fix for future reference
-13. **Close retros**: Use \`update_retro\` to mark status as fixed/declined/wontfix when resolved
-14. **Todo status workflow**: Bot-captured todos go to \`inbox\` for Paul to confirm → \`next\` → \`doing\` → \`done\`
-15. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
-16. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
-17. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
+2. **Check KB stats**: Use \`kb_stats\` to understand what's in the brain and find transcripts without notes
+3. **Search before writing**: Always \`recall\` before creating notes to avoid duplicates
+4. **Handle duplicates**: When \`remember\` or \`add_todo\` returns needsDecision with candidates, review and choose merge/new/supersede
+5. **Deduplication**: Let tools check for duplicates automatically — they'll ask when unsure
+6. **Tagging**: Tag liberally. Common tags: \`#strapi\`, \`#mcp\`, \`#cursor\`, \`#ai\`, \`#deployment\`, \`#bug\`, \`#feature\`
+7. **Linking**: Link notes to people/projects/sources — it enables context traversal
+8. **Video notes workflow**: For YouTube content:
+   - Check \`kb_stats\` to find transcripts without notes
+   - Create note with \`kind: "video"\` and \`videoId\`
+   - Link to source with \`link\` (pass videoId/url to find or update source)
+   - This enables joining with youtube-transcripts plugin data
+9. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
+10. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
+11. **Pinning**: Pin critical notes so they rank higher in search
+12. **Source Bot**: Always set \`source_bot\` to identify which bot created a note
+13. **Write negatives**: Use \`record_capability\` with \`canDo: false\` to document what doesn't work
+14. **Log gaps**: When you can't handle something well, \`log_gap\` so we can build it later
+15. **Log retros**: When things fail in real work, \`log_retro\` with the fix for future reference
+16. **Close retros**: Use \`update_retro\` to mark status as fixed/declined/wontfix when resolved
+17. **Todo status workflow**: Bot-captured todos go to \`inbox\` for Paul to confirm → \`next\` → \`doing\` → \`done\`
+18. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
+19. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
+20. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
 
 ## Common Workflows
+
+### Knowledge Base Maintenance
+1. \`kb_stats\` to see overview and find gaps
+2. Check transcripts without notes (returned in kb_stats)
+3. Create video notes for important transcripts
+4. Review orphans (notes/sources without connections)
+
+### Processing YouTube Videos
+1. \`kb_stats\` to find transcripts without notes
+2. For each important video:
+   - \`recall\` by videoId to check if note exists
+   - \`upsert_source\` with title, type: "video", videoId, and url
+   - Create note with \`kind: "video"\`, \`videoId\`, and key insights
+   - \`link\` the note to source (pass videoId and url)
+   - Tag appropriately (\`#video\`, topic tags)
 
 ### Learning about a person
 1. \`recall\` with their name
@@ -20140,14 +20212,16 @@ Update goal fields.
 3. Link people involved
 
 ### Capturing a conversation
-1. \`remember\` key points as separate notes (kind: \`fact\` or \`preference\`)
-2. Link to source if it's a video/article
-3. Tag with relevant topics
+1. \`recall\` first to check for existing notes
+2. \`remember\` key points as separate notes (kind: \`fact\` or \`preference\`)
+3. Link to source if it's a video/article
+4. Tag with relevant topics
 
 ### Finding prior context
-1. \`recall\` with keywords + tags
-2. \`get_entity\` to get full details
-3. \`list_recent\` to see what was captured recently
+1. \`recall\` with keywords + tags (now searches body/content too)
+2. Use filters: kind, tag, videoId, sourceId
+3. \`get_entity\` to get full details
+4. \`list_recent\` to see what was captured recently
 
 ### Capturing a todo from an email/meeting
 1. \`add_todo\` with source=email/meeting, capturedBy set to bot name
@@ -20171,9 +20245,11 @@ Update goal fields.
 Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.guide.read\` — read this guide
 - \`plugin::paul-brain.read\` — recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo
+- \`plugin::paul-brain.stats.read\` — kb_stats
 - \`plugin::paul-brain.health.read\` — health_check
 - \`plugin::paul-brain.brief.read\` — get_briefing
 - \`plugin::paul-brain.note.write\` — remember, update_note, link
+- \`plugin::paul-brain.entity.write\` — upsert_person, upsert_source, update_source
 - \`plugin::paul-brain.decision.write\` — log_decision
 - \`plugin::paul-brain.meta.write\` — log_retro, log_gap, record_capability
 - \`plugin::paul-brain.retro.update\` — update_retro
@@ -20186,8 +20262,8 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.4.2";
-const register$u = (strapi2) => {
+const PLUGIN_VERSION = "1.5.0";
+const register$y = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
     title: "Get Brain Usage Guide",
@@ -20221,7 +20297,7 @@ Plugin version: ${PLUGIN_VERSION}`
 };
 const getBrainGuide = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$u
+  register: register$y
 }, Symbol.toStringTag, { value: "Module" }));
 function stripNullish(obj) {
   if (obj === null || obj === void 0) {
@@ -20259,15 +20335,18 @@ function diffDays(laterDateStr, earlierDateStr) {
   const earlier = /* @__PURE__ */ new Date(earlierDateStr + "T00:00:00Z");
   return Math.round((later.getTime() - earlier.getTime()) / 864e5);
 }
-const register$t = (strapi2) => {
+const register$x = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "recall",
     title: "Recall from Brain",
-    description: "Search across all brain types (notes, people, projects, decisions, sources) with ranked keyword search. Returns snippets and documentIds. Results ranked by: title match (×3) > alias/tag match (×2) > body match (×1), plus recency decay and pinned boost. See get_brain_guide for usage.",
+    description: "Search across all brain types (notes, people, projects, decisions, sources) with ranked keyword search. Searches note body/content and tags. Returns snippets, documentIds, and linked source/person ids. Results ranked by: title match (×3) > alias/tag match (×2) > body match (×1), plus recency decay and pinned boost. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       query: string().describe("Search query (keywords)"),
       types: array(_enum(["note", "person", "project", "decision", "source"])).optional().describe("Limit search to these types (default: all)"),
-      tags: array(string()).optional().describe("Filter by tags (notes only)"),
+      kind: _enum(["fact", "preference", "idea", "todo", "log", "reference", "lesson", "video", "taught"]).optional().describe("Filter notes by kind"),
+      tag: string().optional().describe("Filter by tag (notes only)"),
+      videoId: string().optional().describe("Filter by videoId (notes only)"),
+      sourceId: string().optional().describe("Filter by linked source documentId (notes only)"),
       since: string().optional().describe("Only return items updated after this ISO date"),
       limit: number().min(1).max(25).optional().describe("Max results (default: 25)")
     }),
@@ -20280,7 +20359,9 @@ const register$t = (strapi2) => {
         name: string().nullish(),
         snippet: string(),
         score: number(),
-        updatedAt: string()
+        updatedAt: string(),
+        linkedSourceIds: array(string()).optional(),
+        linkedPersonIds: array(string()).optional()
       })),
       count: number()
     }),
@@ -20292,7 +20373,10 @@ const register$t = (strapi2) => {
       const results = await brainService.search({
         query: args.query,
         types: args.types,
-        tags: args.tags,
+        kind: args.kind,
+        tag: args.tag,
+        videoId: args.videoId,
+        sourceId: args.sourceId,
         since: args.since,
         limit: args.limit
       });
@@ -20314,9 +20398,9 @@ const register$t = (strapi2) => {
 };
 const recall = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$t
+  register: register$x
 }, Symbol.toStringTag, { value: "Module" }));
-const register$s = (strapi2) => {
+const register$w = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_entity",
     title: "Get Brain Entity",
@@ -20369,16 +20453,16 @@ const register$s = (strapi2) => {
 };
 const getEntity = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$s
+  register: register$w
 }, Symbol.toStringTag, { value: "Module" }));
-const register$r = (strapi2) => {
+const register$v = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_recent",
     title: "List Recent Brain Items",
     description: 'Get newest N items by updatedAt across or within types. Good for "what did we save today?". Optional filters: types, kind (notes only), source_bot. See get_brain_guide for usage.',
     resolveInputSchema: () => object({
       types: array(_enum(["note", "person", "project", "decision", "source"])).optional().describe("Limit to these types (default: all)"),
-      kind: _enum(["fact", "preference", "idea", "todo", "log", "reference", "lesson"]).optional().describe("Filter notes by kind"),
+      kind: _enum(["fact", "preference", "idea", "todo", "log", "reference", "lesson", "video", "taught"]).optional().describe("Filter notes by kind"),
       source_bot: string().optional().describe("Filter by source_bot (notes only)"),
       limit: number().min(1).max(50).optional().describe("Max results (default: 25)")
     }),
@@ -20455,9 +20539,9 @@ const register$r = (strapi2) => {
 };
 const listRecent = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$r
+  register: register$v
 }, Symbol.toStringTag, { value: "Module" }));
-const register$q = (strapi2) => {
+const register$u = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "remember",
     title: "Remember in Brain",
@@ -20548,6 +20632,9 @@ const register$q = (strapi2) => {
             pinned: args.pinned,
             expires_on: args.expires_on
           });
+          if (args.createMissing) {
+            await applyLinks(strapi22, existing.documentId, args, brainService);
+          }
           message = "Merged with existing note";
         } else if (mode2 === "supersede") {
           result = await createNewNote(strapi22, uid, args, slug, brainService);
@@ -20602,6 +20689,66 @@ const register$q = (strapi2) => {
     }
   });
 };
+async function applyLinks(strapi2, noteDocId, args, brainService) {
+  const uid = getUid("note");
+  if (args.link_people) {
+    const peopleIds = await Promise.all(
+      args.link_people.map(async (name) => {
+        const personSlug = brainService.slugify(name);
+        const existingPerson = await brainService.findBySlugOrAlias("person", personSlug);
+        if (existingPerson.exists) {
+          return existingPerson.documentId;
+        }
+        const newPerson = await strapi2.documents(getUid("person")).create({
+          data: { name, slug: personSlug }
+        });
+        return newPerson.documentId;
+      })
+    );
+    await strapi2.documents(uid).update({
+      documentId: noteDocId,
+      data: { people: { connect: peopleIds.map((id) => ({ documentId: id })) } }
+    });
+  }
+  if (args.link_projects) {
+    const projectIds = await Promise.all(
+      args.link_projects.map(async (name) => {
+        const projectSlug = brainService.slugify(name);
+        const existingProject = await brainService.findBySlugOrAlias("project", projectSlug);
+        if (existingProject.exists) {
+          return existingProject.documentId;
+        }
+        const newProject = await strapi2.documents(getUid("project")).create({
+          data: { name, slug: projectSlug }
+        });
+        return newProject.documentId;
+      })
+    );
+    await strapi2.documents(uid).update({
+      documentId: noteDocId,
+      data: { projects: { connect: projectIds.map((id) => ({ documentId: id })) } }
+    });
+  }
+  if (args.link_sources) {
+    const sourceIds = await Promise.all(
+      args.link_sources.map(async (title) => {
+        const sourceSlug = brainService.slugify(title);
+        const existingSource = await brainService.findBySlugOrAlias("source", sourceSlug);
+        if (existingSource.exists) {
+          return existingSource.documentId;
+        }
+        const newSource = await strapi2.documents(getUid("source")).create({
+          data: { title, slug: sourceSlug }
+        });
+        return newSource.documentId;
+      })
+    );
+    await strapi2.documents(uid).update({
+      documentId: noteDocId,
+      data: { sources: { connect: sourceIds.map((id) => ({ documentId: id })) } }
+    });
+  }
+}
 async function createNewNote(strapi2, uid, args, slug, brainService) {
   const data = {
     title: args.title,
@@ -20670,9 +20817,9 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
 }
 const remember = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$q
+  register: register$u
 }, Symbol.toStringTag, { value: "Module" }));
-const register$p = (strapi2) => {
+const register$t = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_note",
     title: "Update Brain Note",
@@ -20763,18 +20910,20 @@ ${args.appendBody}` : args.appendBody;
 };
 const updateNote = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$p
+  register: register$t
 }, Symbol.toStringTag, { value: "Module" }));
-const register$o = (strapi2) => {
+const register$s = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "link",
     title: "Link Brain Entities",
-    description: "Connect or disconnect a note with people/projects/sources/decisions. Pass documentIds or slugs. Use after creating stubs with createMissing. See get_brain_guide for usage.",
+    description: "Connect or disconnect a note with people/projects/sources/decisions. Pass documentIds or slugs. For sources, can also pass videoId or url to find/update. Use after creating stubs with createMissing. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       note: string().describe("Note documentId or slug"),
       relation: _enum(["people", "projects", "sources", "decisions"]).describe("Relation to modify"),
       targets: array(string()).describe("Target documentIds or slugs"),
-      operation: _enum(["connect", "disconnect"]).describe("connect or disconnect")
+      operation: _enum(["connect", "disconnect"]).describe("connect or disconnect"),
+      videoId: string().optional().describe("For sources: videoId to find source or update matched source"),
+      url: string().optional().describe("For sources: url to find source or update matched source")
     }),
     resolveOutputSchema: () => object({
       linked: boolean(),
@@ -20798,7 +20947,43 @@ const register$o = (strapi2) => {
       const targetType = relationTypeMap[args.relation];
       const targetDocIds = await Promise.all(
         args.targets.map(async (target) => {
-          const docId = await brainService.resolveEntityBySlug(targetType, target);
+          let docId = await brainService.resolveEntityBySlug(targetType, target);
+          if (!docId && args.relation === "sources") {
+            const sourceUid = `plugin::${PLUGIN_NAME$1}.source`;
+            if (args.videoId) {
+              const sources = await strapi22.documents(sourceUid).findMany({
+                filters: { videoId: { $eq: args.videoId } },
+                limit: 1
+              });
+              if (sources.length > 0) {
+                docId = sources[0].documentId;
+                const updates = {};
+                if (args.url && !sources[0].url) {
+                  updates.url = args.url;
+                }
+                if (Object.keys(updates).length > 0) {
+                  await strapi22.documents(sourceUid).update({
+                    documentId: docId,
+                    data: updates
+                  });
+                }
+              }
+            } else if (args.url) {
+              const sources = await strapi22.documents(sourceUid).findMany({
+                filters: { url: { $eq: args.url } },
+                limit: 1
+              });
+              if (sources.length > 0) {
+                docId = sources[0].documentId;
+                if (args.videoId && !sources[0].videoId) {
+                  await strapi22.documents(sourceUid).update({
+                    documentId: docId,
+                    data: { videoId: args.videoId }
+                  });
+                }
+              }
+            }
+          }
           if (!docId) {
             throw new Error(`${targetType} not found: ${target}`);
           }
@@ -20829,9 +21014,9 @@ const register$o = (strapi2) => {
 };
 const link = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$o
+  register: register$s
 }, Symbol.toStringTag, { value: "Module" }));
-const register$n = (strapi2) => {
+const register$r = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_decision",
     title: "Log Brain Decision",
@@ -20916,9 +21101,9 @@ const register$n = (strapi2) => {
 };
 const logDecision = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$n
+  register: register$r
 }, Symbol.toStringTag, { value: "Module" }));
-const register$m = (strapi2) => {
+const register$q = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "forget",
     title: "Forget from Brain",
@@ -20972,9 +21157,9 @@ const register$m = (strapi2) => {
 };
 const forget = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$m
+  register: register$q
 }, Symbol.toStringTag, { value: "Module" }));
-const register$l = (strapi2) => {
+const register$p = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_retro",
     title: "Log Brain Retro",
@@ -21037,9 +21222,9 @@ const register$l = (strapi2) => {
 };
 const logRetro = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$l
+  register: register$p
 }, Symbol.toStringTag, { value: "Module" }));
-const register$k = (strapi2) => {
+const register$o = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_retros",
     title: "List Brain Retros",
@@ -21101,9 +21286,9 @@ const register$k = (strapi2) => {
 };
 const listRetros = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$k
+  register: register$o
 }, Symbol.toStringTag, { value: "Module" }));
-const register$j = (strapi2) => {
+const register$n = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_gap",
     title: "Log Brain Gap",
@@ -21200,9 +21385,9 @@ const register$j = (strapi2) => {
 };
 const logGap = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$j
+  register: register$n
 }, Symbol.toStringTag, { value: "Module" }));
-const register$i = (strapi2) => {
+const register$m = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_gaps",
     title: "List Brain Gaps",
@@ -21266,9 +21451,9 @@ const register$i = (strapi2) => {
 };
 const listGaps = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$i
+  register: register$m
 }, Symbol.toStringTag, { value: "Module" }));
-const register$h = (strapi2) => {
+const register$l = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "record_capability",
     title: "Record Brain Capability",
@@ -21340,9 +21525,9 @@ const register$h = (strapi2) => {
 };
 const recordCapability = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$h
+  register: register$l
 }, Symbol.toStringTag, { value: "Module" }));
-const register$g = (strapi2) => {
+const register$k = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_capabilities",
     title: "List Brain Capabilities",
@@ -21404,9 +21589,9 @@ const register$g = (strapi2) => {
 };
 const listCapabilities = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$g
+  register: register$k
 }, Symbol.toStringTag, { value: "Module" }));
-const register$f = (strapi2) => {
+const register$j = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_rule",
     title: "Add Brain Rule",
@@ -21453,9 +21638,9 @@ const register$f = (strapi2) => {
 };
 const addRule = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$f
+  register: register$j
 }, Symbol.toStringTag, { value: "Module" }));
-const register$e = (strapi2) => {
+const register$i = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_rules",
     title: "List Brain Rules",
@@ -21524,9 +21709,9 @@ const register$e = (strapi2) => {
 };
 const listRules = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$e
+  register: register$i
 }, Symbol.toStringTag, { value: "Module" }));
-const register$d = (strapi2) => {
+const register$h = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_todo",
     title: "Add Todo",
@@ -21740,9 +21925,9 @@ async function createNewTodo(strapi2, uid, args) {
 }
 const addTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$d
+  register: register$h
 }, Symbol.toStringTag, { value: "Module" }));
-const register$c = (strapi2) => {
+const register$g = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_todo",
     title: "Update Todo",
@@ -21847,9 +22032,9 @@ ${args.appendContext}` : args.appendContext;
 };
 const updateTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$c
+  register: register$g
 }, Symbol.toStringTag, { value: "Module" }));
-const register$b = (strapi2) => {
+const register$f = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_todos",
     title: "List Todos",
@@ -21979,9 +22164,9 @@ const register$b = (strapi2) => {
 };
 const listTodos = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$b
+  register: register$f
 }, Symbol.toStringTag, { value: "Module" }));
-const register$a = (strapi2) => {
+const register$e = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_todo",
     title: "Get Todo",
@@ -22077,9 +22262,9 @@ const register$a = (strapi2) => {
 };
 const getTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$a
+  register: register$e
 }, Symbol.toStringTag, { value: "Module" }));
-const register$9 = (strapi2) => {
+const register$d = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "complete_todo",
     title: "Complete Todo",
@@ -22146,9 +22331,9 @@ const register$9 = (strapi2) => {
 };
 const completeTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$9
+  register: register$d
 }, Symbol.toStringTag, { value: "Module" }));
-const register$8 = (strapi2) => {
+const register$c = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_goal",
     title: "Add Goal",
@@ -22240,9 +22425,9 @@ const register$8 = (strapi2) => {
 };
 const addGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$8
+  register: register$c
 }, Symbol.toStringTag, { value: "Module" }));
-const register$7 = (strapi2) => {
+const register$b = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_goals",
     title: "List Goals",
@@ -22329,7 +22514,7 @@ const register$7 = (strapi2) => {
 };
 const listGoals = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$7
+  register: register$b
 }, Symbol.toStringTag, { value: "Module" }));
 function calculateStreaks(checkins, cadence) {
   if (checkins.length === 0) {
@@ -22403,7 +22588,7 @@ function calculateStreaks(checkins, cadence) {
   }
   return { currentStreak, bestStreak };
 }
-const register$6 = (strapi2) => {
+const register$a = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_checkin",
     title: "Log Goal Check-in",
@@ -22509,9 +22694,9 @@ const register$6 = (strapi2) => {
 const logCheckin = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   calculateStreaks,
-  register: register$6
+  register: register$a
 }, Symbol.toStringTag, { value: "Module" }));
-const register$5 = (strapi2) => {
+const register$9 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_goal_progress",
     title: "Get Goal Progress",
@@ -22607,9 +22792,9 @@ const register$5 = (strapi2) => {
 };
 const getGoalProgress = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$5
+  register: register$9
 }, Symbol.toStringTag, { value: "Module" }));
-const register$4 = (strapi2) => {
+const register$8 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_goal",
     title: "Update Goal",
@@ -22682,7 +22867,7 @@ const register$4 = (strapi2) => {
 };
 const updateGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$4
+  register: register$8
 }, Symbol.toStringTag, { value: "Module" }));
 function normalizeTitle(title) {
   return title.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
@@ -22697,7 +22882,7 @@ function isSimilar(title1, title2) {
   const similarity = 2 * commonWords.length / (words1.length + words2.length);
   return similarity > 0.7;
 }
-const register$3 = (strapi2) => {
+const register$7 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "health_check",
     title: "Health Check",
@@ -23009,9 +23194,9 @@ const register$3 = (strapi2) => {
 };
 const healthCheck = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$3
+  register: register$7
 }, Symbol.toStringTag, { value: "Module" }));
-const register$2 = (strapi2) => {
+const register$6 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_retro",
     title: "Update Retro",
@@ -23069,9 +23254,9 @@ const register$2 = (strapi2) => {
 };
 const updateRetro = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$2
+  register: register$6
 }, Symbol.toStringTag, { value: "Module" }));
-const register$1 = (strapi2) => {
+const register$5 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_gap",
     title: "Update Gap",
@@ -23127,9 +23312,9 @@ const register$1 = (strapi2) => {
 };
 const updateGap = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$1
+  register: register$5
 }, Symbol.toStringTag, { value: "Module" }));
-const register = (strapi2) => {
+const register$4 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_briefing",
     title: "Get Briefing",
@@ -23313,15 +23498,510 @@ const register = (strapi2) => {
 };
 const getBriefing = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  register: register$4
+}, Symbol.toStringTag, { value: "Module" }));
+const register$3 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "kb_stats",
+    title: "Knowledge Base Statistics",
+    description: "Get counts per paul-brain content type, notes by kind/tag, video notes vs transcripts in youtube-transcripts plugin, orphan count. See get_brain_guide for usage.",
+    resolveInputSchema: () => object({}),
+    resolveOutputSchema: () => object({
+      contentTypeCounts: object({
+        note: number(),
+        person: number(),
+        project: number(),
+        decision: number(),
+        source: number(),
+        retro: number(),
+        gap: number(),
+        capability: number(),
+        rule: number(),
+        todo: number(),
+        goal: number(),
+        goalCheckin: number()
+      }),
+      notesByKind: record(number()),
+      notesByTag: record(number()),
+      videoNotes: object({
+        notesWithVideoId: number(),
+        notesLinkedToSources: number(),
+        videoSourcesWithNotes: number(),
+        totalVideoSources: number()
+      }),
+      transcripts: object({
+        total: number(),
+        withoutNotes: array(object({
+          videoId: string(),
+          title: string().nullish()
+        })).optional()
+      }),
+      orphans: object({
+        notesWithoutLinks: number(),
+        peopleWithoutNotes: number(),
+        projectsWithoutNotes: number(),
+        sourcesWithoutNotes: number()
+      })
+    }),
+    auth: {
+      policies: [{ action: getActionId("stats.read") }]
+    },
+    createHandler: (strapi22) => async ({ args, context }) => {
+      const contentTypeCounts = {
+        note: 0,
+        person: 0,
+        project: 0,
+        decision: 0,
+        source: 0,
+        retro: 0,
+        gap: 0,
+        capability: 0,
+        rule: 0,
+        todo: 0,
+        goal: 0,
+        goalCheckin: 0
+      };
+      const contentTypes2 = [
+        "note",
+        "person",
+        "project",
+        "decision",
+        "source",
+        "retro",
+        "gap",
+        "capability",
+        "rule",
+        "todo",
+        "goal",
+        "goal-checkin"
+      ];
+      for (const type of contentTypes2) {
+        try {
+          const uid = getUid(type);
+          const items = await strapi22.documents(uid).findMany({
+            limit: -1
+          });
+          const key = type === "goal-checkin" ? "goalCheckin" : type;
+          contentTypeCounts[key] = items.length;
+        } catch (err) {
+          strapi22.log.warn(`Failed to count ${type}:`, err);
+        }
+      }
+      const notesByKind = {};
+      const notesByTag = {};
+      let notesWithVideoId = 0;
+      let notesWithoutLinks = 0;
+      try {
+        const notes = await strapi22.documents(getUid("note")).findMany({
+          limit: -1,
+          populate: ["people", "projects", "sources", "decisions"]
+        });
+        for (const note2 of notes) {
+          if (note2.kind) {
+            notesByKind[note2.kind] = (notesByKind[note2.kind] || 0) + 1;
+          }
+          if (Array.isArray(note2.tags)) {
+            for (const tag of note2.tags) {
+              notesByTag[tag] = (notesByTag[tag] || 0) + 1;
+            }
+          }
+          if (note2.videoId) {
+            notesWithVideoId++;
+          }
+          const hasLinks = Array.isArray(note2.people) && note2.people.length > 0 || Array.isArray(note2.projects) && note2.projects.length > 0 || Array.isArray(note2.sources) && note2.sources.length > 0 || Array.isArray(note2.decisions) && note2.decisions.length > 0;
+          if (!hasLinks) {
+            notesWithoutLinks++;
+          }
+        }
+      } catch (err) {
+        strapi22.log.warn("Failed to analyze notes:", err);
+      }
+      let notesLinkedToSources = 0;
+      let videoSourcesWithNotes = 0;
+      let totalVideoSources = 0;
+      try {
+        const sources = await strapi22.documents(getUid("source")).findMany({
+          limit: -1,
+          populate: ["notes"]
+        });
+        for (const source2 of sources) {
+          if (source2.type === "video") {
+            totalVideoSources++;
+            if (Array.isArray(source2.notes) && source2.notes.length > 0) {
+              videoSourcesWithNotes++;
+            }
+          }
+          if (Array.isArray(source2.notes) && source2.notes.length > 0) {
+            notesLinkedToSources += source2.notes.length;
+          }
+        }
+      } catch (err) {
+        strapi22.log.warn("Failed to analyze sources:", err);
+      }
+      let peopleWithoutNotes = 0;
+      try {
+        const people = await strapi22.documents(getUid("person")).findMany({
+          limit: -1,
+          populate: ["notes"]
+        });
+        peopleWithoutNotes = people.filter(
+          (p) => !Array.isArray(p.notes) || p.notes.length === 0
+        ).length;
+      } catch (err) {
+        strapi22.log.warn("Failed to analyze people:", err);
+      }
+      let projectsWithoutNotes = 0;
+      try {
+        const projects = await strapi22.documents(getUid("project")).findMany({
+          limit: -1,
+          populate: ["notes"]
+        });
+        projectsWithoutNotes = projects.filter(
+          (p) => !Array.isArray(p.notes) || p.notes.length === 0
+        ).length;
+      } catch (err) {
+        strapi22.log.warn("Failed to analyze projects:", err);
+      }
+      let sourcesWithoutNotes = 0;
+      try {
+        const sources = await strapi22.documents(getUid("source")).findMany({
+          limit: -1,
+          populate: ["notes"]
+        });
+        sourcesWithoutNotes = sources.filter(
+          (s) => !Array.isArray(s.notes) || s.notes.length === 0
+        ).length;
+      } catch (err) {
+        strapi22.log.warn("Failed to analyze sources:", err);
+      }
+      let transcriptsTotal = 0;
+      const transcriptsWithoutNotes = [];
+      try {
+        const transcriptPlugin = strapi22.plugin("youtube-transcripts");
+        if (transcriptPlugin) {
+          const transcripts = await strapi22.documents("plugin::youtube-transcripts.transcript").findMany({
+            limit: -1
+          });
+          transcriptsTotal = transcripts.length;
+          const notes = await strapi22.documents(getUid("note")).findMany({
+            limit: -1,
+            filters: {
+              videoId: { $notNull: true }
+            }
+          });
+          const notedVideoIds = new Set(notes.map((n) => n.videoId));
+          for (const transcript of transcripts) {
+            if (!notedVideoIds.has(transcript.videoId)) {
+              transcriptsWithoutNotes.push({
+                videoId: transcript.videoId,
+                title: transcript.title
+              });
+            }
+          }
+        }
+      } catch (err) {
+        strapi22.log.debug("youtube-transcripts plugin not available or error:", err);
+      }
+      const output = stripNullish({
+        contentTypeCounts,
+        notesByKind,
+        notesByTag,
+        videoNotes: {
+          notesWithVideoId,
+          notesLinkedToSources,
+          videoSourcesWithNotes,
+          totalVideoSources
+        },
+        transcripts: {
+          total: transcriptsTotal,
+          withoutNotes: transcriptsWithoutNotes.length > 0 ? transcriptsWithoutNotes : void 0
+        },
+        orphans: {
+          notesWithoutLinks,
+          peopleWithoutNotes,
+          projectsWithoutNotes,
+          sourcesWithoutNotes
+        }
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const kbStats = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$3
+}, Symbol.toStringTag, { value: "Module" }));
+const register$2 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "upsert_source",
+    title: "Upsert Source",
+    description: "Create or update a source. Matches by slug (from title), videoId, or url. Updates matched source or creates new. See get_brain_guide for usage.",
+    resolveInputSchema: () => object({
+      title: string().describe("Source title (used to generate slug)"),
+      type: _enum(["video", "article", "email", "transcript", "chat", "repo", "other"]).optional().describe("Source type"),
+      url: string().optional().describe("Source URL"),
+      videoId: string().optional().describe("YouTube video ID"),
+      external_id: string().optional().describe("External ID (e.g., video ID, article ID)"),
+      excerpt: string().optional().describe("Excerpt or description"),
+      captured_on: string().optional().describe("Date captured (ISO format)")
+    }),
+    resolveOutputSchema: () => object({
+      created: boolean(),
+      documentId: string(),
+      slug: string(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("entity.write") }]
+    },
+    createHandler: (strapi22) => async ({ args, context }) => {
+      const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
+      const uid = getUid("source");
+      const slug = brainService.slugify(args.title);
+      let existing = await brainService.findBySlugOrAlias("source", slug);
+      if (!existing.exists && args.videoId) {
+        const sources = await strapi22.documents(uid).findMany({
+          filters: { videoId: { $eq: args.videoId } },
+          limit: 1
+        });
+        if (sources.length > 0) {
+          existing = { exists: true, documentId: sources[0].documentId, entity: sources[0] };
+        }
+      }
+      if (!existing.exists && args.url) {
+        const sources = await strapi22.documents(uid).findMany({
+          filters: { url: { $eq: args.url } },
+          limit: 1
+        });
+        if (sources.length > 0) {
+          existing = { exists: true, documentId: sources[0].documentId, entity: sources[0] };
+        }
+      }
+      let result;
+      let created = false;
+      let message = "";
+      if (existing.exists) {
+        const updates = {
+          title: args.title
+        };
+        if (args.type) updates.type = args.type;
+        if (args.url) updates.url = args.url;
+        if (args.videoId) updates.videoId = args.videoId;
+        if (args.external_id) updates.external_id = args.external_id;
+        if (args.excerpt) updates.excerpt = args.excerpt;
+        if (args.captured_on) updates.captured_on = args.captured_on;
+        result = await strapi22.documents(uid).update({
+          documentId: existing.documentId,
+          data: updates
+        });
+        message = "Updated existing source";
+      } else {
+        result = await strapi22.documents(uid).create({
+          data: {
+            title: args.title,
+            slug,
+            type: args.type || "other",
+            url: args.url,
+            videoId: args.videoId,
+            external_id: args.external_id,
+            excerpt: args.excerpt,
+            captured_on: args.captured_on
+          }
+        });
+        created = true;
+        message = "Created new source";
+      }
+      const output = stripNullish({
+        created,
+        documentId: result.documentId,
+        slug: result.slug,
+        message
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const upsertSource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$2
+}, Symbol.toStringTag, { value: "Module" }));
+const register$1 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "update_source",
+    title: "Update Source",
+    description: "Update an existing source by documentId or slug. See get_brain_guide for usage.",
+    resolveInputSchema: () => object({
+      source: string().describe("Source documentId or slug"),
+      title: string().optional().describe("New title"),
+      type: _enum(["video", "article", "email", "transcript", "chat", "repo", "other"]).optional().describe("Source type"),
+      url: string().optional().describe("Source URL"),
+      videoId: string().optional().describe("YouTube video ID"),
+      external_id: string().optional().describe("External ID"),
+      excerpt: string().optional().describe("Excerpt or description"),
+      captured_on: string().optional().describe("Date captured (ISO format)")
+    }),
+    resolveOutputSchema: () => object({
+      updated: boolean(),
+      documentId: string(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("entity.write") }]
+    },
+    createHandler: (strapi22) => async ({ args, context }) => {
+      const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
+      const uid = getUid("source");
+      const sourceDocId = await brainService.resolveEntityBySlug("source", args.source);
+      if (!sourceDocId) {
+        throw new Error(`Source not found: ${args.source}`);
+      }
+      const updates = {};
+      if (args.title !== void 0) updates.title = args.title;
+      if (args.type !== void 0) updates.type = args.type;
+      if (args.url !== void 0) updates.url = args.url;
+      if (args.videoId !== void 0) updates.videoId = args.videoId;
+      if (args.external_id !== void 0) updates.external_id = args.external_id;
+      if (args.excerpt !== void 0) updates.excerpt = args.excerpt;
+      if (args.captured_on !== void 0) updates.captured_on = args.captured_on;
+      if (Object.keys(updates).length === 0) {
+        throw new Error("No fields to update");
+      }
+      const result = await strapi22.documents(uid).update({
+        documentId: sourceDocId,
+        data: updates
+      });
+      const output = stripNullish({
+        updated: true,
+        documentId: result.documentId,
+        message: "Source updated successfully"
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const updateSource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$1
+}, Symbol.toStringTag, { value: "Module" }));
+const register = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "upsert_person",
+    title: "Upsert Person",
+    description: "Create or update a person. Matches by slug (from name) or alias. Updates matched person or creates new. See get_brain_guide for usage.",
+    resolveInputSchema: () => object({
+      name: string().describe("Person name (used to generate slug)"),
+      role: string().optional().describe("Role or title"),
+      org: string().optional().describe("Organization"),
+      email: string().email().optional().describe("Email address"),
+      handles: record(string()).optional().describe('Social handles (e.g., {github: "username", x: "username"})'),
+      notes_md: string().optional().describe("Rich text notes about this person"),
+      last_contact: string().optional().describe("Last contact date (ISO format)")
+    }),
+    resolveOutputSchema: () => object({
+      created: boolean(),
+      documentId: string(),
+      slug: string(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("entity.write") }]
+    },
+    createHandler: (strapi22) => async ({ args, context }) => {
+      const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
+      const uid = getUid("person");
+      const slug = brainService.slugify(args.name);
+      const existing = await brainService.findBySlugOrAlias("person", slug);
+      let result;
+      let created = false;
+      let message = "";
+      if (existing.exists) {
+        const updates = {
+          name: args.name
+        };
+        if (args.role !== void 0) updates.role = args.role;
+        if (args.org !== void 0) updates.org = args.org;
+        if (args.email !== void 0) updates.email = args.email;
+        if (args.handles !== void 0) updates.handles = args.handles;
+        if (args.notes_md !== void 0) updates.notes_md = args.notes_md;
+        if (args.last_contact !== void 0) updates.last_contact = args.last_contact;
+        result = await strapi22.documents(uid).update({
+          documentId: existing.documentId,
+          data: updates
+        });
+        message = "Updated existing person";
+      } else {
+        result = await strapi22.documents(uid).create({
+          data: {
+            name: args.name,
+            slug,
+            role: args.role,
+            org: args.org,
+            email: args.email,
+            handles: args.handles || {},
+            notes_md: args.notes_md,
+            last_contact: args.last_contact
+          }
+        });
+        created = true;
+        message = "Created new person";
+      }
+      const output = stripNullish({
+        created,
+        documentId: result.documentId,
+        slug: result.slug,
+        message
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const upsertPerson = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
   register
 }, Symbol.toStringTag, { value: "Module" }));
 const tools = [
   getBrainGuide,
+  kbStats,
   recall,
   getEntity,
   listRecent,
   remember,
   updateNote,
+  upsertPerson,
+  upsertSource,
+  updateSource,
   link,
   logDecision,
   forget,
@@ -23782,6 +24462,9 @@ const attributes$7 = {
     "default": "other"
   },
   url: {
+    type: "string"
+  },
+  videoId: {
     type: "string"
   },
   external_id: {
@@ -24326,7 +25009,7 @@ ${data.body}`;
     return strapi2.documents(uid).update({ documentId, data: updates });
   },
   async search(options2) {
-    const { query, types = ["note", "person", "project", "decision", "source"], tags, since, limit = 25 } = options2;
+    const { query, types = ["note", "person", "project", "decision", "source"], kind: kind2, tag, videoId, sourceId, since, limit = 25 } = options2;
     const results = [];
     const queryLower = query.toLowerCase();
     const keywords = queryLower.split(/\s+/).filter((k) => k.length > 2);
@@ -24337,18 +25020,34 @@ ${data.body}`;
         if (since) {
           filters2.updatedAt = { $gte: since };
         }
+        if (type === "note" && kind2) {
+          filters2.kind = { $eq: kind2 };
+        }
+        if (type === "note" && videoId) {
+          filters2.videoId = { $eq: videoId };
+        }
+        const populate2 = type === "note" ? ["sources", "people"] : void 0;
         const entities = await strapi2.documents(uid).findMany({
           filters: filters2,
+          populate: populate2,
           limit: 100
         });
         for (const entity of entities) {
-          if (tags && type === "note") {
+          if (tag && type === "note") {
             const entityTags2 = Array.isArray(entity.tags) ? entity.tags : [];
-            const tagsLower = tags.map((t) => t.toLowerCase());
             const hasMatchingTag = entityTags2.some(
-              (t) => tagsLower.includes(t.toLowerCase())
+              (t) => t.toLowerCase() === tag.toLowerCase()
             );
             if (!hasMatchingTag) {
+              continue;
+            }
+          }
+          if (sourceId && type === "note") {
+            const sources = Array.isArray(entity.sources) ? entity.sources : [];
+            const hasMatchingSource = sources.some(
+              (s) => s.documentId === sourceId
+            );
+            if (!hasMatchingSource) {
               continue;
             }
           }
@@ -24385,7 +25084,7 @@ ${data.body}`;
             } else {
               snippet = bodyText.substring(0, 150) + (bodyText.length > 150 ? "..." : "");
             }
-            results.push({
+            const result = {
               type,
               documentId: entity.documentId,
               slug: entity.slug,
@@ -24394,7 +25093,18 @@ ${data.body}`;
               snippet,
               score,
               updatedAt: entity.updatedAt
-            });
+            };
+            if (type === "note") {
+              const sources = Array.isArray(entity.sources) ? entity.sources : [];
+              const people = Array.isArray(entity.people) ? entity.people : [];
+              if (sources.length > 0) {
+                result.linkedSourceIds = sources.map((s) => s.documentId);
+              }
+              if (people.length > 0) {
+                result.linkedPersonIds = people.map((p) => p.documentId);
+              }
+            }
+            results.push(result);
           }
         }
       } catch (err) {
@@ -24478,7 +25188,7 @@ const services = {
   brain
 };
 const index = {
-  register: register$v,
+  register: register$z,
   bootstrap,
   contentTypes,
   services

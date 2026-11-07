@@ -22,6 +22,13 @@ export const PERMISSIONS = [
     section: 'plugins',
     pluginName: PLUGIN_NAME,
     subCategory: 'memory',
+    uid: 'stats.read',
+    displayName: 'Read knowledge base statistics',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'memory',
     uid: 'read',
     displayName: 'Read memory',
   },
@@ -31,6 +38,13 @@ export const PERMISSIONS = [
     subCategory: 'memory',
     uid: 'note.write',
     displayName: 'Write notes and links',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'memory',
+    uid: 'entity.write',
+    displayName: 'Upsert and update entities (person, source)',
   },
   {
     section: 'plugins',
