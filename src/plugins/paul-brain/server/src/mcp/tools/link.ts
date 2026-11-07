@@ -7,13 +7,15 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'link',
     title: 'Link Brain Entities',
-    description: 'Connect or disconnect a note with people/projects/sources/decisions. Pass documentIds or slugs. Use after creating stubs with createMissing. See get_brain_guide for usage.',
+    description: 'Connect or disconnect a note with people/projects/sources/decisions. Pass documentIds or slugs. For sources, can also pass videoId or url to find/update. Use after creating stubs with createMissing. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
       note: z.string().describe('Note documentId or slug'),
       relation: z.enum(['people', 'projects', 'sources', 'decisions']).describe('Relation to modify'),
       targets: z.array(z.string()).describe('Target documentIds or slugs'),
       operation: z.enum(['connect', 'disconnect']).describe('connect or disconnect'),
+      videoId: z.string().optional().describe('For sources: videoId to find source or update matched source'),
+      url: z.string().optional().describe('For sources: url to find source or update matched source'),
     }),
     
     resolveOutputSchema: () => z.object({
@@ -43,7 +45,48 @@ export const register = (strapi: Core.Strapi) => {
 
       const targetDocIds = await Promise.all(
         args.targets.map(async (target) => {
-          const docId = await brainService.resolveEntityBySlug(targetType, target);
+          let docId = await brainService.resolveEntityBySlug(targetType, target);
+          
+          if (!docId && args.relation === 'sources') {
+            const sourceUid = `plugin::${PLUGIN_NAME}.source`;
+            
+            if (args.videoId) {
+              const sources = await strapi.documents(sourceUid).findMany({
+                filters: { videoId: { $eq: args.videoId } },
+                limit: 1,
+              });
+              if (sources.length > 0) {
+                docId = sources[0].documentId;
+                
+                const updates: any = {};
+                if (args.url && !sources[0].url) {
+                  updates.url = args.url;
+                }
+                if (Object.keys(updates).length > 0) {
+                  await strapi.documents(sourceUid).update({
+                    documentId: docId,
+                    data: updates,
+                  });
+                }
+              }
+            } else if (args.url) {
+              const sources = await strapi.documents(sourceUid).findMany({
+                filters: { url: { $eq: args.url } },
+                limit: 1,
+              });
+              if (sources.length > 0) {
+                docId = sources[0].documentId;
+                
+                if (args.videoId && !sources[0].videoId) {
+                  await strapi.documents(sourceUid).update({
+                    documentId: docId,
+                    data: { videoId: args.videoId },
+                  });
+                }
+              }
+            }
+          }
+          
           if (!docId) {
             throw new Error(`${targetType} not found: ${target}`);
           }

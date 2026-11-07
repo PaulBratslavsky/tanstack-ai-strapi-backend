@@ -8,12 +8,15 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'recall',
     title: 'Recall from Brain',
-    description: 'Search across all brain types (notes, people, projects, decisions, sources) with ranked keyword search. Returns snippets and documentIds. Results ranked by: title match (×3) > alias/tag match (×2) > body match (×1), plus recency decay and pinned boost. See get_brain_guide for usage.',
+    description: 'Search across all brain types (notes, people, projects, decisions, sources) with ranked keyword search. Searches note body/content and tags. Returns snippets, documentIds, and linked source/person ids. Results ranked by: title match (×3) > alias/tag match (×2) > body match (×1), plus recency decay and pinned boost. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
       query: z.string().describe('Search query (keywords)'),
       types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source'])).optional().describe('Limit search to these types (default: all)'),
-      tags: z.array(z.string()).optional().describe('Filter by tags (notes only)'),
+      kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference', 'lesson', 'video', 'taught']).optional().describe('Filter notes by kind'),
+      tag: z.string().optional().describe('Filter by tag (notes only)'),
+      videoId: z.string().optional().describe('Filter by videoId (notes only)'),
+      sourceId: z.string().optional().describe('Filter by linked source documentId (notes only)'),
       since: z.string().optional().describe('Only return items updated after this ISO date'),
       limit: z.number().min(1).max(25).optional().describe('Max results (default: 25)'),
     }),
@@ -28,6 +31,8 @@ export const register = (strapi: Core.Strapi) => {
         snippet: z.string(),
         score: z.number(),
         updatedAt: z.string(),
+        linkedSourceIds: z.array(z.string()).optional(),
+        linkedPersonIds: z.array(z.string()).optional(),
       })),
       count: z.number(),
     }),
@@ -42,7 +47,10 @@ export const register = (strapi: Core.Strapi) => {
       const results = await brainService.search({
         query: args.query,
         types: args.types,
-        tags: args.tags,
+        kind: args.kind,
+        tag: args.tag,
+        videoId: args.videoId,
+        sourceId: args.sourceId,
         since: args.since,
         limit: args.limit,
       });

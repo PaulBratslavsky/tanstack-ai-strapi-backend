@@ -29,14 +29,22 @@ import * as healthCheck from './health-check';
 import * as updateRetro from './update-retro';
 import * as updateGap from './update-gap';
 import * as getBriefing from './get-briefing';
+import * as kbStats from './kb-stats';
+import * as upsertSource from './upsert-source';
+import * as updateSource from './update-source';
+import * as upsertPerson from './upsert-person';
 
 export const tools = [
   getBrainGuide,
+  kbStats,
   recall,
   getEntity,
   listRecent,
   remember,
   updateNote,
+  upsertPerson,
+  upsertSource,
+  updateSource,
   link,
   logDecision,
   forget,
