@@ -32,7 +32,7 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 
 5. **source** — External sources (videos, articles, transcripts)
    - Types: `video`, `article`, `email`, `transcript`, `chat`, `repo`, `other`
-   - Include `external_id` for YouTube videos to enable join with transcripts plugin
+   - Include `videoId` for YouTube videos to enable join with central yt-kb service transcripts
 
 6. **retro** — Failure on real work + fix (post-mortem)
    - Fields: title, date, task, failure, fix, fixLocation, status (open/fixed)

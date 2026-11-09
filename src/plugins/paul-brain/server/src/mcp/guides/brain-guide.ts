@@ -8,6 +8,8 @@ export const BRAIN_GUIDE = `# Paul's Brain — Usage Guide for AI Assistants
 
 Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul's AI assistants (Cursor agents, Grok bots, chat interfaces) read and write here to maintain continuity across conversations.
 
+**Note on YouTube Transcripts**: Raw YouTube transcripts now live centrally in a separate Strapi Cloud app (yt-kb plugin at https://deserving-harmony-9f5ca04daf.strapiapp.com). Access them via the \`yt_kb__*\` MCP tools on the \`strapi-prod\` MCP server (e.g., \`yt_kb__get_transcript\`, \`yt_kb__search_transcript\`, \`yt_kb__add_video\`, etc.). Paul-brain stores only notes/sources/people that reference videos by YouTube videoId, enabling joins between notes and transcripts.
+
 **Core Principles for Team Brain**:
 - **Drafts only**: Save work-in-progress, not polished outputs
 - **Uniform results are suspect**: If all/none/zero results come back, verify by checking one raw record
@@ -39,7 +41,7 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 
 5. **source** — External sources (videos, articles, transcripts)
    - Types: \`video\`, \`article\`, \`email\`, \`transcript\`, \`chat\`, \`repo\`, \`other\`
-   - Include \`external_id\` for YouTube videos to enable join with transcripts plugin
+   - Include \`videoId\` for YouTube videos to enable join with central yt-kb service transcripts (accessed via yt_kb__* MCP tools on strapi-prod server)
 
 6. **retro** — Failure on real work + fix (post-mortem)
    - Fields: title, date, task, failure, fix, fixLocation, status (open/fixed/declined/wontfix)
@@ -95,10 +97,11 @@ Get a compact session briefing to start every session.
 Get knowledge base statistics to understand what's in the brain.
 - Returns counts per content type (note, person, project, etc.)
 - Notes broken down by kind and tag
-- Video notes vs transcripts: shows which YouTube transcripts lack notes
+- Video notes vs transcripts: shows which YouTube transcripts (from central yt-kb service) lack notes
 - Orphan counts: notes without links, people/projects/sources without notes
 - Use before major operations to understand KB state
 - Check regularly to find transcripts that need notes
+- Note: Requires YT_KB_API_TOKEN env var to fetch transcript list; shows 'yt-kb not configured' message if missing
 
 ### health_check
 Run diagnostic checks on brain data.
@@ -157,13 +160,14 @@ Create or update a source (matches by slug, videoId, or url).
 - Fields: title, type, url, videoId, external_id, excerpt, captured_on
 - Matches by slug (from title), videoId, or url
 - Updates matched source or creates new
-- Use for YouTube videos: pass videoId and url
+- Use for YouTube videos: pass videoId and url to join with central yt-kb transcripts
 
 ### update_source
 Update an existing source by documentId or slug.
 - Fields: title, type, url, videoId, external_id, excerpt, captured_on
 - All fields optional (only updates provided fields)
 - Use when you know the source exists
+- For YouTube videos, ensure videoId is set to join with central yt-kb transcripts
 
 ### link
 Connect or disconnect a note with people/projects/sources/decisions.
@@ -309,7 +313,7 @@ Update goal fields.
    - Check \`kb_stats\` to find transcripts without notes
    - Create note with \`kind: "video"\` and \`videoId\`
    - Link to source with \`link\` (pass videoId/url to find or update source)
-   - This enables joining with youtube-transcripts plugin data
+   - This enables joining with central yt-kb service data (access transcripts via yt_kb__* MCP tools on strapi-prod server)
 9. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
 10. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
 11. **Pinning**: Pin critical notes so they rank higher in search

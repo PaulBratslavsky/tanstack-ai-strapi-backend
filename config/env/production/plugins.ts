@@ -23,16 +23,6 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
       },
     },
   },
-
-  'youtube-transcripts': {
-    config: {
-      proxyUrl: env('PROXY_URL'),
-      chunkSizeSeconds: 300,
-      previewLength: 500,
-      maxFullTranscriptLength: 50000,
-      searchSegmentSeconds: 30,
-    },
-  },
 });
 
 export default config;

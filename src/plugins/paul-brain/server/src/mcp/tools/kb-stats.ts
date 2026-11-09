@@ -8,7 +8,7 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'kb_stats',
     title: 'Knowledge Base Statistics',
-    description: 'Get counts per paul-brain content type, notes by kind/tag, video notes vs transcripts in youtube-transcripts plugin, orphan count. See get_brain_guide for usage.',
+    description: 'Get counts per paul-brain content type, notes by kind/tag, video notes vs transcripts in central yt-kb service, orphan count. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({}),
     
@@ -196,13 +196,44 @@ export const register = (strapi: Core.Strapi) => {
       let transcriptsTotal = 0;
       const transcriptsWithoutNotes: { videoId: string; title?: string }[] = [];
 
-      try {
-        const transcriptPlugin = strapi.plugin('youtube-transcripts');
-        if (transcriptPlugin) {
-          const transcripts = await strapi.documents('plugin::youtube-transcripts.transcript').findMany({
-            limit: -1,
-          });
-          transcriptsTotal = transcripts.length;
+      const ytKbApiUrl = process.env.YT_KB_API_URL || 'https://deserving-harmony-9f5ca04daf.strapiapp.com/api/yt-kb';
+      const ytKbApiToken = process.env.YT_KB_API_TOKEN;
+
+      if (ytKbApiToken) {
+        try {
+          let page = 1;
+          let hasMore = true;
+          const allTranscripts: Array<{ youtubeVideoId: string; title?: string }> = [];
+
+          while (hasMore) {
+            const response = await fetch(`${ytKbApiUrl}/transcripts?pagination[page]=${page}&pagination[pageSize]=100`, {
+              headers: {
+                Authorization: `Bearer ${ytKbApiToken}`,
+              },
+            });
+
+            if (!response.ok) {
+              strapi.log.warn(`yt-kb API returned ${response.status}: ${response.statusText}`);
+              break;
+            }
+
+            const data = await response.json();
+            const transcripts = data.data || [];
+            
+            for (const t of transcripts) {
+              if (t.youtubeVideoId) {
+                allTranscripts.push({
+                  youtubeVideoId: t.youtubeVideoId,
+                  title: t.title,
+                });
+              }
+            }
+
+            hasMore = transcripts.length === 100;
+            page++;
+          }
+
+          transcriptsTotal = allTranscripts.length;
 
           const notes = await strapi.documents(getUid('note')).findMany({
             limit: -1,
@@ -213,17 +244,17 @@ export const register = (strapi: Core.Strapi) => {
 
           const notedVideoIds = new Set(notes.map(n => n.videoId));
 
-          for (const transcript of transcripts) {
-            if (!notedVideoIds.has(transcript.videoId)) {
+          for (const transcript of allTranscripts) {
+            if (!notedVideoIds.has(transcript.youtubeVideoId)) {
               transcriptsWithoutNotes.push({
-                videoId: transcript.videoId,
+                videoId: transcript.youtubeVideoId,
                 title: transcript.title,
               });
             }
           }
+        } catch (err) {
+          strapi.log.warn('Failed to fetch transcripts from yt-kb API:', err);
         }
-      } catch (err) {
-        strapi.log.debug('youtube-transcripts plugin not available or error:', err);
       }
 
       const output = stripNullish({
@@ -236,9 +267,11 @@ export const register = (strapi: Core.Strapi) => {
           videoSourcesWithNotes,
           totalVideoSources,
         },
-        transcripts: {
+        transcripts: ytKbApiToken ? {
           total: transcriptsTotal,
           withoutNotes: transcriptsWithoutNotes.length > 0 ? transcriptsWithoutNotes : undefined,
+        } : {
+          message: 'yt-kb not configured (set YT_KB_API_TOKEN env var)',
         },
         orphans: {
           notesWithoutLinks,
