@@ -10,7 +10,7 @@ export const register = (strapi: Core.Strapi) => {
     description: 'Fetch one entity by type and documentId or slug, with relations populated. Use after recall to get full details. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
-      type: z.enum(['note', 'person', 'project', 'decision', 'source']).describe('Entity type'),
+      type: z.enum(['note', 'person', 'project', 'decision', 'source', 'retro', 'gap', 'capability', 'rule', 'todo', 'goal', 'goal-checkin']).describe('Entity type'),
       identifier: z.string().describe('documentId or slug'),
     }),
     

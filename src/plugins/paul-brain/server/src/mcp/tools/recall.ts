@@ -12,7 +12,7 @@ export const register = (strapi: Core.Strapi) => {
     
     resolveInputSchema: () => z.object({
       query: z.string().describe('Search query (keywords)'),
-      types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source'])).optional().describe('Limit search to these types (default: all)'),
+      types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source', 'retro', 'gap', 'capability', 'rule', 'todo', 'goal', 'goal-checkin'])).optional().describe('Limit search to these types (default: all)'),
       kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference', 'lesson', 'video', 'taught']).optional().describe('Filter notes by kind'),
       tag: z.string().optional().describe('Filter by tag (notes only)'),
       videoId: z.string().optional().describe('Filter by videoId (notes only)'),

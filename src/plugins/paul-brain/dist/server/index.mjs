@@ -10,7 +10,7 @@ import require$$0$6 from "stream";
 import require$$2$1 from "util";
 import "node:stream";
 const PLUGIN_NAME$1 = "paul-brain";
-const CONTENT_TYPES = ["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo"];
+const CONTENT_TYPES = ["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin"];
 const getUid = (type) => `plugin::${PLUGIN_NAME$1}.${type}`;
 const PERMISSIONS = [
   // Memory subcategory
@@ -19869,6 +19869,8 @@ const BRAIN_GUIDE = `# Paul's Brain — Usage Guide for AI Assistants
 
 Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul's AI assistants (Cursor agents, Grok bots, chat interfaces) read and write here to maintain continuity across conversations.
 
+**Note on YouTube Transcripts**: Raw YouTube transcripts now live centrally in a separate Strapi Cloud app (yt-kb plugin at https://deserving-harmony-9f5ca04daf.strapiapp.com). Access them via the \`yt_kb__*\` MCP tools on the \`strapi-prod\` MCP server (e.g., \`yt_kb__get_transcript\`, \`yt_kb__search_transcript\`, \`yt_kb__add_video\`, etc.). Paul-brain stores only notes/sources/people that reference videos by YouTube videoId, enabling joins between notes and transcripts.
+
 **Core Principles for Team Brain**:
 - **Drafts only**: Save work-in-progress, not polished outputs
 - **Uniform results are suspect**: If all/none/zero results come back, verify by checking one raw record
@@ -19900,7 +19902,7 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 
 5. **source** — External sources (videos, articles, transcripts)
    - Types: \`video\`, \`article\`, \`email\`, \`transcript\`, \`chat\`, \`repo\`, \`other\`
-   - Include \`external_id\` for YouTube videos to enable join with transcripts plugin
+   - Include \`videoId\` for YouTube videos to enable join with central yt-kb service transcripts (accessed via yt_kb__* MCP tools on strapi-prod server)
 
 6. **retro** — Failure on real work + fix (post-mortem)
    - Fields: title, date, task, failure, fix, fixLocation, status (open/fixed/declined/wontfix)
@@ -19956,10 +19958,11 @@ Get a compact session briefing to start every session.
 Get knowledge base statistics to understand what's in the brain.
 - Returns counts per content type (note, person, project, etc.)
 - Notes broken down by kind and tag
-- Video notes vs transcripts: shows which YouTube transcripts lack notes
+- Video notes vs transcripts: shows which YouTube transcripts (from central yt-kb service) lack notes
 - Orphan counts: notes without links, people/projects/sources without notes
 - Use before major operations to understand KB state
 - Check regularly to find transcripts that need notes
+- Note: Requires YT_KB_API_TOKEN env var to fetch transcript list; shows 'yt-kb not configured' message if missing
 
 ### health_check
 Run diagnostic checks on brain data.
@@ -20018,13 +20021,14 @@ Create or update a source (matches by slug, videoId, or url).
 - Fields: title, type, url, videoId, external_id, excerpt, captured_on
 - Matches by slug (from title), videoId, or url
 - Updates matched source or creates new
-- Use for YouTube videos: pass videoId and url
+- Use for YouTube videos: pass videoId and url to join with central yt-kb transcripts
 
 ### update_source
 Update an existing source by documentId or slug.
 - Fields: title, type, url, videoId, external_id, excerpt, captured_on
 - All fields optional (only updates provided fields)
 - Use when you know the source exists
+- For YouTube videos, ensure videoId is set to join with central yt-kb transcripts
 
 ### link
 Connect or disconnect a note with people/projects/sources/decisions.
@@ -20170,7 +20174,7 @@ Update goal fields.
    - Check \`kb_stats\` to find transcripts without notes
    - Create note with \`kind: "video"\` and \`videoId\`
    - Link to source with \`link\` (pass videoId/url to find or update source)
-   - This enables joining with youtube-transcripts plugin data
+   - This enables joining with central yt-kb service data (access transcripts via yt_kb__* MCP tools on strapi-prod server)
 9. **Confidence**: Set \`low\` for speculative info, \`high\` for verified facts
 10. **Expiry**: Set \`expires_on\` for time-sensitive notes (todos, temporary decisions)
 11. **Pinning**: Pin critical notes so they rank higher in search
@@ -20262,7 +20266,7 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.5.0";
+const PLUGIN_VERSION = "1.6.0";
 const register$y = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
@@ -20342,7 +20346,7 @@ const register$x = (strapi2) => {
     description: "Search across all brain types (notes, people, projects, decisions, sources) with ranked keyword search. Searches note body/content and tags. Returns snippets, documentIds, and linked source/person ids. Results ranked by: title match (×3) > alias/tag match (×2) > body match (×1), plus recency decay and pinned boost. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       query: string().describe("Search query (keywords)"),
-      types: array(_enum(["note", "person", "project", "decision", "source"])).optional().describe("Limit search to these types (default: all)"),
+      types: array(_enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin"])).optional().describe("Limit search to these types (default: all)"),
       kind: _enum(["fact", "preference", "idea", "todo", "log", "reference", "lesson", "video", "taught"]).optional().describe("Filter notes by kind"),
       tag: string().optional().describe("Filter by tag (notes only)"),
       videoId: string().optional().describe("Filter by videoId (notes only)"),
@@ -20406,7 +20410,7 @@ const register$w = (strapi2) => {
     title: "Get Brain Entity",
     description: "Fetch one entity by type and documentId or slug, with relations populated. Use after recall to get full details. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
-      type: _enum(["note", "person", "project", "decision", "source"]).describe("Entity type"),
+      type: _enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin"]).describe("Entity type"),
       identifier: string().describe("documentId or slug")
     }),
     resolveOutputSchema: () => object({
@@ -23504,7 +23508,7 @@ const register$3 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "kb_stats",
     title: "Knowledge Base Statistics",
-    description: "Get counts per paul-brain content type, notes by kind/tag, video notes vs transcripts in youtube-transcripts plugin, orphan count. See get_brain_guide for usage.",
+    description: "Get counts per paul-brain content type, notes by kind/tag, video notes vs transcripts in central yt-kb service, orphan count. See get_brain_guide for usage.",
     resolveInputSchema: () => object({}),
     resolveOutputSchema: () => object({
       contentTypeCounts: object({
@@ -23676,13 +23680,37 @@ const register$3 = (strapi2) => {
       }
       let transcriptsTotal = 0;
       const transcriptsWithoutNotes = [];
-      try {
-        const transcriptPlugin = strapi22.plugin("youtube-transcripts");
-        if (transcriptPlugin) {
-          const transcripts = await strapi22.documents("plugin::youtube-transcripts.transcript").findMany({
-            limit: -1
-          });
-          transcriptsTotal = transcripts.length;
+      const ytKbApiUrl = process.env.YT_KB_API_URL || "https://deserving-harmony-9f5ca04daf.strapiapp.com/api/yt-kb";
+      const ytKbApiToken = process.env.YT_KB_API_TOKEN;
+      if (ytKbApiToken) {
+        try {
+          let page = 1;
+          let hasMore = true;
+          const allTranscripts = [];
+          while (hasMore) {
+            const response = await fetch(`${ytKbApiUrl}/transcripts?pagination[page]=${page}&pagination[pageSize]=100`, {
+              headers: {
+                Authorization: `Bearer ${ytKbApiToken}`
+              }
+            });
+            if (!response.ok) {
+              strapi22.log.warn(`yt-kb API returned ${response.status}: ${response.statusText}`);
+              break;
+            }
+            const data = await response.json();
+            const transcripts = data.data || [];
+            for (const t of transcripts) {
+              if (t.youtubeVideoId) {
+                allTranscripts.push({
+                  youtubeVideoId: t.youtubeVideoId,
+                  title: t.title
+                });
+              }
+            }
+            hasMore = transcripts.length === 100;
+            page++;
+          }
+          transcriptsTotal = allTranscripts.length;
           const notes = await strapi22.documents(getUid("note")).findMany({
             limit: -1,
             filters: {
@@ -23690,17 +23718,17 @@ const register$3 = (strapi2) => {
             }
           });
           const notedVideoIds = new Set(notes.map((n) => n.videoId));
-          for (const transcript of transcripts) {
-            if (!notedVideoIds.has(transcript.videoId)) {
+          for (const transcript of allTranscripts) {
+            if (!notedVideoIds.has(transcript.youtubeVideoId)) {
               transcriptsWithoutNotes.push({
-                videoId: transcript.videoId,
+                videoId: transcript.youtubeVideoId,
                 title: transcript.title
               });
             }
           }
+        } catch (err) {
+          strapi22.log.warn("Failed to fetch transcripts from yt-kb API:", err);
         }
-      } catch (err) {
-        strapi22.log.debug("youtube-transcripts plugin not available or error:", err);
       }
       const output = stripNullish({
         contentTypeCounts,
@@ -23712,9 +23740,11 @@ const register$3 = (strapi2) => {
           videoSourcesWithNotes,
           totalVideoSources
         },
-        transcripts: {
+        transcripts: ytKbApiToken ? {
           total: transcriptsTotal,
           withoutNotes: transcriptsWithoutNotes.length > 0 ? transcriptsWithoutNotes : void 0
+        } : {
+          message: "yt-kb not configured (set YT_KB_API_TOKEN env var)"
         },
         orphans: {
           notesWithoutLinks,

@@ -7,7 +7,7 @@ export interface ToolContext {
   userAbility: any;
 }
 
-export const CONTENT_TYPES = ['note', 'person', 'project', 'decision', 'source', 'retro', 'gap', 'capability', 'rule', 'todo'] as const;
+export const CONTENT_TYPES = ['note', 'person', 'project', 'decision', 'source', 'retro', 'gap', 'capability', 'rule', 'todo', 'goal', 'goal-checkin'] as const;
 export type ContentType = typeof CONTENT_TYPES[number];
 
 export const getUid = (type: ContentType | string) => `plugin::${PLUGIN_NAME}.${type}`;
