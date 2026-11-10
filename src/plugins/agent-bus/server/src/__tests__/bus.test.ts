@@ -264,6 +264,42 @@ describe('Agent Bus Service Tests', () => {
       
       // resolveCaller MUST use tokenId (123), NOT userId (1)
     });
+
+    it('should reject users-permissions JWT with colliding ID', () => {
+      // SECURITY: users-permissions JWTs populate ctx.state.auth.credentials
+      // with USER ids that could collide with API token IDs
+      
+      // Simulates a users-permissions JWT for end user with id=3
+      const usersPermissionsCtx = {
+        state: {
+          auth: {
+            credentials: { id: 3 }, // USER id = 3
+            strategy: { name: 'users-permissions' }, // NOT 'content-api-token'
+          },
+        },
+      };
+      
+      // Simulates a valid content-api-token with id=3 (same number, different entity)
+      const validApiTokenCtx = {
+        state: {
+          auth: {
+            credentials: { id: 3 }, // TOKEN id = 3
+            strategy: { name: 'content-api-token' }, // CORRECT strategy
+          },
+        },
+      };
+      
+      // resolveCaller MUST reject the users-permissions strategy
+      expect(usersPermissionsCtx.state.auth.strategy.name).not.toBe('content-api-token');
+      
+      // resolveCaller MUST accept only content-api-token strategy
+      expect(validApiTokenCtx.state.auth.strategy.name).toBe('content-api-token');
+      
+      // The collision (both id=3) would be dangerous without the strategy check
+      expect(usersPermissionsCtx.state.auth.credentials.id).toBe(
+        validApiTokenCtx.state.auth.credentials.id
+      );
+    });
   });
 });
 

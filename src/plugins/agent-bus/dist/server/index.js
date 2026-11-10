@@ -1,3 +1,3 @@
 "use strict";
-const index = require("../_chunks/index-B9PvmhBh.js");
+const index = require("../_chunks/index-BvjsWC-X.js");
 module.exports = index.index;

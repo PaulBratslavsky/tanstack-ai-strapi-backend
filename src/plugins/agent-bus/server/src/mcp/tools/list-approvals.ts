@@ -26,15 +26,54 @@ export const register = (strapi: Core.Strapi) => {
       policies: [{ action: getActionId('approval.read') }],
     },
 
-    createHandler: (strapi) => async ({ args, context }) => {
+    createHandler: (strapi) => async ({ args, extra, context }) => {
+      const authService = strapi.plugin(PLUGIN_NAME).service('auth');
       const approvalUid = getUid('approval');
+      const threadUid = getUid('thread');
       const limit = Math.min(args.limit || 20, 50);
+
+      // Resolve caller to check if they're the orchestrator
+      const caller = await authService.resolveCaller(strapi, extra);
+      
+      // Check if caller has message.manage permission (orchestrator)
+      const manageAction = getActionId('message.manage');
+      const isOrchestrator = context.userAbility?.can(manageAction) ?? false;
 
       const filters: any = {};
       if (args.status) {
         filters.status = { $eq: args.status };
       } else {
         filters.status = { $eq: 'pending' };
+      }
+
+      // If not orchestrator, scope to threads where caller is a participant
+      if (!isOrchestrator) {
+        // Find threads where this agent is a participant
+        const callerThreads = await strapi.documents(threadUid).findMany({
+          filters: {
+            $or: [
+              { participants: { documentId: { $eq: caller.agentDocumentId } } },
+            ],
+          },
+          fields: ['documentId'],
+        });
+        
+        const threadIds = callerThreads.map((t: any) => t.documentId);
+        
+        if (threadIds.length === 0) {
+          // No threads = no approvals
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ approvals: [], count: 0 }, null, 2),
+              },
+            ],
+            structuredContent: { approvals: [], count: 0 },
+          };
+        }
+        
+        filters.thread = { documentId: { $in: threadIds } };
       }
 
       const approvals = await strapi.documents(approvalUid).findMany({

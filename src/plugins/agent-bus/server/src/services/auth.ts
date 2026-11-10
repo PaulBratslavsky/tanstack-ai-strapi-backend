@@ -46,8 +46,19 @@ export const resolveCaller = async (
   let kind: 'content-api' | 'admin' | undefined;
 
   // Content API context (Koa ctx from REST routes)
-  // The strategy sets ctx.state.auth.credentials = apiToken (full token object with id)
+  // SECURITY: Must verify the auth strategy is 'content-api-token' to prevent
+  // users-permissions JWTs (which also set ctx.state.auth.credentials) from
+  // impersonating agents if user IDs collide with token IDs
   if (ctxOrExtra?.state?.auth?.credentials) {
+    const strategyName = ctxOrExtra.state.auth.strategy?.name;
+    
+    if (strategyName !== 'content-api-token') {
+      throw new Error(
+        `Invalid auth strategy for agent-bus: ${strategyName || 'unknown'}. ` +
+        'Only content-api-token strategy is accepted.'
+      );
+    }
+    
     tokenId = ctxOrExtra.state.auth.credentials.id;
     kind = 'content-api';
   }

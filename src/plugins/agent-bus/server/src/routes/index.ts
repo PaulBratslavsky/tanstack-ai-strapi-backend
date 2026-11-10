@@ -8,7 +8,9 @@ export default {
         path: '/v1/agents',
         handler: 'bus.listAgents',
         config: {
-          auth: true,
+          auth: {
+            scope: ['plugin::agent-bus.agent.read'],
+          },
         },
       },
       
@@ -18,7 +20,9 @@ export default {
         path: '/v1/messages',
         handler: 'bus.sendMessage',
         config: {
-          auth: true,
+          auth: {
+            scope: ['plugin::agent-bus.message.send'],
+          },
         },
       },
       {
@@ -26,7 +30,9 @@ export default {
         path: '/v1/messages/:id',
         handler: 'bus.getMessage',
         config: {
-          auth: true,
+          auth: {
+            scope: ['plugin::agent-bus.message.inbox'],
+          },
         },
       },
       {
@@ -34,7 +40,9 @@ export default {
         path: '/v1/messages/:id/claim',
         handler: 'bus.claimMessage',
         config: {
-          auth: true,
+          auth: {
+            scope: ['plugin::agent-bus.message.inbox'],
+          },
         },
       },
       {
@@ -42,7 +50,9 @@ export default {
         path: '/v1/messages/:id/reply',
         handler: 'bus.reply',
         config: {
-          auth: true,
+          auth: {
+            scope: ['plugin::agent-bus.message.inbox'],
+          },
         },
       },
       
@@ -52,7 +62,9 @@ export default {
         path: '/v1/inbox',
         handler: 'bus.getInbox',
         config: {
-          auth: true,
+          auth: {
+            scope: ['plugin::agent-bus.message.inbox'],
+          },
         },
       },
       
@@ -62,7 +74,9 @@ export default {
         path: '/v1/threads/:id',
         handler: 'bus.getThread',
         config: {
-          auth: true,
+          auth: {
+            scope: ['plugin::agent-bus.message.inbox'],
+          },
         },
       },
       
@@ -72,7 +86,9 @@ export default {
         path: '/v1/approvals',
         handler: 'bus.listApprovals',
         config: {
-          auth: true,
+          auth: {
+            scope: ['plugin::agent-bus.approval.read'],
+          },
         },
       },
       {
@@ -80,7 +96,9 @@ export default {
         path: '/v1/approvals/:id/decide',
         handler: 'bus.decide',
         config: {
-          auth: true,
+          auth: {
+            scope: ['plugin::agent-bus.approval.decide'],
+          },
         },
       },
     ],
