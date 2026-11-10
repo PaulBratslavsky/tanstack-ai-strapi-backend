@@ -23,7 +23,7 @@
       "type": "string",
       "required": true
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["open", "waiting", "closed"],
       "default": "open"

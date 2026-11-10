@@ -22,13 +22,13 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
       // Find due deliveries
       const deliveries = await strapi.documents(deliveryUid).findMany({
         filters: {
-          status: { $in: ['pending', 'failed'] },
+          state: { $in: ['pending', 'failed'] },
           nextAttemptAt: { $lte: new Date().toISOString() },
         },
         populate: {
-          agent: { fields: ['webhookUrl', 'webhookSecret', 'webhookAuthHeader', 'webhookMode', 'webhookTimeoutMs', 'slug', 'status'] },
+          agent: true,
           message: {
-            fields: ['type', 'body', 'payload', 'priority', 'blastRadius', 'flagged'],
+            fields: ['type', 'body', 'payload', 'priority', 'blastRadius', 'flagged', 'state'],
             populate: {
               from: { fields: ['slug'] },
               to: { fields: ['slug'] },
@@ -44,10 +44,10 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
         const message = delivery.message as any;
 
         // Skip if agent is disabled or has no webhook
-        if (agent.status !== 'active' || !agent.webhookUrl) {
+        if (agent.state !== 'active' || !agent.webhookUrl) {
           await strapi.documents(deliveryUid).update({
             documentId: delivery.documentId,
-            data: { status: 'skipped' },
+            data: { state: 'skipped' },
           });
           continue;
         }
@@ -57,7 +57,7 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
           await strapi.documents(deliveryUid).update({
             documentId: delivery.documentId,
             data: {
-              status: 'skipped',
+              state: 'skipped',
               lastError: 'HTTP webhooks not allowed in production',
             },
           });
@@ -69,7 +69,7 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
           await strapi.documents(deliveryUid).update({
             documentId: delivery.documentId,
             data: {
-              status: 'exhausted',
+              state: 'exhausted',
               lastError: 'Max attempts exceeded',
             },
           });
@@ -153,18 +153,18 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
             await strapi.documents(deliveryUid).update({
               documentId: delivery.documentId,
               data: {
-                status: 'delivered',
+                state: 'delivered',
                 deliveredAt: new Date().toISOString(),
                 lastStatusCode: response.status,
                 lastError: null,
               },
             });
 
-            // Update message status to notified if it was queued
-            if (message.status === 'queued') {
+            // Update message state to notified if it was queued
+            if (message.state === 'queued') {
               await strapi.documents(messageUid).update({
                 documentId: message.documentId,
-                data: { status: 'notified' },
+                data: { state: 'notified' },
               });
             }
 
@@ -184,7 +184,7 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
             await strapi.documents(deliveryUid).update({
               documentId: delivery.documentId,
               data: {
-                status: 'skipped',
+                state: 'skipped',
                 lastStatusCode: response.status,
                 lastError: `Endpoint returned ${response.status}`,
               },
@@ -202,7 +202,7 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
           await strapi.documents(deliveryUid).update({
             documentId: delivery.documentId,
             data: {
-              status: 'failed',
+              state: 'failed',
               attemptCount,
               nextAttemptAt: nextAttemptAt.toISOString(),
               lastError: error.message || String(error),

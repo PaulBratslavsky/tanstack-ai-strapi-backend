@@ -92,7 +92,7 @@ export const register = (strapi: Core.Strapi) => {
         const todoUid = getUid('todo');
         const todos = await strapi.documents(todoUid).findMany({
           filters: {
-            status: { $notIn: ['done', 'dropped', 'superseded'] }
+            state: { $notIn: ['done', 'dropped', 'superseded'] }
           },
           limit: 500,
         });
@@ -163,7 +163,7 @@ export const register = (strapi: Core.Strapi) => {
             });
           }
 
-          if (!todo.status) {
+          if (!todo.state) {
             findings.push({
               severity: 'WARN',
               kind: 'missing_status',
@@ -174,7 +174,7 @@ export const register = (strapi: Core.Strapi) => {
             });
           }
 
-          if (todo.status === 'done' && !todo.completedAt) {
+          if (todo.state === 'done' && !todo.completedAt) {
             findings.push({
               severity: 'WARN',
               kind: 'missing_completed_at',
@@ -185,7 +185,7 @@ export const register = (strapi: Core.Strapi) => {
             });
           }
 
-          if (todo.status === 'waiting' && !todo.waitingOn) {
+          if (todo.state === 'waiting' && !todo.waitingOn) {
             findings.push({
               severity: 'WARN',
               kind: 'missing_waiting_on',
@@ -319,7 +319,7 @@ export const register = (strapi: Core.Strapi) => {
         const retroUid = getUid('retro');
         const retros = await strapi.documents(retroUid).findMany({
           filters: {
-            status: { $eq: 'open' },
+            state: { $eq: 'open' },
           },
           limit: 500,
         });

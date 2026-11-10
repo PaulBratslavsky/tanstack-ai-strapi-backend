@@ -96,7 +96,7 @@ export const register = (strapi: Core.Strapi) => {
       const output = stripNullish({
         goalId: goal.documentId,
         title: goal.title,
-        status: goal.status,
+        status: goal.state, // Map state to status for external API
         currentStreak,
         bestStreak,
         metRateLast7Days,

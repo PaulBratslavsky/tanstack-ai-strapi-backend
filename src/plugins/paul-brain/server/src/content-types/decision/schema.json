@@ -33,7 +33,7 @@
     "rationale": {
       "type": "richtext"
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["proposed", "accepted", "superseded"],
       "default": "proposed"

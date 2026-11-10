@@ -41,7 +41,7 @@ export const register = (strapi: Core.Strapi) => {
       if (args.failure !== undefined) updates.failure = args.failure;
       if (args.fix !== undefined) updates.fix = args.fix;
       if (args.fixLocation !== undefined) updates.fixLocation = args.fixLocation;
-      if (args.status !== undefined) updates.status = args.status;
+      if (args.status !== undefined) updates.state = args.status // Map external status to internal state;
       if (args.date !== undefined) updates.date = args.date;
 
       const result = await strapi.documents(uid).update({
@@ -52,7 +52,7 @@ export const register = (strapi: Core.Strapi) => {
       const output = stripNullish({
         documentId: result.documentId,
         title: result.title,
-        status: result.status,
+        status: result.state, // Map state to status for external API
         message: 'Retro updated successfully',
       });
 

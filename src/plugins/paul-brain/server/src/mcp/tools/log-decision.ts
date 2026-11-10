@@ -44,7 +44,7 @@ export const register = (strapi: Core.Strapi) => {
         context: args.context,
         decision: args.decision,
         rationale: args.rationale,
-        status: args.status || 'accepted',
+        state: args.status || 'accepted', // Map external status to internal state
         decided_on: args.decided_on || new Date().toISOString(),
       };
 
@@ -74,7 +74,7 @@ export const register = (strapi: Core.Strapi) => {
           data.supersedes = { connect: [{ documentId: supersedesDocId }] };
           await strapi.documents(uid).update({
             documentId: supersedesDocId,
-            data: { status: 'superseded' },
+            data: { state: 'superseded' },
           });
         }
       }

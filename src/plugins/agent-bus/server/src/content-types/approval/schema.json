@@ -31,7 +31,7 @@
       "target": "plugin::agent-bus.thread",
       "required": true
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["pending", "approved", "rejected", "auto_approved", "vetoed", "expired"],
       "default": "pending"

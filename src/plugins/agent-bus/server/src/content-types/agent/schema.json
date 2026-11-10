@@ -62,7 +62,7 @@
       "min": 1000,
       "max": 15000
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["active", "disabled"],
       "default": "active"

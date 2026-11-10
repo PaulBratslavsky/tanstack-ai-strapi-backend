@@ -10,7 +10,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
       const agentUid = getUid('agent');
       
       const filters: any = {
-        status: { $eq: ctx.query.status || 'active' },
+        state: { $eq: ctx.query.status || 'active' }, // Accept status from query param but use state internally
       };
       
       if (ctx.query.kind) {
@@ -220,9 +220,9 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
       
       const filters: any = {};
       if (ctx.query.status) {
-        filters.status = { $eq: ctx.query.status };
+        filters.state = { $eq: ctx.query.status }; // Accept status from query param but use state internally
       } else {
-        filters.status = { $eq: 'pending' };
+        filters.state = { $eq: 'pending' };
       }
 
       const limit = ctx.query.limit ? Math.min(parseInt(ctx.query.limit, 10), 50) : 20;
@@ -281,16 +281,16 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
       const approval = approvals[0];
 
-      if (approval.status !== 'pending') {
+      if (approval.state !== 'pending') {
         ctx.status = 400;
-        ctx.body = { error: `Approval already decided: ${approval.status}` };
+        ctx.body = { error: `Approval already decided: ${approval.state}` };
         return;
       }
 
       await strapi.documents(approvalUid).update({
         documentId: ctx.params.id,
         data: {
-          status: decision,
+          state: decision,
           decidedAt: new Date().toISOString(),
           decidedByAgent: { connect: [{ documentId: caller.agentDocumentId }] },
           decidedByLabel: caller.agentSlug,
@@ -303,7 +303,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
       await strapi.documents(messageUid).update({
         documentId: (approval.message as any).documentId,
-        data: { status: messageStatus },
+        data: { state: messageStatus },
       });
 
       await busService.audit({

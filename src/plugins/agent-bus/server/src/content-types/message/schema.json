@@ -57,7 +57,7 @@
       "type": "json",
       "default": {}
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": [
         "queued",

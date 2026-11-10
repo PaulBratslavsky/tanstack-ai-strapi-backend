@@ -75,7 +75,7 @@ export const register = (strapi: Core.Strapi) => {
           data: {
             message: { connect: [{ documentId: args.messageId }] },
             thread: { connect: [{ documentId: (message.thread as any).documentId }] },
-            status: 'pending',
+            state: 'pending',
             reviewLevel: 'human',
           },
         });
@@ -93,7 +93,7 @@ export const register = (strapi: Core.Strapi) => {
           data: {
             message: { connect: [{ documentId: args.messageId }] },
             thread: { connect: [{ documentId: (message.thread as any).documentId }] },
-            status: 'pending',
+            state: 'pending',
             reviewLevel: 'auto',
             vetoUntil: vetoUntil.toISOString(),
           },
@@ -103,10 +103,10 @@ export const register = (strapi: Core.Strapi) => {
       }
       // Green: auto-complete immediately
 
-      // Update message status
+      // Update message state
       await strapi.documents(messageUid).update({
         documentId: args.messageId,
-        data: { status: newStatus },
+        data: { state: newStatus },
       });
 
       // Audit

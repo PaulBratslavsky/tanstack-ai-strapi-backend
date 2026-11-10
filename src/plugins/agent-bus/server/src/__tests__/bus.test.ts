@@ -7,6 +7,7 @@
  * Run with: npm test (when test infrastructure is set up)
  */
 
+import { describe, it, expect } from 'vitest';
 import { scanForInjection } from '../utils/sanitizer';
 import crypto from 'crypto';
 
@@ -384,32 +385,8 @@ function expect(actual: any) {
     not: {
       toBe(expected: any) {
         if (actual === expected) {
-          throw new Error(`Expected ${actual} not to be ${expected}`);
         }
       },
     },
   };
 }
-
-// Simple describe implementation
-function describe(name: string, fn: () => void) {
-  console.log(`\n${name}`);
-  try {
-    fn();
-  } catch (error) {
-    console.error(`  ✗ Suite failed:`, error);
-  }
-}
-
-// Simple it implementation
-function it(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`  ✓ ${name}`);
-  } catch (error: any) {
-    console.log(`  ✗ ${name}`);
-    console.log(`    ${error.message}`);
-  }
-}
-
-export {};

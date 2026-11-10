@@ -55,14 +55,14 @@ export const register = (strapi: Core.Strapi) => {
 
       // Check if cancellable
       const cancellableStatuses = ['queued', 'notified', 'claimed', 'in_progress', 'waiting_info'];
-      if (!cancellableStatuses.includes(message.status)) {
-        throw new Error(`Cannot cancel message in status: ${message.status}`);
+      if (!cancellableStatuses.includes(message.state)) {
+        throw new Error(`Cannot cancel message in status: ${message.state}`);
       }
 
-      // Update status
+      // Update state
       await strapi.documents(messageUid).update({
         documentId: args.messageId,
-        data: { status: 'cancelled' },
+        data: { state: 'cancelled' },
       });
 
       // Audit

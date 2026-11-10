@@ -68,7 +68,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
         return {
           messageId: msg.documentId,
           threadId: (msg.thread as any)?.documentId || '',
-          status: msg.status,
+          status: msg.state, // Map state to status for external API
           duplicate: true,
         };
       }
@@ -82,7 +82,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
           { slug: { $eq: toSlugOrId } },
           { documentId: { $eq: toSlugOrId } },
         ],
-        status: { $eq: 'active' },
+        state: { $eq: 'active' },
       },
       limit: 1,
     });
@@ -151,7 +151,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
       thread = await strapi.documents(threadUid).create({
         data: {
           subject,
-          status: 'open',
+          state: 'open',
           originAgent: { connect: [{ documentId: caller.agentDocumentId }] },
           participants: { 
             connect: [
@@ -184,7 +184,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
         type: input.type,
         body: input.body,
         payload: input.payload || {},
-        status: 'queued',
+        state: 'queued',
         priority: input.priority || 'P2',
         blastRadius,
         reviewLevel,
@@ -296,7 +296,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
     const agents = await strapi.documents(agentUid).findMany({
       filters: { documentId: { $eq: agentDocumentId } },
-      fields: ['webhookUrl', 'status', 'slug'],
+      fields: ['webhookUrl', 'state', 'slug'],
     });
 
     if (!agents || agents.length === 0) {
@@ -305,7 +305,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
     const agent = agents[0];
 
-    if (agent.status !== 'active' || !agent.webhookUrl) {
+    if (agent.state !== 'active' || !agent.webhookUrl) {
       // Skip delivery
       return;
     }
@@ -328,7 +328,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
         agent: { connect: [{ documentId: agentDocumentId }] },
         event,
         url: agent.webhookUrl,
-        status: 'pending',
+        state: 'pending',
         attemptCount: 0,
         nextAttemptAt: new Date().toISOString(),
         idempotencyKey,
@@ -391,9 +391,9 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
     ];
 
     if (options.statuses && options.statuses.length > 0) {
-      filters.status = { $in: options.statuses };
+      filters.state = { $in: options.statuses };
     } else {
-      filters.status = { $in: openStatuses };
+      filters.state = { $in: openStatuses };
     }
 
     if (options.priority) {
@@ -420,7 +420,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
       priority: msg.priority,
       blastRadius: msg.blastRadius,
       flagged: msg.flagged,
-      status: msg.status,
+      status: msg.state, // Map state to status for external API
       createdAt: msg.createdAt,
       ...(options.includeBody ? { body: msg.body, untrusted: msg.untrusted } : {}),
     }));
@@ -428,7 +428,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
     const unreadCount = await strapi.documents(messageUid).count({
       filters: {
         to: { documentId: { $eq: caller.agentDocumentId } },
-        status: { $in: openStatuses },
+        state: { $in: openStatuses },
       },
     });
 
@@ -462,8 +462,8 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
     // Check if claimable
     const claimableStatuses = ['queued', 'notified', 'claimed'];
-    if (!claimableStatuses.includes(message.status)) {
-      throw new Error(`Message cannot be claimed (status: ${message.status})`);
+    if (!claimableStatuses.includes(message.state)) {
+      throw new Error(`Message cannot be claimed (status: ${message.state})`);
     }
 
     // If already claimed by same agent, extend lease
@@ -472,7 +472,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
     await strapi.documents(messageUid).update({
       documentId: messageId,
       data: {
-        status: 'claimed',
+        state: 'claimed',
         claimedBy: { connect: [{ documentId: caller.agentDocumentId }] },
         claimedUntil: claimedUntil.toISOString(),
       },
@@ -489,7 +489,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
     return {
       messageId,
-      status: 'claimed',
+      status: 'claimed', // External API uses status
       claimedUntil: claimedUntil.toISOString(),
     };
   },

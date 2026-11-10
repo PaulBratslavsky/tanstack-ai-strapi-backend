@@ -20,19 +20,19 @@ export const startExpiryWorker = (strapi: Core.Strapi) => {
       // Release expired leases
       const claimedMessages = await strapi.documents(messageUid).findMany({
         filters: {
-          status: { $in: ['claimed', 'in_progress'] },
+          state: { $in: ['claimed', 'in_progress'] },
           claimedUntil: { $lt: now },
         },
         limit: 50,
       });
 
       for (const msg of claimedMessages) {
-        const newStatus = msg.status === 'claimed' ? 'notified' : 'queued';
+        const newState = msg.state === 'claimed' ? 'notified' : 'queued';
         
         await strapi.documents(messageUid).update({
           documentId: msg.documentId,
           data: {
-            status: newStatus,
+            state: newState,
             claimedBy: null,
             claimedUntil: null,
           },
@@ -43,7 +43,7 @@ export const startExpiryWorker = (strapi: Core.Strapi) => {
           action: 'lease.expired',
           entityType: 'message',
           entityDocumentId: msg.documentId,
-          metadata: { oldStatus: msg.status, newStatus },
+          metadata: { oldStatus: msg.state, newStatus: newState },
         });
       }
 
@@ -51,7 +51,7 @@ export const startExpiryWorker = (strapi: Core.Strapi) => {
       const expiredMessages = await strapi.documents(messageUid).findMany({
         filters: {
           expiresAt: { $lt: now },
-          status: { $notIn: ['expired', 'completed', 'answered', 'cancelled', 'declined'] },
+          state: { $notIn: ['expired', 'completed', 'answered', 'cancelled', 'declined'] },
         },
         limit: 50,
       });
@@ -59,7 +59,7 @@ export const startExpiryWorker = (strapi: Core.Strapi) => {
       for (const msg of expiredMessages) {
         await strapi.documents(messageUid).update({
           documentId: msg.documentId,
-          data: { status: 'expired' },
+          data: { state: 'expired' },
         });
 
         const busService = strapi.plugin('agent-bus').service('bus');
@@ -74,11 +74,11 @@ export const startExpiryWorker = (strapi: Core.Strapi) => {
       // Process veto window auto-completion
       const scheduledApprovals = await strapi.documents(approvalUid).findMany({
         filters: {
-          status: { $eq: 'pending' },
+          state: { $eq: 'pending' },
           vetoUntil: { $lt: now },
         },
         populate: {
-          message: { fields: ['documentId', 'status'] },
+          message: { fields: ['documentId', 'state'] },
         },
         limit: 20,
       });
@@ -90,7 +90,7 @@ export const startExpiryWorker = (strapi: Core.Strapi) => {
         await strapi.documents(approvalUid).update({
           documentId: approval.documentId,
           data: {
-            status: 'auto_approved',
+            state: 'auto_approved',
             decidedAt: now,
             decidedByLabel: 'system',
             reason: 'Veto window elapsed without intervention',
@@ -98,10 +98,10 @@ export const startExpiryWorker = (strapi: Core.Strapi) => {
         });
 
         // Complete the message
-        if (message && message.status === 'scheduled') {
+        if (message && message.state === 'scheduled') {
           await strapi.documents(messageUid).update({
             documentId: message.documentId,
-            data: { status: 'completed' },
+            data: { state: 'completed' },
           });
         }
 

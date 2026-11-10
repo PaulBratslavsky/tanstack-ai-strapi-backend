@@ -38,7 +38,7 @@
     "tokenName": {
       "type": "string"
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["active", "revoked"],
       "default": "active"

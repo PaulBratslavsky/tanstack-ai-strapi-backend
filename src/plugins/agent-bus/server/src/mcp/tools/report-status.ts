@@ -58,11 +58,11 @@ export const register = (strapi: Core.Strapi) => {
         throw new Error('Only the claiming agent can cancel');
       }
 
-      // Update status
+      // Update state (args.status maps to internal state field)
       await strapi.documents(messageUid).update({
         documentId: args.messageId,
         data: {
-          status: args.status,
+          state: args.status, // Map external status to internal state
         },
       });
 

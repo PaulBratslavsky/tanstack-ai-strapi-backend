@@ -53,7 +53,7 @@ export const register = (strapi: Core.Strapi) => {
       const goal = goals[0];
 
       const updateData: any = {};
-      if (args.status !== undefined) updateData.status = args.status;
+      if (args.status !== undefined) updateData.state = args.status // Map external status to internal state;
       if (args.description !== undefined) updateData.description = args.description;
       if (args.category !== undefined) updateData.category = args.category;
       if (args.target !== undefined) updateData.target = args.target;
@@ -67,7 +67,7 @@ export const register = (strapi: Core.Strapi) => {
       const output = stripNullish({
         documentId: updated.documentId,
         title: updated.title,
-        status: updated.status,
+        status: updated.state, // Map state to status for external API
         description: updated.description,
         category: updated.category,
         target: updated.target,

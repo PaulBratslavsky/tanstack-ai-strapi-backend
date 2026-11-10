@@ -38,7 +38,7 @@ export const register = (strapi: Core.Strapi) => {
 
       const approvals = await strapi.documents(approvalUid).findMany({
         filters: { documentId: { $eq: args.approvalId } },
-        populate: { message: { fields: ['documentId', 'status'] } },
+        populate: { message: { fields: ['documentId', 'state'] } },
       });
 
       if (!approvals || approvals.length === 0) {
@@ -47,15 +47,15 @@ export const register = (strapi: Core.Strapi) => {
 
       const approval = approvals[0];
 
-      if (approval.status !== 'pending') {
-        throw new Error(`Approval already decided: ${approval.status}`);
+      if (approval.state !== 'pending') {
+        throw new Error(`Approval already decided: ${approval.state}`);
       }
 
       // Update approval
       await strapi.documents(approvalUid).update({
         documentId: args.approvalId,
         data: {
-          status: args.decision,
+          state: args.decision,
           decidedAt: new Date().toISOString(),
           decidedByAgent: { connect: [{ documentId: caller.agentDocumentId }] },
           decidedByLabel: caller.agentSlug,
@@ -63,15 +63,15 @@ export const register = (strapi: Core.Strapi) => {
         },
       });
 
-      // Update message status
-      let messageStatus = 'completed';
+      // Update message state
+      let messageState = 'completed';
       if (args.decision === 'rejected' || args.decision === 'vetoed') {
-        messageStatus = args.decision === 'vetoed' ? 'vetoed' : 'declined';
+        messageState = args.decision === 'vetoed' ? 'vetoed' : 'declined';
       }
 
       await strapi.documents(messageUid).update({
         documentId: (approval.message as any).documentId,
-        data: { status: messageStatus },
+        data: { state: messageState },
       });
 
       // Audit
@@ -84,14 +84,14 @@ export const register = (strapi: Core.Strapi) => {
         metadata: {
           decision: args.decision,
           messageId: (approval.message as any).documentId,
-          messageStatus,
+          messageStatus: messageState, // Map back to status for audit/logging
         },
       });
 
       const output = stripNullish({
         approvalId: args.approvalId,
         status: args.decision,
-        messageStatus,
+        messageStatus: messageState, // Map internal state to external status
       });
 
       return {

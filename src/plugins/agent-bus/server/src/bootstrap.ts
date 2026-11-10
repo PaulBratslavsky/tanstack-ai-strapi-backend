@@ -19,7 +19,7 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
         kind: 'orchestrator',
         description: "Paul's Chief of Staff. Default inbox and manager. Delegates work, checks proof, escalates to Paul.",
         capabilities: [],
-        status: 'active',
+        state: 'active',
         permissionPack: 'orchestrator',
       },
     });

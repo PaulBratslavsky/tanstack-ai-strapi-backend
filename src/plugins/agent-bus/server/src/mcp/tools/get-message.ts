@@ -34,7 +34,7 @@ export const register = (strapi: Core.Strapi) => {
       const messages = await strapi.documents(messageUid).findMany({
         filters: { documentId: { $eq: args.messageId } },
         populate: {
-          thread: { fields: ['documentId', 'subject', 'status', 'turnCount', 'maxTurns'] },
+          thread: { fields: ['documentId', 'subject', 'state', 'turnCount', 'maxTurns'] },
           from: { fields: ['slug', 'name'] },
           to: { fields: ['slug', 'name'] },
           parent: { fields: ['documentId', 'type'] },
@@ -71,7 +71,7 @@ export const register = (strapi: Core.Strapi) => {
           subject: thread?.subject,
           body: message.body,
           payload: message.payload,
-          status: message.status,
+          status: message.state, // Map state to status for external API
           priority: message.priority,
           blastRadius: message.blastRadius,
           reviewLevel: message.reviewLevel,
@@ -89,7 +89,7 @@ export const register = (strapi: Core.Strapi) => {
         thread: stripNullish({
           threadId: thread?.documentId,
           subject: thread?.subject,
-          status: thread?.status,
+          status: thread?.state, // Map state to status for external API
           turnCount: thread?.turnCount,
           maxTurns: thread?.maxTurns,
         }),

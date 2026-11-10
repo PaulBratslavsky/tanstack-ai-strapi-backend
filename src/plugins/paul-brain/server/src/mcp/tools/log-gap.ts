@@ -43,7 +43,7 @@ export const register = (strapi: Core.Strapi) => {
       const existing = await strapi.documents(uid).findMany({
         filters: {
           slug: { $eq: slug },
-          status: { $eq: 'open' },
+          state: { $eq: 'open' },
         },
         limit: 1,
       });
@@ -85,7 +85,7 @@ export const register = (strapi: Core.Strapi) => {
           request: args.request,
           whatWasNeeded: args.whatWasNeeded,
           count: 1,
-          status: args.status || 'open',
+          state: args.status || 'open', // Map external status to internal state,
         };
 
         result = await strapi.documents(uid).create({ data });

@@ -16,7 +16,7 @@
       "type": "string",
       "required": true
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["inbox", "next", "doing", "waiting", "done", "dropped", "superseded"],
       "default": "inbox"
