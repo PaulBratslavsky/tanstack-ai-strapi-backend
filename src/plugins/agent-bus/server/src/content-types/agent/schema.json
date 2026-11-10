@@ -47,6 +47,10 @@
       "type": "string",
       "private": true
     },
+    "webhookAuthHeader": {
+      "type": "string",
+      "private": true
+    },
     "webhookMode": {
       "type": "enumeration",
       "enum": ["reference", "full"],

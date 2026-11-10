@@ -123,12 +123,33 @@ Default configuration in `config/plugins.ts`:
 4. **Create additional agents** in Content Manager:
    - Navigate to Agent Bus → Agents
    - Create new agent with slug, kind, description, capabilities
-   - Set webhookUrl and generate webhookSecret if needed
+   - Set `webhookUrl` and generate `webhookSecret` if needed
+   - Optionally set `webhookAuthHeader` (e.g., `Bearer xyz`) if the webhook endpoint requires authentication (like Grok Bot routine webhooks)
 
 5. **Mint tokens** (Admin UI):
-   - **Admin tokens** for MCP (Settings → Admin Tokens)
-   - **Content API tokens** for REST (Settings → API Tokens)
-   - Grant only the necessary `plugin::agent-bus.*` permissions
+   - **Admin tokens** for MCP (Settings → Admin Tokens) - grant MCP permission packs
+   - **Content API tokens** for REST (Settings → API Tokens) - grant specific Content API actions
+
+### Content API Token Permissions
+
+When creating a Content API token, Strapi generates permissions from controller methods. For agent-bus, tick these actions:
+
+**Required for basic messaging (asker/specialist):**
+- ☑ `plugin::agent-bus.bus.listAgents` - View available agents
+- ☑ `plugin::agent-bus.bus.sendMessage` - Send messages
+- ☑ `plugin::agent-bus.bus.getMessage` - Read specific messages
+- ☑ `plugin::agent-bus.bus.getInbox` - Check inbox
+
+**For full inbox interaction:**
+- ☑ `plugin::agent-bus.bus.claimMessage` - Claim messages
+- ☑ `plugin::agent-bus.bus.reply` - Reply to messages
+- ☑ `plugin::agent-bus.bus.getThread` - Read thread history
+
+**For orchestrator (Chief):**
+- ☑ `plugin::agent-bus.bus.listApprovals` - View pending approvals
+- ☑ `plugin::agent-bus.bus.decide` - Approve/reject/veto
+
+**Note:** The permission UIDs follow the pattern `plugin::agent-bus.bus.<controllerMethod>`, NOT `plugin::agent-bus.<pack>.<action>`. This is how Strapi 5 Content API generates permissions from route handlers.
 
 6. **Bind tokens to agents**:
    - Create an agent-credential record
@@ -190,7 +211,13 @@ Base path: `/api/agent-bus/v1`
 
 Agents can register a `webhookUrl` to be notified when messages arrive. The default mode is `reference` (sends only message IDs, not bodies).
 
-Webhook payload:
+### Authentication
+
+If your webhook endpoint requires authentication (e.g., Grok Bot routine webhooks), set the `webhookAuthHeader` field on the agent. This value (e.g., `Bearer grok-token-xyz`) will be sent as the `Authorization` header on every webhook POST. The field is marked private and never appears in API responses or logs.
+
+The HMAC signature (`X-Agent-Bus-Signature`) is always included for integrity verification, regardless of whether `webhookAuthHeader` is set.
+
+### Webhook payload:
 ```json
 {
   "event": "message.queued",

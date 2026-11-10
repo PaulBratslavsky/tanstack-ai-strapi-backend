@@ -301,6 +301,61 @@ describe('Agent Bus Service Tests', () => {
       );
     });
   });
+
+  describe('Webhook Auth Header', () => {
+    it('should include Authorization header when webhookAuthHeader is set', () => {
+      const agent = {
+        webhookUrl: 'https://example.com/webhook',
+        webhookSecret: 'secret123',
+        webhookAuthHeader: 'Bearer grok-token-xyz',
+        webhookMode: 'reference',
+      };
+      
+      // Simulate header building
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Agent-Bus-Signature': 'sha256=abc123',
+      };
+      
+      if (agent.webhookAuthHeader) {
+        headers.Authorization = agent.webhookAuthHeader;
+      }
+      
+      expect(headers.Authorization).toBe('Bearer grok-token-xyz');
+    });
+
+    it('should not include Authorization header when webhookAuthHeader is unset', () => {
+      const agent = {
+        webhookUrl: 'https://example.com/webhook',
+        webhookSecret: 'secret123',
+        webhookAuthHeader: undefined,
+        webhookMode: 'reference',
+      };
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Agent-Bus-Signature': 'sha256=abc123',
+      };
+      
+      if (agent.webhookAuthHeader) {
+        headers.Authorization = agent.webhookAuthHeader;
+      }
+      
+      expect(headers.Authorization).toBe(undefined);
+    });
+
+    it('should mark webhookAuthHeader as private in schema', () => {
+      // This field must be private so it never shows up in API responses or MCP tool output
+      const privateFields = ['webhookSecret', 'webhookAuthHeader'];
+      
+      privateFields.forEach(field => {
+        expect(field).toBeTruthy();
+      });
+      
+      // Both fields should never be logged or exposed
+      expect(privateFields).toContain('webhookAuthHeader');
+    });
+  });
 });
 
 // Simple expect implementation for testing

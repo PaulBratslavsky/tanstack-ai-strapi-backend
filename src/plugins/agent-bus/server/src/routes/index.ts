@@ -9,7 +9,7 @@ export default {
         handler: 'bus.listAgents',
         config: {
           auth: {
-            scope: ['plugin::agent-bus.agent.read'],
+            scope: ['plugin::agent-bus.bus.listAgents'],
           },
         },
       },
@@ -21,7 +21,7 @@ export default {
         handler: 'bus.sendMessage',
         config: {
           auth: {
-            scope: ['plugin::agent-bus.message.send'],
+            scope: ['plugin::agent-bus.bus.sendMessage'],
           },
         },
       },
@@ -31,7 +31,7 @@ export default {
         handler: 'bus.getMessage',
         config: {
           auth: {
-            scope: ['plugin::agent-bus.message.inbox'],
+            scope: ['plugin::agent-bus.bus.getMessage'],
           },
         },
       },
@@ -41,7 +41,7 @@ export default {
         handler: 'bus.claimMessage',
         config: {
           auth: {
-            scope: ['plugin::agent-bus.message.inbox'],
+            scope: ['plugin::agent-bus.bus.claimMessage'],
           },
         },
       },
@@ -51,7 +51,7 @@ export default {
         handler: 'bus.reply',
         config: {
           auth: {
-            scope: ['plugin::agent-bus.message.inbox'],
+            scope: ['plugin::agent-bus.bus.reply'],
           },
         },
       },
@@ -63,7 +63,7 @@ export default {
         handler: 'bus.getInbox',
         config: {
           auth: {
-            scope: ['plugin::agent-bus.message.inbox'],
+            scope: ['plugin::agent-bus.bus.getInbox'],
           },
         },
       },
@@ -75,7 +75,7 @@ export default {
         handler: 'bus.getThread',
         config: {
           auth: {
-            scope: ['plugin::agent-bus.message.inbox'],
+            scope: ['plugin::agent-bus.bus.getThread'],
           },
         },
       },
@@ -87,7 +87,7 @@ export default {
         handler: 'bus.listApprovals',
         config: {
           auth: {
-            scope: ['plugin::agent-bus.approval.read'],
+            scope: ['plugin::agent-bus.bus.listApprovals'],
           },
         },
       },
@@ -97,7 +97,7 @@ export default {
         handler: 'bus.decide',
         config: {
           auth: {
-            scope: ['plugin::agent-bus.approval.decide'],
+            scope: ['plugin::agent-bus.bus.decide'],
           },
         },
       },
