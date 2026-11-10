@@ -24,7 +24,7 @@ export const register = (strapi: Core.Strapi) => {
       todos: z.array(z.object({
         documentId: z.string(),
         title: z.string(),
-        state: z.string(),
+        status: z.string(),
         priority: z.string(),
         dueDate: z.string().nullish(),
         doDate: z.string().nullish(),

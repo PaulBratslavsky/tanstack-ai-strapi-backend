@@ -50,7 +50,7 @@ export const register = (strapi: Core.Strapi) => {
       z.object({
         documentId: z.string(),
         title: z.string(),
-        state: z.string(),
+        status: z.string(),
         priority: z.string(),
         merged: z.boolean().optional(),
         superseded: z.string().optional(),

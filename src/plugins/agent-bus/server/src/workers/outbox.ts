@@ -26,7 +26,7 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
           nextAttemptAt: { $lte: new Date().toISOString() },
         },
         populate: {
-          agent: { fields: ['webhookUrl', 'webhookSecret', 'webhookAuthHeader', 'webhookMode', 'webhookTimeoutMs', 'slug', 'state'] },
+          agent: true,
           message: {
             fields: ['type', 'body', 'payload', 'priority', 'blastRadius', 'flagged', 'state'],
             populate: {

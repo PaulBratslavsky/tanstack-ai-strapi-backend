@@ -41,7 +41,7 @@ export const register = (strapi: Core.Strapi) => {
         documentId: z.string(),
         title: z.string(),
         priority: z.string(),
-        state: z.string(),
+        status: z.string(),
         dueDate: z.string().optional(),
       })),
       recentCannotCapabilities: z.array(z.object({
@@ -109,7 +109,7 @@ export const register = (strapi: Core.Strapi) => {
       // Get open retros
       const openRetros = await strapi.documents(retroUid).findMany({
         filters: {
-          status: { $eq: 'open' },
+          state: { $eq: 'open' },
         },
         limit: 20,
         sort: ['date:desc'],
@@ -126,7 +126,7 @@ export const register = (strapi: Core.Strapi) => {
       // Get open gaps sorted by count
       const openGaps = await strapi.documents(gapUid).findMany({
         filters: {
-          status: { $eq: 'open' },
+          state: { $eq: 'open' },
         },
         limit: 20,
         sort: ['count:desc', 'date:desc'],
@@ -144,7 +144,7 @@ export const register = (strapi: Core.Strapi) => {
       const todayPST = getTodayPST();
       const todos = await strapi.documents(todoUid).findMany({
         filters: {
-          status: { $in: ['inbox', 'next', 'doing', 'waiting'] },
+          state: { $in: ['inbox', 'next', 'doing', 'waiting'] },
         },
         limit: 100,
         sort: ['priority:asc', 'dueDate:asc'],

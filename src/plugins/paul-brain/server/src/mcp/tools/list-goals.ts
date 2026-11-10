@@ -24,7 +24,7 @@ export const register = (strapi: Core.Strapi) => {
         category: z.string().nullish(),
         cadence: z.string(),
         target: z.string().nullish(),
-        state: z.string(),
+        status: z.string(),
         startDate: z.string().nullish(),
         currentStreak: z.number(),
         bestStreak: z.number(),

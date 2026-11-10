@@ -20,7 +20,7 @@ export const register = (strapi: Core.Strapi) => {
         documentId: z.string(),
         slug: z.string(),
         title: z.string(),
-        state: z.string(),
+        status: z.string(),
         date: z.string().nullish(),
         failure: z.string().nullish(),
         fix: z.string().nullish(),

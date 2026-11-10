@@ -37,7 +37,7 @@ export const register = (strapi: Core.Strapi) => {
       
       // Check if caller has message.manage permission (orchestrator)
       const manageAction = getActionId('message.manage');
-      const isOrchestrator = context.userAbility?.can(manageAction) ?? false;
+      const isOrchestrator = extra.userAbility?.can(manageAction) ?? false;
 
       const filters: any = {};
       if (args.status) {

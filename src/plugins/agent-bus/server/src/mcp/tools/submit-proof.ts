@@ -38,7 +38,7 @@ export const register = (strapi: Core.Strapi) => {
 
       const messages = await strapi.documents(messageUid).findMany({
         filters: { documentId: { $eq: args.messageId } },
-        populate: { to: true, thread: true, state: true },
+        populate: { to: true, thread: true },
       });
 
       if (!messages || messages.length === 0) {
