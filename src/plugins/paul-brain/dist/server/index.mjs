@@ -22381,7 +22381,7 @@ const register$c = (strapi2) => {
       const existingGoals = await strapi22.documents(uid).findMany({
         filters: {
           title: { $eq: args.title },
-          status: { $eq: "active" }
+          state: { $eq: "active" }
         },
         limit: 1
       });

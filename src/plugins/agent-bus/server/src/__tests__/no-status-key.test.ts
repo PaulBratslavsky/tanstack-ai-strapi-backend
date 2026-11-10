@@ -46,12 +46,14 @@ describe('Document Service Calls Should Not Use "status" Key - Agent Bus', () =>
         const line = lines[i];
         
         // Check for strapi.documents() or db.query() calls with status in data/filters
-        // Skip comments and external API mappings (like "status: record.state")
+        // Skip comments, string literals in error messages, and external API mappings
         if (line.includes('//')) continue;
         if (line.match(/status:\s*\w+\.state/)) continue;  // Mapping state to status is OK
         if (line.match(/metadata:\s*{.*status/)) continue;  // audit metadata OK
         if (line.match(/lastStatusCode/)) continue;  // HTTP status codes OK
         if (line.match(/ctx\.status\s*=/)) continue;  // HTTP response status OK
+        if (line.match(/['"].*\bstatus\b.*['"]/)) continue;  // String literals (error messages)
+        if (line.match(/throw.*status|Error.*status/i)) continue;  // Error messages
         
         // Detect problematic patterns
         if (line.match(/\bstatus:\s*{?\s*\$/) ||  // status: { $eq, $in, $notIn, etc

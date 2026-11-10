@@ -40,7 +40,7 @@ export const register = (strapi: Core.Strapi) => {
       const existingGoals = await strapi.documents(uid).findMany({
         filters: {
           title: { $eq: args.title },
-          status: { $eq: 'active' },
+          state: { $eq: 'active' },
         },
         limit: 1,
       });

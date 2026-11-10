@@ -1,6 +1,7 @@
 import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
+import { getUid } from '../types';
 import { stripNullish } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
@@ -35,12 +36,32 @@ export const register = (strapi: Core.Strapi) => {
 
       const caller = await authService.resolveCaller(strapi, extra);
 
+      // Get the original message to resolve thread
+      const originalMessages = await strapi.documents(messageUid).findMany({
+        filters: { documentId: { $eq: args.messageId } },
+        populate: {
+          thread: { fields: ['documentId'] },
+        },
+        limit: 1,
+      });
+
+      if (!originalMessages || originalMessages.length === 0) {
+        throw new Error('Original message not found');
+      }
+
+      const originalMessage = originalMessages[0];
+      const threadId = args.threadId || (originalMessage.thread as any)?.documentId;
+      
+      if (!threadId) {
+        throw new Error('Thread not found');
+      }
+
       // Escalation creates a new escalation-type message to chief
       const result = await busService.sendMessage(caller, {
         type: 'escalation',
         body: args.body,
         to: 'chief',
-        threadId: args.threadId || args.messageId,
+        threadId,
         parentId: args.messageId,
         riskClass: args.riskClass || 'none',
         priority: 'P1', // Escalations are high priority

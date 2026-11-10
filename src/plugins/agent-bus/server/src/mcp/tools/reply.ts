@@ -65,7 +65,7 @@ export const register = (strapi: Core.Strapi) => {
         type: args.type || 'reply',
         body: args.body,
         threadId,
-        toSlug: originalSender?.slug,
+        to: originalSender?.slug,
         parentId: args.messageId,
         payload: args.payload,
       });

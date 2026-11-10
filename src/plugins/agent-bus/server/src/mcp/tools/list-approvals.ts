@@ -26,7 +26,7 @@ export const register = (strapi: Core.Strapi) => {
       policies: [{ action: getActionId('approval.read') }],
     },
 
-    createHandler: (strapi) => async ({ args, extra, context }) => {
+    createHandler: (strapi, context) => async ({ args, extra }) => {
       const authService = strapi.plugin(PLUGIN_NAME).service('auth');
       const approvalUid = getUid('approval');
       const threadUid = getUid('thread');
@@ -37,7 +37,7 @@ export const register = (strapi: Core.Strapi) => {
       
       // Check if caller has message.manage permission (orchestrator)
       const manageAction = getActionId('message.manage');
-      const isOrchestrator = extra.userAbility?.can(manageAction) ?? false;
+      const isOrchestrator = context.userAbility?.can(manageAction) ?? false;
 
       const filters: any = {};
       if (args.status) {

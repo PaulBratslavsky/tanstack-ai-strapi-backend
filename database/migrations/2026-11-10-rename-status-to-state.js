@@ -14,6 +14,7 @@ async function up(knex) {
   const isSQLite = clientName === 'sqlite' || clientName === 'sqlite3' || clientName === 'better-sqlite3';
   
   const schema = isSQLite ? null : (
+    strapi?.config?.get('database.connection.connection.schema') || 
     strapi?.config?.get('database.connection.schema') || 
     strapi?.db?.connection?.context?.client?.config?.searchPath?.[0] || 
     'public'
@@ -101,7 +102,7 @@ async function up(knex) {
 
   strapi?.log?.info(`[migration] Found ${existingTables.length} tables to migrate${schema ? ` in schema '${schema}'` : ''}`);
 
-  // Default values for each table (matching schema.json defaults)
+  // Default values for each table (matching schema.json defaults exactly)
   const defaults = {
     agent_bus_agents: 'active',
     agent_bus_approvals: 'pending',
@@ -109,10 +110,10 @@ async function up(knex) {
     agent_bus_deliveries: 'pending',
     agent_bus_messages: 'queued',
     agent_bus_threads: 'open',
-    paul_brain_decisions: 'open',
+    paul_brain_decisions: 'proposed',
     paul_brain_gaps: 'open',
     paul_brain_goals: 'active',
-    paul_brain_projects: 'active',
+    paul_brain_projects: 'idea',
     paul_brain_retros: 'open',
     paul_brain_todos: 'inbox',
   };
