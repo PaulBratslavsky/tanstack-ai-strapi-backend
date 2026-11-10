@@ -9,35 +9,74 @@ export interface CallerInfo {
 }
 
 /**
- * Resolve the calling agent from a Content API or MCP request context.
+ * Extract bearer token from authorization header
+ */
+const extractBearerToken = (authorization: string | undefined): string | null => {
+  if (!authorization) {
+    return null;
+  }
+  const parts = authorization.split(/\s+/);
+  if (parts[0].toLowerCase() !== 'bearer' || parts.length !== 2) {
+    return null;
+  }
+  return parts[1];
+};
+
+/**
+ * Resolve the calling agent from a Content API or MCP request.
  * 
  * This is the security core of agent-bus: it enforces that every token
  * is bound to exactly one agent, and that `from` is server-set.
  * 
- * Content API (Koa ctx): ctx.state.auth.apiToken contains the API token
- * MCP (handler context): context.user.id contains the admin token ID
+ * SECURITY CRITICAL:
+ * - MCP: Reads the actual bearer token from request headers, authenticates it,
+ *   and binds on authResult.credentials.id (the admin TOKEN id, NOT the user id)
+ * - Content API: Reads ctx.state.auth.credentials.id (the API token's database id)
  * 
- * Verified against Strapi 5.60 @strapi/core types and tested with actual requests.
+ * Verified against Strapi 5.60 source:
+ * - @strapi/core/dist/services/mcp/authentication.js returns credentials.id = token id
+ * - @strapi/admin/dist/server/server/src/strategies/content-api-token.js sets credentials = apiToken
+ * - Context.user.id is the admin USER who owns the token, which would break binding
  */
 export const resolveCaller = async (
   strapi: Core.Strapi,
-  ctxOrContext: any
+  ctxOrExtra: any
 ): Promise<CallerInfo> => {
   let tokenId: string | number | undefined;
   let kind: 'content-api' | 'admin' | undefined;
 
   // Content API context (Koa ctx from REST routes)
-  if (ctxOrContext?.state?.auth?.apiToken) {
-    // Content API tokens are stored with id field
-    tokenId = ctxOrContext.state.auth.apiToken.id;
+  // The strategy sets ctx.state.auth.credentials = apiToken (full token object with id)
+  if (ctxOrExtra?.state?.auth?.credentials) {
+    tokenId = ctxOrExtra.state.auth.credentials.id;
     kind = 'content-api';
   }
-  // MCP handler context (from createHandler)
-  // Based on McpHandlerContext type: { user: { id: string | number }, userAbility: Ability }
-  // The user.id is the admin token ID when authenticated via admin token
-  else if (ctxOrContext?.user?.id !== undefined) {
-    tokenId = ctxOrContext.user.id;
-    kind = 'admin';
+  // MCP handler extra (from createMcpCapabilityHandlerContext)
+  // We must extract and authenticate the token ourselves - do NOT use context.user.id
+  // because that's the admin user who owns the token, not the token itself
+  else if (ctxOrExtra?.requestInfo?.headers) {
+    const authorization = ctxOrExtra.requestInfo.headers.authorization;
+    const token = extractBearerToken(authorization);
+    
+    if (!token) {
+      throw new Error('No bearer token found in MCP request headers');
+    }
+
+    // Authenticate the token to get the token id (NOT the user id)
+    try {
+      const authResult = await strapi.admin.services['api-token-admin'].authenticateAdminToken(token);
+      
+      if (!authResult.authenticated) {
+        throw new Error('Token authentication failed');
+      }
+
+      // CRITICAL: Use authResult.credentials.id (the token id)
+      // NOT authResult.user.id (the admin user who owns the token)
+      tokenId = authResult.credentials.id;
+      kind = 'admin';
+    } catch (error: any) {
+      throw new Error(`Failed to authenticate admin token: ${error.message}`);
+    }
   }
 
   if (tokenId === undefined || !kind) {

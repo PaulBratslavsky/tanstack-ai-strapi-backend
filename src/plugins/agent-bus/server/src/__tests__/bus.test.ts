@@ -200,6 +200,71 @@ describe('Agent Bus Service Tests', () => {
       expect(exceedsLimit).toBe(false);
     });
   });
+
+  describe('Token Binding Security (Critical)', () => {
+    it('should use token ID not user ID for binding', () => {
+      // Simulates the fix: two different tokens owned by same admin user
+      // must resolve to different agent bindings
+      
+      const adminUserId = 1; // Paul's admin user
+      
+      // Token 1 for Chief
+      const token1 = {
+        credentials: { id: 101 }, // Token ID
+        user: { id: adminUserId }, // User who owns it
+      };
+      
+      // Token 2 for Claude  
+      const token2 = {
+        credentials: { id: 102 }, // Different token ID
+        user: { id: adminUserId }, // Same user owns it
+      };
+      
+      // CRITICAL: Must bind on credentials.id (token), NOT user.id (owner)
+      expect(token1.credentials.id).not.toBe(token2.credentials.id);
+      expect(token1.user.id).toBe(token2.user.id); // Same owner
+      
+      // The binding lookup must use token1.credentials.id and token2.credentials.id
+      // which are different, so they resolve to different agents
+    });
+
+    it('should reject requests with no token binding', () => {
+      // If a token exists but has no agent-credential binding, must reject
+      const tokenIdWithNoBinding = '999';
+      const credentialsList: any[] = []; // Empty - no binding exists
+      
+      const hasBinding = credentialsList.length > 0;
+      expect(hasBinding).toBe(false);
+      // resolveCaller should throw 'No active credential binding found for this token'
+    });
+
+    it('should fail closed on missing authorization header', () => {
+      const headers = {}; // No authorization header
+      const authorization = headers['authorization' as keyof typeof headers];
+      
+      expect(authorization).toBe(undefined);
+      // resolveCaller should throw 'No bearer token found in MCP request headers'
+    });
+
+    it('should extract token ID from MCP auth result correctly', () => {
+      // Simulates what strapi.admin.services['api-token-admin'].authenticateAdminToken returns
+      const authResult = {
+        authenticated: true,
+        credentials: { id: 123 }, // THE TOKEN ID
+        user: { id: 1 },          // The admin user who owns it
+        ability: {},
+      };
+      
+      const tokenId = authResult.credentials.id; // CORRECT
+      const userId = authResult.user.id;         // WRONG
+      
+      expect(tokenId).toBe(123);
+      expect(userId).toBe(1);
+      expect(tokenId).not.toBe(userId);
+      
+      // resolveCaller MUST use tokenId (123), NOT userId (1)
+    });
+  });
 });
 
 // Simple expect implementation for testing

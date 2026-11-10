@@ -25,12 +25,12 @@ export const register = (strapi: Core.Strapi) => {
       policies: [{ action: getActionId('message.inbox') }],
     },
 
-    createHandler: (strapi) => async ({ args, context }) => {
+    createHandler: (strapi) => async ({ args, extra }) => {
       const authService = strapi.plugin(PLUGIN_NAME).service('auth');
       const threadUid = getUid('thread');
       const messageUid = getUid('message');
 
-      const caller = await authService.resolveCaller(strapi, context);
+      const caller = await authService.resolveCaller(strapi, extra);
 
       const threads = await strapi.documents(threadUid).findMany({
         filters: { documentId: { $eq: args.threadId } },

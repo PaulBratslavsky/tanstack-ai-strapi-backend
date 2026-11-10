@@ -23,6 +23,24 @@ The plugin provides two interfaces to the same service layer:
 
 All messages are treated as untrusted data. Risk-sensitive actions (payments, deletions, external messages, credentials) are forced to red classification and require human approval.
 
+## Security: Token Binding
+
+The `resolveCaller` service is the **security core** of agent-bus. It enforces that every token is bound to exactly one agent:
+
+- **MCP Tools**: Extracts the bearer token from `extra.requestInfo.headers.authorization` on each request, authenticates it with `strapi.admin.services['api-token-admin'].authenticateAdminToken()`, and binds on `authResult.credentials.id` (the admin **token** ID, NOT `authResult.user.id` which is the admin **user** who owns the token).
+- **Content API**: Binds on `ctx.state.auth.credentials.id` (the token's database ID).
+
+This ensures that two different tokens owned by the same admin user resolve to different agents. For example, Claude's token and Chief's token both belong to Paul's admin user, but they resolve to different agent bindings.
+
+Security properties:
+
+- Always fails closed if authentication fails or no active binding exists
+- Never caches credentials across requests (re-authenticates every call)
+- Never logs raw bearer tokens
+- Updates `lastUsedAt` on credentials and `lastSeenAt` on agents for audit purposes
+
+Verified against Strapi 5.60 source.
+
 ## Content Types
 
 - **agent** - Registered agents (Chief, Claude, apps, specialists)

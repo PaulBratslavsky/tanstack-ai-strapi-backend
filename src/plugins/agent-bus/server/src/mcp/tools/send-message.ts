@@ -40,11 +40,11 @@ export const register = (strapi: Core.Strapi) => {
       policies: [{ action: getActionId('message.send') }],
     },
 
-    createHandler: (strapi) => async ({ args, context }) => {
+    createHandler: (strapi) => async ({ args, extra }) => {
       const authService = strapi.plugin(PLUGIN_NAME).service('auth');
       const busService = strapi.plugin(PLUGIN_NAME).service('bus');
 
-      const caller = await authService.resolveCaller(strapi, context);
+      const caller = await authService.resolveCaller(strapi, extra);
       const result = await busService.sendMessage(caller, args);
 
       const output = stripNullish(result);

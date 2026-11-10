@@ -29,11 +29,11 @@ export const register = (strapi: Core.Strapi) => {
       policies: [{ action: getActionId('message.inbox') }],
     },
 
-    createHandler: (strapi) => async ({ args, context }) => {
+    createHandler: (strapi) => async ({ args, extra }) => {
       const authService = strapi.plugin(PLUGIN_NAME).service('auth');
       const busService = strapi.plugin(PLUGIN_NAME).service('bus');
 
-      const caller = await authService.resolveCaller(strapi, context);
+      const caller = await authService.resolveCaller(strapi, extra);
 
       // Reply is just sending a message with threadId and optional parentId
       const result = await busService.sendMessage(caller, {
