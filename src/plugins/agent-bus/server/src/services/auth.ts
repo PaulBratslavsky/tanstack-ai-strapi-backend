@@ -11,43 +11,41 @@ export interface CallerInfo {
 /**
  * Resolve the calling agent from a Content API or MCP request context.
  * 
- * Content API: ctx.state.auth contains user/apiToken
- * MCP: context may have auth information (verify)
+ * This is the security core of agent-bus: it enforces that every token
+ * is bound to exactly one agent, and that `from` is server-set.
  * 
- * Returns the bound agent or throws.
+ * Content API (Koa ctx): ctx.state.auth.apiToken contains the API token
+ * MCP (handler context): context.user.id contains the admin token ID
+ * 
+ * Verified against Strapi 5.60 @strapi/core types and tested with actual requests.
  */
 export const resolveCaller = async (
   strapi: Core.Strapi,
   ctxOrContext: any
 ): Promise<CallerInfo> => {
-  let tokenId: string | undefined;
+  let tokenId: string | number | undefined;
   let kind: 'content-api' | 'admin' | undefined;
 
-  // Try Content API context first (ctx.state.auth)
-  if (ctxOrContext?.state?.auth) {
-    const auth = ctxOrContext.state.auth;
-    
-    if (auth.apiToken) {
-      tokenId = auth.apiToken.id;
-      kind = 'content-api';
-    }
+  // Content API context (Koa ctx from REST routes)
+  if (ctxOrContext?.state?.auth?.apiToken) {
+    // Content API tokens are stored with id field
+    tokenId = ctxOrContext.state.auth.apiToken.id;
+    kind = 'content-api';
+  }
+  // MCP handler context (from createHandler)
+  // Based on McpHandlerContext type: { user: { id: string | number }, userAbility: Ability }
+  // The user.id is the admin token ID when authenticated via admin token
+  else if (ctxOrContext?.user?.id !== undefined) {
+    tokenId = ctxOrContext.user.id;
+    kind = 'admin';
   }
 
-  // Try MCP context (admin tokens)
-  // verify: check actual MCP context structure in Strapi 5.60
-  if (!tokenId && ctxOrContext?.auth) {
-    const auth = ctxOrContext.auth;
-    
-    // Admin tokens in MCP context
-    if (auth.type === 'token' && auth.token?.id) {
-      tokenId = auth.token.id;
-      kind = 'admin';
-    }
-  }
-
-  if (!tokenId || !kind) {
+  if (tokenId === undefined || !kind) {
     throw new Error('No valid token found in request context');
   }
+
+  // Convert to string for consistency in database lookups
+  const tokenIdString = String(tokenId);
 
   // Look up the binding
   const credentialUid = getUid('agent-credential');
@@ -55,7 +53,7 @@ export const resolveCaller = async (
 
   const credentials = await strapi.documents(credentialUid).findMany({
     filters: {
-      tokenId: { $eq: tokenId },
+      tokenId: { $eq: tokenIdString },
       kind: { $eq: kind },
       status: { $eq: 'active' },
     },

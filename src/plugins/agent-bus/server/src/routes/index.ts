@@ -2,6 +2,17 @@ export default {
   'content-api': {
     type: 'content-api',
     routes: [
+      // Agents
+      {
+        method: 'GET',
+        path: '/v1/agents',
+        handler: 'bus.listAgents',
+        config: {
+          auth: true,
+        },
+      },
+      
+      // Messages
       {
         method: 'POST',
         path: '/v1/messages',
@@ -12,8 +23,8 @@ export default {
       },
       {
         method: 'GET',
-        path: '/v1/inbox',
-        handler: 'bus.getInbox',
+        path: '/v1/messages/:id',
+        handler: 'bus.getMessage',
         config: {
           auth: true,
         },
@@ -22,6 +33,52 @@ export default {
         method: 'POST',
         path: '/v1/messages/:id/claim',
         handler: 'bus.claimMessage',
+        config: {
+          auth: true,
+        },
+      },
+      {
+        method: 'POST',
+        path: '/v1/messages/:id/reply',
+        handler: 'bus.reply',
+        config: {
+          auth: true,
+        },
+      },
+      
+      // Inbox
+      {
+        method: 'GET',
+        path: '/v1/inbox',
+        handler: 'bus.getInbox',
+        config: {
+          auth: true,
+        },
+      },
+      
+      // Threads
+      {
+        method: 'GET',
+        path: '/v1/threads/:id',
+        handler: 'bus.getThread',
+        config: {
+          auth: true,
+        },
+      },
+      
+      // Approvals
+      {
+        method: 'GET',
+        path: '/v1/approvals',
+        handler: 'bus.listApprovals',
+        config: {
+          auth: true,
+        },
+      },
+      {
+        method: 'POST',
+        path: '/v1/approvals/:id/decide',
+        handler: 'bus.decide',
         config: {
           auth: true,
         },
