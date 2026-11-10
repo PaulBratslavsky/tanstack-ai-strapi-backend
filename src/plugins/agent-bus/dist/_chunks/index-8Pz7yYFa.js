@@ -110,7 +110,7 @@ const startOutboxWorker = (strapi, config2) => {
           nextAttemptAt: { $lte: (/* @__PURE__ */ new Date()).toISOString() }
         },
         populate: {
-          agent: { fields: ["webhookUrl", "webhookSecret", "webhookMode", "webhookTimeoutMs", "slug", "status"] },
+          agent: { fields: ["webhookUrl", "webhookSecret", "webhookAuthHeader", "webhookMode", "webhookTimeoutMs", "slug", "status"] },
           message: {
             fields: ["type", "body", "payload", "priority", "blastRadius", "flagged"],
             populate: {
@@ -186,16 +186,20 @@ const startOutboxWorker = (strapi, config2) => {
           const signature = crypto__default.default.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), agent2.webhookTimeoutMs || 5e3);
+          const headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "agent-bus/1",
+            "X-Agent-Bus-Event": delivery2.event,
+            "X-Agent-Bus-Timestamp": timestamp.toString(),
+            "X-Agent-Bus-Idempotency-Key": delivery2.idempotencyKey,
+            "X-Agent-Bus-Signature": `sha256=${signature}`
+          };
+          if (agent2.webhookAuthHeader) {
+            headers.Authorization = agent2.webhookAuthHeader;
+          }
           const response = await fetch(agent2.webhookUrl, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "User-Agent": "agent-bus/1",
-              "X-Agent-Bus-Event": delivery2.event,
-              "X-Agent-Bus-Timestamp": timestamp.toString(),
-              "X-Agent-Bus-Idempotency-Key": delivery2.idempotencyKey,
-              "X-Agent-Bus-Signature": `sha256=${signature}`
-            },
+            headers,
             body,
             signal: controller.signal
           });
@@ -392,7 +396,7 @@ const bootstrap = async ({ strapi }) => {
   startOutboxWorker(strapi, finalConfig);
   startExpiryWorker(strapi);
   if (strapi.ai?.mcp?.isEnabled()) {
-    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-DICLIems.js"));
+    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-CIHr6Y_A.js"));
     registerMcpTools(strapi);
   } else {
     strapi.log.info("[agent-bus] MCP is not enabled, skipping MCP tool registration");
@@ -449,6 +453,10 @@ const attributes$6 = {
     type: "string"
   },
   webhookSecret: {
+    type: "string",
+    "private": true
+  },
+  webhookAuthHeader: {
     type: "string",
     "private": true
   },
@@ -1608,7 +1616,7 @@ const routes = {
         handler: "bus.listAgents",
         config: {
           auth: {
-            scope: ["plugin::agent-bus.agent.read"]
+            scope: ["plugin::agent-bus.bus.listAgents"]
           }
         }
       },
@@ -1619,7 +1627,7 @@ const routes = {
         handler: "bus.sendMessage",
         config: {
           auth: {
-            scope: ["plugin::agent-bus.message.send"]
+            scope: ["plugin::agent-bus.bus.sendMessage"]
           }
         }
       },
@@ -1629,7 +1637,7 @@ const routes = {
         handler: "bus.getMessage",
         config: {
           auth: {
-            scope: ["plugin::agent-bus.message.inbox"]
+            scope: ["plugin::agent-bus.bus.getMessage"]
           }
         }
       },
@@ -1639,7 +1647,7 @@ const routes = {
         handler: "bus.claimMessage",
         config: {
           auth: {
-            scope: ["plugin::agent-bus.message.inbox"]
+            scope: ["plugin::agent-bus.bus.claimMessage"]
           }
         }
       },
@@ -1649,7 +1657,7 @@ const routes = {
         handler: "bus.reply",
         config: {
           auth: {
-            scope: ["plugin::agent-bus.message.inbox"]
+            scope: ["plugin::agent-bus.bus.reply"]
           }
         }
       },
@@ -1660,7 +1668,7 @@ const routes = {
         handler: "bus.getInbox",
         config: {
           auth: {
-            scope: ["plugin::agent-bus.message.inbox"]
+            scope: ["plugin::agent-bus.bus.getInbox"]
           }
         }
       },
@@ -1671,7 +1679,7 @@ const routes = {
         handler: "bus.getThread",
         config: {
           auth: {
-            scope: ["plugin::agent-bus.message.inbox"]
+            scope: ["plugin::agent-bus.bus.getThread"]
           }
         }
       },
@@ -1682,7 +1690,7 @@ const routes = {
         handler: "bus.listApprovals",
         config: {
           auth: {
-            scope: ["plugin::agent-bus.approval.read"]
+            scope: ["plugin::agent-bus.bus.listApprovals"]
           }
         }
       },
@@ -1692,7 +1700,7 @@ const routes = {
         handler: "bus.decide",
         config: {
           auth: {
-            scope: ["plugin::agent-bus.approval.decide"]
+            scope: ["plugin::agent-bus.bus.decide"]
           }
         }
       }

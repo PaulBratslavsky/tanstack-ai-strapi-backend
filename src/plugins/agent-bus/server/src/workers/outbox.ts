@@ -26,7 +26,7 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
           nextAttemptAt: { $lte: new Date().toISOString() },
         },
         populate: {
-          agent: { fields: ['webhookUrl', 'webhookSecret', 'webhookMode', 'webhookTimeoutMs', 'slug', 'status'] },
+          agent: { fields: ['webhookUrl', 'webhookSecret', 'webhookAuthHeader', 'webhookMode', 'webhookTimeoutMs', 'slug', 'status'] },
           message: {
             fields: ['type', 'body', 'payload', 'priority', 'blastRadius', 'flagged'],
             populate: {
@@ -124,16 +124,24 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), agent.webhookTimeoutMs || 5000);
 
+          // Build headers
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            'User-Agent': 'agent-bus/1',
+            'X-Agent-Bus-Event': delivery.event,
+            'X-Agent-Bus-Timestamp': timestamp.toString(),
+            'X-Agent-Bus-Idempotency-Key': delivery.idempotencyKey,
+            'X-Agent-Bus-Signature': `sha256=${signature}`,
+          };
+
+          // Add custom Authorization header if configured (for Grok Bot routine webhooks)
+          if (agent.webhookAuthHeader) {
+            headers.Authorization = agent.webhookAuthHeader;
+          }
+
           const response = await fetch(agent.webhookUrl, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': 'agent-bus/1',
-              'X-Agent-Bus-Event': delivery.event,
-              'X-Agent-Bus-Timestamp': timestamp.toString(),
-              'X-Agent-Bus-Idempotency-Key': delivery.idempotencyKey,
-              'X-Agent-Bus-Signature': `sha256=${signature}`,
-            },
+            headers,
             body,
             signal: controller.signal,
           });
