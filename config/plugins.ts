@@ -68,6 +68,11 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
     resolve: './src/plugins/paul-brain',
   },
 
+  'agent-bus': {
+    enabled: true,
+    resolve: './src/plugins/agent-bus',
+  },
+
   'users-permissions': {
     config: {
       jwtManagement: 'refresh',
