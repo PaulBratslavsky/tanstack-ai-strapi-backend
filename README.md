@@ -32,6 +32,53 @@ npm run build
 yarn build
 ```
 
+## 🛡️ MCP Guard
+
+This application includes [MCP Guard](https://github.com/PaulBratslavsky/strapi-mcp-guard), a security plugin that monitors and protects Strapi's built-in MCP endpoint (`POST /mcp`).
+
+### What it does
+
+- **Logs** every MCP tool call with caller, duration, and outcome
+- **Validates** JSON-RPC requests and enforces tool policies
+- **Scans** for prompt injection patterns in both tool arguments and results
+- **Admin dashboard** to view events, stats, and configuration (accessible via the MCP Guard menu item)
+
+### Configuration
+
+MCP Guard runs in **observe mode** by default (warn-only, non-blocking) to avoid disrupting existing MCP tools used by Paul's AI assistant.
+
+Default settings in `config/plugins.ts`:
+- `inbound: 'warn'` - Logs suspicious tool arguments but doesn't block them
+- `outbound: 'warn'` - Logs suspicious results but doesn't sanitize or block them
+- `deniedTools: []` - No tools are blocked by default
+- `persist: false` - Events are stored in memory only (reset on restart)
+
+### Environment variables
+
+- `MCP_GUARD_INBOUND` - Set to `'block'` to reject suspicious tool calls (default: `'warn'`)
+- `MCP_GUARD_OUTBOUND` - Set to `'block'` or `'sanitize'` to filter results (default: `'warn'`)
+- `MCP_GUARD_PERSIST` - Set to `'true'` to persist events to the database (default: `false`)
+
+### Enforcing stricter policies
+
+To enable active protection (for production use):
+
+```typescript
+// config/plugins.ts or config/env/production/plugins.ts
+'mcp-guard': {
+  config: {
+    inbound: 'block',        // Block suspicious tool arguments
+    outbound: 'sanitize',    // Strip injection patterns from results
+    deniedTools: ['delete_*'], // Block specific tools (glob patterns supported)
+    persist: true,           // Keep event history across restarts
+  },
+}
+```
+
+See the [MCP Guard documentation](https://github.com/PaulBratslavsky/strapi-mcp-guard) for full details.
+
+---
+
 ## ⚙️ Deployment
 
 Strapi gives you many possible deployment options for your project including [Strapi Cloud](https://cloud.strapi.io). Browse the [deployment section of the documentation](https://docs.strapi.io/dev-docs/deployment) to find the best solution for your use case.

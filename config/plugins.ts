@@ -68,6 +68,21 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
     resolve: './src/plugins/paul-brain',
   },
 
+  'mcp-guard': {
+    enabled: true,
+    resolve: './src/plugins/mcp-guard',
+    config: {
+      // Safe defaults: observe mode, don't block existing tools
+      inbound: env('MCP_GUARD_INBOUND', 'warn'),
+      outbound: env('MCP_GUARD_OUTBOUND', 'warn'),
+      // No tools denied by default - Paul's paul-brain tools remain accessible
+      deniedTools: [],
+      // Only persist events if explicitly enabled
+      persist: env.bool('MCP_GUARD_PERSIST', false),
+      bufferSize: 200,
+    },
+  },
+
   'users-permissions': {
     config: {
       jwtManagement: 'refresh',
