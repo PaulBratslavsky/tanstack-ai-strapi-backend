@@ -396,7 +396,7 @@ const bootstrap = async ({ strapi }) => {
   startOutboxWorker(strapi, finalConfig);
   startExpiryWorker(strapi);
   if (strapi.ai?.mcp?.isEnabled()) {
-    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-Ci2TeDxN.js"));
+    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-DIvJD9ap.js"));
     registerMcpTools(strapi);
   } else {
     strapi.log.info("[agent-bus] MCP is not enabled, skipping MCP tool registration");

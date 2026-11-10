@@ -11,7 +11,7 @@ const require$$0$7 = require("buffer");
 const require$$0$6 = require("stream");
 const require$$2$1 = require("util");
 require("node:stream");
-const index = require("./index-CJaja8_y.js");
+const index = require("./index-BnJY7pUk.js");
 const _interopDefault = (e) => e && e.__esModule ? e : { default: e };
 const crypto__default = /* @__PURE__ */ _interopDefault(crypto);
 const require$$0__default = /* @__PURE__ */ _interopDefault(require$$0$1);
@@ -20054,28 +20054,52 @@ const register$8 = (strapi2) => {
       const busService = strapi22.plugin(index.PLUGIN_NAME).service("bus");
       const messageUid = index.getUid("message");
       const caller = await authService.resolveCaller(strapi22, extra);
-      const originalMessages = await strapi22.documents(messageUid).findMany({
-        filters: { documentId: { $eq: args.messageId } },
-        populate: {
-          thread: { fields: ["documentId"] },
-          from: { fields: ["documentId", "slug"] }
-        },
-        limit: 1
-      });
-      if (!originalMessages || originalMessages.length === 0) {
-        throw new Error("Original message not found");
+      let threadId;
+      let toSlug;
+      if (args.messageId) {
+        const originalMessages = await strapi22.documents(messageUid).findMany({
+          filters: { documentId: { $eq: args.messageId } },
+          populate: {
+            thread: { fields: ["documentId"] },
+            from: { fields: ["documentId", "slug"] }
+          },
+          limit: 1
+        });
+        if (!originalMessages || originalMessages.length === 0) {
+          throw new Error("Original message not found");
+        }
+        const originalMessage = originalMessages[0];
+        threadId = args.threadId || originalMessage.thread?.documentId;
+        toSlug = originalMessage.from?.slug;
+      } else if (args.threadId) {
+        threadId = args.threadId;
+        const threadUid = index.getUid("thread");
+        const threads = await strapi22.documents(threadUid).findMany({
+          filters: { documentId: { $eq: threadId } },
+          populate: {
+            originAgent: { fields: ["slug"] },
+            participants: { fields: ["slug", "documentId"] }
+          },
+          limit: 1
+        });
+        if (!threads || threads.length === 0) {
+          throw new Error("Thread not found");
+        }
+        const thread = threads[0];
+        const participants = thread.participants;
+        const otherParticipant = participants?.find((p) => p.documentId !== caller.agentDocumentId);
+        toSlug = otherParticipant?.slug || thread.originAgent?.slug;
+      } else {
+        throw new Error("Either messageId or threadId must be provided");
       }
-      const originalMessage = originalMessages[0];
-      const threadId = args.threadId || originalMessage.thread?.documentId;
       if (!threadId) {
         throw new Error("Thread not found");
       }
-      const originalSender = originalMessage.from;
       const result = await busService.sendMessage(caller, {
         type: args.type || "reply",
         body: args.body,
         threadId,
-        toSlug: originalSender?.slug,
+        to: toSlug,
         parentId: args.messageId,
         payload: args.payload
       });
@@ -20296,12 +20320,35 @@ const register$5 = (strapi2) => {
     createHandler: (strapi22) => async ({ args, extra }) => {
       const authService = strapi22.plugin(index.PLUGIN_NAME).service("auth");
       const busService = strapi22.plugin(index.PLUGIN_NAME).service("bus");
+      const messageUid = index.getUid("message");
       const caller = await authService.resolveCaller(strapi22, extra);
+      let threadId;
+      if (args.messageId) {
+        const originalMessages = await strapi22.documents(messageUid).findMany({
+          filters: { documentId: { $eq: args.messageId } },
+          populate: {
+            thread: { fields: ["documentId"] }
+          },
+          limit: 1
+        });
+        if (!originalMessages || originalMessages.length === 0) {
+          throw new Error("Original message not found");
+        }
+        const originalMessage = originalMessages[0];
+        threadId = args.threadId || originalMessage.thread?.documentId;
+      } else if (args.threadId) {
+        threadId = args.threadId;
+      } else {
+        throw new Error("Either messageId or threadId must be provided");
+      }
+      if (!threadId) {
+        throw new Error("Thread not found");
+      }
       const result = await busService.sendMessage(caller, {
         type: "escalation",
         body: args.body,
         to: "chief",
-        threadId: args.threadId || args.messageId,
+        threadId,
         parentId: args.messageId,
         riskClass: args.riskClass || "none",
         priority: "P1"
@@ -20430,14 +20477,14 @@ const register$3 = (strapi2) => {
     auth: {
       policies: [{ action: index.getActionId("approval.read") }]
     },
-    createHandler: (strapi22) => async ({ args, extra, context }) => {
+    createHandler: (strapi22, context) => async ({ args, extra }) => {
       const authService = strapi22.plugin(index.PLUGIN_NAME).service("auth");
       const approvalUid = index.getUid("approval");
       const threadUid = index.getUid("thread");
       const limit = Math.min(args.limit || 20, 50);
       const caller = await authService.resolveCaller(strapi22, extra);
       const manageAction = index.getActionId("message.manage");
-      const isOrchestrator = extra.userAbility?.can(manageAction) ?? false;
+      const isOrchestrator = context.userAbility?.can(manageAction) ?? false;
       const filters2 = {};
       if (args.status) {
         filters2.state = { $eq: args.status };

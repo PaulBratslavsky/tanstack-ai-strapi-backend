@@ -46,12 +46,12 @@ describe('Document Service Calls Should Not Use "status" Key', () => {
         const line = lines[i];
         
         // Check for strapi.documents() or db.query() calls with status in data/filters
-        // Skip comments, string literals in error messages, and external API mappings
+        // Skip comments and external API mappings, but NOT quoted object keys
         if (line.includes('//')) continue;
         if (line.match(/status:\s*\w+\.state/)) continue;  // Mapping state to status is OK
         if (line.match(/metadata:\s*{.*status/)) continue;  // audit metadata OK
-        if (line.match(/['"].*\bstatus\b.*['"]/)) continue;  // String literals (error messages)
-        if (line.match(/throw.*status|Error.*status/i)) continue;  // Error messages
+        if (line.match(/throw new Error.*status/i)) continue;  // Error message strings only
+        if (line.match(/Error\(.*status.*\)/)) continue;  // Error constructor strings
         
         // Detect problematic patterns
         if (line.match(/\bstatus:\s*{?\s*\$/) ||  // status: { $eq, $in, $notIn, etc

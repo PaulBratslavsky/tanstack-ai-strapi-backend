@@ -33,24 +33,34 @@ export const register = (strapi: Core.Strapi) => {
     createHandler: (strapi) => async ({ args, extra }) => {
       const authService = strapi.plugin(PLUGIN_NAME).service('auth');
       const busService = strapi.plugin(PLUGIN_NAME).service('bus');
+      const messageUid = getUid('message');
 
       const caller = await authService.resolveCaller(strapi, extra);
 
-      // Get the original message to resolve thread
-      const originalMessages = await strapi.documents(messageUid).findMany({
-        filters: { documentId: { $eq: args.messageId } },
-        populate: {
-          thread: { fields: ['documentId'] },
-        },
-        limit: 1,
-      });
+      let threadId: string;
 
-      if (!originalMessages || originalMessages.length === 0) {
-        throw new Error('Original message not found');
+      if (args.messageId) {
+        // Get the original message to resolve thread
+        const originalMessages = await strapi.documents(messageUid).findMany({
+          filters: { documentId: { $eq: args.messageId } },
+          populate: {
+            thread: { fields: ['documentId'] },
+          },
+          limit: 1,
+        });
+
+        if (!originalMessages || originalMessages.length === 0) {
+          throw new Error('Original message not found');
+        }
+
+        const originalMessage = originalMessages[0];
+        threadId = args.threadId || (originalMessage.thread as any)?.documentId;
+      } else if (args.threadId) {
+        // threadId-only case
+        threadId = args.threadId;
+      } else {
+        throw new Error('Either messageId or threadId must be provided');
       }
-
-      const originalMessage = originalMessages[0];
-      const threadId = args.threadId || (originalMessage.thread as any)?.documentId;
       
       if (!threadId) {
         throw new Error('Thread not found');
