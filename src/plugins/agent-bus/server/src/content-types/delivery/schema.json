@@ -1,0 +1,68 @@
+{
+  "kind": "collectionType",
+  "collectionName": "agent_bus_deliveries",
+  "info": {
+    "singularName": "delivery",
+    "pluralName": "deliveries",
+    "displayName": "Delivery",
+    "description": "Durable webhook outbox for agent wake-up calls"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-api": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "message": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.message",
+      "required": true
+    },
+    "agent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.agent",
+      "required": true
+    },
+    "event": {
+      "type": "string",
+      "required": true
+    },
+    "url": {
+      "type": "string",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "delivered", "failed", "exhausted", "skipped"],
+      "default": "pending"
+    },
+    "attemptCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "nextAttemptAt": {
+      "type": "datetime"
+    },
+    "lastError": {
+      "type": "text"
+    },
+    "lastStatusCode": {
+      "type": "integer"
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "required": true
+    },
+    "deliveredAt": {
+      "type": "datetime"
+    }
+  }
+}

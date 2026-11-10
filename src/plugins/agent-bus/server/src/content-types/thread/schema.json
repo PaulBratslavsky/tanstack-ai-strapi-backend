@@ -1,0 +1,68 @@
+{
+  "kind": "collectionType",
+  "collectionName": "agent_bus_threads",
+  "info": {
+    "singularName": "thread",
+    "pluralName": "threads",
+    "displayName": "Thread",
+    "description": "Message threads between agents"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-api": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "subject": {
+      "type": "string",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["open", "waiting", "closed"],
+      "default": "open"
+    },
+    "originAgent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.agent",
+      "required": true
+    },
+    "participants": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::agent-bus.agent",
+      "inversedBy": "threads"
+    },
+    "turnCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "maxTurns": {
+      "type": "integer",
+      "default": 8
+    },
+    "correlationId": {
+      "type": "string"
+    },
+    "externalRefs": {
+      "type": "json",
+      "default": []
+    },
+    "lastMessageAt": {
+      "type": "datetime"
+    },
+    "messages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "plugin::agent-bus.message",
+      "mappedBy": "thread"
+    }
+  }
+}

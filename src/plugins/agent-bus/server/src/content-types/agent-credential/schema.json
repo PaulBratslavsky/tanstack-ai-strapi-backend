@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "agent_bus_credentials",
+  "info": {
+    "singularName": "agent-credential",
+    "pluralName": "agent-credentials",
+    "displayName": "Agent Credential",
+    "description": "Binds a Strapi token to exactly one agent"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-api": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "agent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.agent",
+      "inversedBy": "credentials",
+      "required": true
+    },
+    "kind": {
+      "type": "enumeration",
+      "enum": ["content-api", "admin"],
+      "required": true
+    },
+    "tokenId": {
+      "type": "string",
+      "required": true
+    },
+    "tokenName": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["active", "revoked"],
+      "default": "active"
+    },
+    "lastUsedAt": {
+      "type": "datetime"
+    }
+  }
+}

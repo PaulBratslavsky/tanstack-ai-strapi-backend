@@ -1,0 +1,52 @@
+{
+  "kind": "collectionType",
+  "collectionName": "agent_bus_audit_events",
+  "info": {
+    "singularName": "audit-event",
+    "pluralName": "audit-events",
+    "displayName": "Audit Event",
+    "description": "Audit trail for agent-bus actions and state changes"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-api": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "at": {
+      "type": "datetime",
+      "required": true
+    },
+    "action": {
+      "type": "string",
+      "required": true
+    },
+    "actorAgent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.agent"
+    },
+    "actorLabel": {
+      "type": "string"
+    },
+    "entityType": {
+      "type": "string"
+    },
+    "entityDocumentId": {
+      "type": "string"
+    },
+    "requestId": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "json",
+      "default": {}
+    }
+  }
+}

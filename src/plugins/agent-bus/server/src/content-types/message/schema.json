@@ -1,0 +1,137 @@
+{
+  "kind": "collectionType",
+  "collectionName": "agent_bus_messages",
+  "info": {
+    "singularName": "message",
+    "pluralName": "messages",
+    "displayName": "Message",
+    "description": "Messages sent between agents on the bus"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-api": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "thread": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.thread",
+      "inversedBy": "messages",
+      "required": true
+    },
+    "from": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.agent",
+      "required": true
+    },
+    "to": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.agent",
+      "required": true
+    },
+    "parent": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::agent-bus.message"
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": ["question", "task", "status", "proof", "result", "reply", "escalation", "notice"],
+      "required": true
+    },
+    "body": {
+      "type": "text",
+      "required": true,
+      "maxLength": 20000
+    },
+    "payload": {
+      "type": "json",
+      "default": {}
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "queued",
+        "notified",
+        "claimed",
+        "in_progress",
+        "waiting_info",
+        "waiting_approval",
+        "scheduled",
+        "answered",
+        "completed",
+        "declined",
+        "vetoed",
+        "expired",
+        "cancelled",
+        "dead_letter"
+      ],
+      "default": "queued"
+    },
+    "priority": {
+      "type": "enumeration",
+      "enum": ["P0", "P1", "P2", "P3"],
+      "default": "P2"
+    },
+    "blastRadius": {
+      "type": "enumeration",
+      "enum": ["green", "yellow", "red"],
+      "default": "green"
+    },
+    "reviewLevel": {
+      "type": "enumeration",
+      "enum": ["auto", "ai", "human"]
+    },
+    "riskClass": {
+      "type": "enumeration",
+      "enum": ["none", "data_write", "external_message", "payment", "delete", "credentials"],
+      "default": "none"
+    },
+    "acceptanceCriteria": {
+      "type": "text"
+    },
+    "proof": {
+      "type": "text"
+    },
+    "idempotencyKey": {
+      "type": "string"
+    },
+    "correlationId": {
+      "type": "string"
+    },
+    "expiresAt": {
+      "type": "datetime"
+    },
+    "claimedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.agent"
+    },
+    "claimedUntil": {
+      "type": "datetime"
+    },
+    "untrusted": {
+      "type": "boolean",
+      "default": true
+    },
+    "flagged": {
+      "type": "boolean",
+      "default": false
+    },
+    "flagReason": {
+      "type": "string"
+    },
+    "sourceLabel": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "kind": "collectionType",
+  "collectionName": "agent_bus_agents",
+  "info": {
+    "singularName": "agent",
+    "pluralName": "agents",
+    "displayName": "Agent",
+    "description": "Registered agents that can send and receive messages on the bus"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-api": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "name",
+      "required": true
+    },
+    "kind": {
+      "type": "enumeration",
+      "enum": ["orchestrator", "specialist", "human", "app"],
+      "default": "specialist"
+    },
+    "description": {
+      "type": "text"
+    },
+    "capabilities": {
+      "type": "json",
+      "default": []
+    },
+    "webhookUrl": {
+      "type": "string"
+    },
+    "webhookSecret": {
+      "type": "string",
+      "private": true
+    },
+    "webhookMode": {
+      "type": "enumeration",
+      "enum": ["reference", "full"],
+      "default": "reference"
+    },
+    "webhookTimeoutMs": {
+      "type": "integer",
+      "default": 5000,
+      "min": 1000,
+      "max": 15000
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["active", "disabled"],
+      "default": "active"
+    },
+    "permissionPack": {
+      "type": "enumeration",
+      "enum": ["asker", "specialist", "orchestrator", "custom"],
+      "default": "asker"
+    },
+    "rateLimitPerMinute": {
+      "type": "integer",
+      "default": 30
+    },
+    "rateLimitPerDay": {
+      "type": "integer",
+      "default": 500
+    },
+    "maxTurnsPerThread": {
+      "type": "integer",
+      "default": 8
+    },
+    "lastSeenAt": {
+      "type": "datetime"
+    },
+    "notes": {
+      "type": "text"
+    },
+    "credentials": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "plugin::agent-bus.agent-credential",
+      "mappedBy": "agent"
+    },
+    "threads": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::agent-bus.thread",
+      "mappedBy": "participants"
+    }
+  }
+}

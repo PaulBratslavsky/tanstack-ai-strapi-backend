@@ -1,0 +1,62 @@
+{
+  "kind": "collectionType",
+  "collectionName": "agent_bus_approvals",
+  "info": {
+    "singularName": "approval",
+    "pluralName": "approvals",
+    "displayName": "Approval",
+    "description": "Approval records for messages requiring review"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-api": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "message": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.message",
+      "required": true
+    },
+    "thread": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.thread",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "approved", "rejected", "auto_approved", "vetoed", "expired"],
+      "default": "pending"
+    },
+    "reviewLevel": {
+      "type": "enumeration",
+      "enum": ["auto", "ai", "human"],
+      "required": true
+    },
+    "vetoUntil": {
+      "type": "datetime"
+    },
+    "decidedAt": {
+      "type": "datetime"
+    },
+    "decidedByAgent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::agent-bus.agent"
+    },
+    "decidedByLabel": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "text"
+    }
+  }
+}
