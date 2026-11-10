@@ -1,0 +1,26 @@
+{
+  "kind": "collectionType",
+  "collectionName": "mcp_guard_events",
+  "info": {
+    "singularName": "event",
+    "pluralName": "events",
+    "displayName": "MCP Guard Event",
+    "description": "Persisted record of what the MCP guard did on a request"
+  },
+  "options": { "draftAndPublish": false },
+  "pluginOptions": {
+    "content-manager": { "visible": true },
+    "content-type-builder": { "visible": false }
+  },
+  "attributes": {
+    "occurredAt": { "type": "datetime" },
+    "method": { "type": "string" },
+    "tool": { "type": "string" },
+    "action": { "type": "string" },
+    "adminUser": { "type": "string" },
+    "httpStatus": { "type": "integer" },
+    "durationMs": { "type": "float" },
+    "reason": { "type": "text" },
+    "findings": { "type": "json" }
+  }
+}
