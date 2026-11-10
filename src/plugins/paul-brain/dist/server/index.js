@@ -21256,7 +21256,7 @@ const register$o = (strapi2) => {
         documentId: string(),
         slug: string(),
         title: string(),
-        state: string(),
+        status: string(),
         date: string().nullish(),
         failure: string().nullish(),
         fix: string().nullish()
@@ -21421,7 +21421,7 @@ const register$m = (strapi2) => {
         documentId: string(),
         slug: string(),
         title: string(),
-        state: string(),
+        status: string(),
         count: number(),
         date: string().nullish(),
         request: string().nullish(),
@@ -21775,7 +21775,7 @@ const register$h = (strapi2) => {
       object({
         documentId: string(),
         title: string(),
-        state: string(),
+        status: string(),
         priority: string(),
         merged: boolean().optional(),
         superseded: string().optional()
@@ -22079,7 +22079,7 @@ const register$f = (strapi2) => {
       todos: array(object({
         documentId: string(),
         title: string(),
-        state: string(),
+        status: string(),
         priority: string(),
         dueDate: string().nullish(),
         doDate: string().nullish(),
@@ -22476,7 +22476,7 @@ const register$b = (strapi2) => {
         category: string().nullish(),
         cadence: string(),
         target: string().nullish(),
-        state: string(),
+        status: string(),
         startDate: string().nullish(),
         currentStreak: number(),
         bestStreak: number(),
@@ -23385,7 +23385,7 @@ const register$4 = (strapi2) => {
         documentId: string(),
         title: string(),
         priority: string(),
-        state: string(),
+        status: string(),
         dueDate: string().optional()
       })),
       recentCannotCapabilities: array(object({
@@ -23443,7 +23443,7 @@ const register$4 = (strapi2) => {
       }));
       const openRetros = await strapi22.documents(retroUid).findMany({
         filters: {
-          status: { $eq: "open" }
+          state: { $eq: "open" }
         },
         limit: 20,
         sort: ["date:desc"]
@@ -23457,7 +23457,7 @@ const register$4 = (strapi2) => {
       }));
       const openGaps = await strapi22.documents(gapUid).findMany({
         filters: {
-          status: { $eq: "open" }
+          state: { $eq: "open" }
         },
         limit: 20,
         sort: ["count:desc", "date:desc"]
@@ -23472,7 +23472,7 @@ const register$4 = (strapi2) => {
       const todayPST = getTodayPST();
       const todos = await strapi22.documents(todoUid).findMany({
         filters: {
-          status: { $in: ["inbox", "next", "doing", "waiting"] }
+          state: { $in: ["inbox", "next", "doing", "waiting"] }
         },
         limit: 100,
         sort: ["priority:asc", "dueDate:asc"]
