@@ -92,7 +92,7 @@ export const register = (strapi: Core.Strapi) => {
         const todoUid = getUid('todo');
         const todos = await strapi.documents(todoUid).findMany({
           filters: {
-            status: { $notIn: ['done', 'dropped', 'superseded'] }
+            state: { $notIn: ['done', 'dropped', 'superseded'] }
           },
           limit: 500,
         });
@@ -319,7 +319,7 @@ export const register = (strapi: Core.Strapi) => {
         const retroUid = getUid('retro');
         const retros = await strapi.documents(retroUid).findMany({
           filters: {
-            status: { $eq: 'open' },
+            state: { $eq: 'open' },
           },
           limit: 500,
         });

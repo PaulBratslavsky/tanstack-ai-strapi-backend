@@ -34,7 +34,7 @@ export const register = (strapi: Core.Strapi) => {
       const messages = await strapi.documents(messageUid).findMany({
         filters: { documentId: { $eq: args.messageId } },
         populate: {
-          thread: { fields: ['documentId', 'subject', 'status', 'turnCount', 'maxTurns'] },
+          thread: { fields: ['documentId', 'subject', 'state', 'turnCount', 'maxTurns'] },
           from: { fields: ['slug', 'name'] },
           to: { fields: ['slug', 'name'] },
           parent: { fields: ['documentId', 'type'] },

@@ -306,7 +306,7 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
     const uid = `plugin::${PLUGIN_NAME}.todo`;
     const todos = await strapi.documents(uid).findMany({
       filters: {
-        status: { $notIn: ['done', 'dropped', 'superseded'] }
+        state: { $notIn: ['done', 'dropped', 'superseded'] }
       },
       limit: 100,
     });

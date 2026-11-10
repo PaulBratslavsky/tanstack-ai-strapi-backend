@@ -290,7 +290,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
       await strapi.documents(approvalUid).update({
         documentId: ctx.params.id,
         data: {
-          status: decision,
+          state: decision,
           decidedAt: new Date().toISOString(),
           decidedByAgent: { connect: [{ documentId: caller.agentDocumentId }] },
           decidedByLabel: caller.agentSlug,
@@ -303,7 +303,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
       await strapi.documents(messageUid).update({
         documentId: (approval.message as any).documentId,
-        data: { status: messageStatus },
+        data: { state: messageStatus },
       });
 
       await busService.audit({

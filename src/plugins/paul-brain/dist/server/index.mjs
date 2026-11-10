@@ -21082,7 +21082,7 @@ const register$r = (strapi2) => {
           data.supersedes = { connect: [{ documentId: supersedesDocId }] };
           await strapi22.documents(uid).update({
             documentId: supersedesDocId,
-            data: { status: "superseded" }
+            data: { state: "superseded" }
           });
         }
       }
@@ -21327,7 +21327,7 @@ const register$n = (strapi2) => {
       const existing = await strapi22.documents(uid).findMany({
         filters: {
           slug: { $eq: slug },
-          status: { $eq: "open" }
+          state: { $eq: "open" }
         },
         limit: 1
       });
@@ -21847,7 +21847,7 @@ ${args.context}` : args.context;
             await strapi22.documents(uid).update({
               documentId: existing.documentId,
               data: {
-                status: "superseded",
+                state: "superseded",
                 supersededBy: { connect: [{ documentId: newTodo.documentId }] }
               }
             });
@@ -22955,7 +22955,7 @@ const register$7 = (strapi2) => {
         const todoUid = getUid("todo");
         const todos = await strapi22.documents(todoUid).findMany({
           filters: {
-            status: { $notIn: ["done", "dropped", "superseded"] }
+            state: { $notIn: ["done", "dropped", "superseded"] }
           },
           limit: 500
         });
@@ -23152,7 +23152,7 @@ const register$7 = (strapi2) => {
         const retroUid = getUid("retro");
         const retros = await strapi22.documents(retroUid).findMany({
           filters: {
-            status: { $eq: "open" }
+            state: { $eq: "open" }
           },
           limit: 500
         });
@@ -25204,7 +25204,7 @@ ${data.body}`;
     const uid = `plugin::${PLUGIN_NAME}.todo`;
     const todos = await strapi2.documents(uid).findMany({
       filters: {
-        status: { $notIn: ["done", "dropped", "superseded"] }
+        state: { $notIn: ["done", "dropped", "superseded"] }
       },
       limit: 100
     });

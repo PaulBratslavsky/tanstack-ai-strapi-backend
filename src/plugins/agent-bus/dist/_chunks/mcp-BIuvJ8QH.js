@@ -11,7 +11,7 @@ const require$$0$7 = require("buffer");
 const require$$0$6 = require("stream");
 const require$$2$1 = require("util");
 require("node:stream");
-const index = require("./index-BSABNQFd.js");
+const index = require("./index-BcCYn_RF.js");
 const _interopDefault = (e) => e && e.__esModule ? e : { default: e };
 const crypto__default = /* @__PURE__ */ _interopDefault(crypto);
 const require$$0__default = /* @__PURE__ */ _interopDefault(require$$0$1);
@@ -19961,7 +19961,7 @@ const register$9 = (strapi2) => {
       const messages = await strapi22.documents(messageUid).findMany({
         filters: { documentId: { $eq: args.messageId } },
         populate: {
-          thread: { fields: ["documentId", "subject", "status", "turnCount", "maxTurns"] },
+          thread: { fields: ["documentId", "subject", "state", "turnCount", "maxTurns"] },
           from: { fields: ["slug", "name"] },
           to: { fields: ["slug", "name"] },
           parent: { fields: ["documentId", "type"] },
@@ -20177,7 +20177,7 @@ const register$6 = (strapi2) => {
       const caller = await authService.resolveCaller(strapi22, extra);
       const messages = await strapi22.documents(messageUid).findMany({
         filters: { documentId: { $eq: args.messageId } },
-        populate: { to: true, thread: true }
+        populate: { to: true, thread: true, state: true }
       });
       if (!messages || messages.length === 0) {
         throw new Error("Message not found");
@@ -20201,7 +20201,7 @@ const register$6 = (strapi2) => {
           data: {
             message: { connect: [{ documentId: args.messageId }] },
             thread: { connect: [{ documentId: message.thread.documentId }] },
-            status: "pending",
+            state: "pending",
             reviewLevel: "human"
           }
         });
@@ -20215,7 +20215,7 @@ const register$6 = (strapi2) => {
           data: {
             message: { connect: [{ documentId: args.messageId }] },
             thread: { connect: [{ documentId: message.thread.documentId }] },
-            status: "pending",
+            state: "pending",
             reviewLevel: "auto",
             vetoUntil: vetoUntil.toISOString()
           }
@@ -20224,7 +20224,7 @@ const register$6 = (strapi2) => {
       }
       await strapi22.documents(messageUid).update({
         documentId: args.messageId,
-        data: { status: newStatus }
+        data: { state: newStatus }
       });
       await busService.audit({
         action: "message.submit_proof",

@@ -296,7 +296,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
     const agents = await strapi.documents(agentUid).findMany({
       filters: { documentId: { $eq: agentDocumentId } },
-      fields: ['webhookUrl', 'status', 'slug'],
+      fields: ['webhookUrl', 'state', 'slug'],
     });
 
     if (!agents || agents.length === 0) {
@@ -489,7 +489,7 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
 
     return {
       messageId,
-      status: 'claimed',
+      status: 'claimed', // External API uses status
       claimedUntil: claimedUntil.toISOString(),
     };
   },

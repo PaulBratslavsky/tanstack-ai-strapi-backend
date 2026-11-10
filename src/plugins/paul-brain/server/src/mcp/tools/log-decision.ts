@@ -74,7 +74,7 @@ export const register = (strapi: Core.Strapi) => {
           data.supersedes = { connect: [{ documentId: supersedesDocId }] };
           await strapi.documents(uid).update({
             documentId: supersedesDocId,
-            data: { status: 'superseded' },
+            data: { state: 'superseded' },
           });
         }
       }

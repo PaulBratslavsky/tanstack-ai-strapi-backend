@@ -9,7 +9,7 @@ import require$$0$7 from "buffer";
 import require$$0$6 from "stream";
 import require$$2$1 from "util";
 import "node:stream";
-import { g as getActionId, a as getUid, P as PLUGIN_NAME } from "./index-ClYVN4YM.mjs";
+import { g as getActionId, a as getUid, P as PLUGIN_NAME } from "./index-DbLQmsCL.mjs";
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x) {
   return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
@@ -19948,7 +19948,7 @@ const register$9 = (strapi2) => {
       const messages = await strapi22.documents(messageUid).findMany({
         filters: { documentId: { $eq: args.messageId } },
         populate: {
-          thread: { fields: ["documentId", "subject", "status", "turnCount", "maxTurns"] },
+          thread: { fields: ["documentId", "subject", "state", "turnCount", "maxTurns"] },
           from: { fields: ["slug", "name"] },
           to: { fields: ["slug", "name"] },
           parent: { fields: ["documentId", "type"] },
@@ -20164,7 +20164,7 @@ const register$6 = (strapi2) => {
       const caller = await authService.resolveCaller(strapi22, extra);
       const messages = await strapi22.documents(messageUid).findMany({
         filters: { documentId: { $eq: args.messageId } },
-        populate: { to: true, thread: true }
+        populate: { to: true, thread: true, state: true }
       });
       if (!messages || messages.length === 0) {
         throw new Error("Message not found");
@@ -20188,7 +20188,7 @@ const register$6 = (strapi2) => {
           data: {
             message: { connect: [{ documentId: args.messageId }] },
             thread: { connect: [{ documentId: message.thread.documentId }] },
-            status: "pending",
+            state: "pending",
             reviewLevel: "human"
           }
         });
@@ -20202,7 +20202,7 @@ const register$6 = (strapi2) => {
           data: {
             message: { connect: [{ documentId: args.messageId }] },
             thread: { connect: [{ documentId: message.thread.documentId }] },
-            status: "pending",
+            state: "pending",
             reviewLevel: "auto",
             vetoUntil: vetoUntil.toISOString()
           }
@@ -20211,7 +20211,7 @@ const register$6 = (strapi2) => {
       }
       await strapi22.documents(messageUid).update({
         documentId: args.messageId,
-        data: { status: newStatus }
+        data: { state: newStatus }
       });
       await busService.audit({
         action: "message.submit_proof",

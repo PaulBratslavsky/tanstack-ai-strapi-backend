@@ -148,7 +148,7 @@ export const register = (strapi: Core.Strapi) => {
             await strapi.documents(uid).update({
               documentId: existing.documentId,
               data: {
-                status: 'superseded',
+                state: 'superseded',
                 supersededBy: { connect: [{ documentId: newTodo.documentId }] },
               },
             });

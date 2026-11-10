@@ -377,7 +377,7 @@ const bootstrap = async ({ strapi }) => {
         kind: "orchestrator",
         description: "Paul's Chief of Staff. Default inbox and manager. Delegates work, checks proof, escalates to Paul.",
         capabilities: [],
-        status: "active",
+        state: "active",
         permissionPack: "orchestrator"
       }
     });
@@ -393,7 +393,7 @@ const bootstrap = async ({ strapi }) => {
   startOutboxWorker(strapi, finalConfig);
   startExpiryWorker(strapi);
   if (strapi.ai?.mcp?.isEnabled()) {
-    const { registerMcpTools } = await import("./mcp-COXbleFr.mjs");
+    const { registerMcpTools } = await import("./mcp-fsj1wqKA.mjs");
     registerMcpTools(strapi);
   } else {
     strapi.log.info("[agent-bus] MCP is not enabled, skipping MCP tool registration");
@@ -1447,7 +1447,7 @@ const bus$1 = ({ strapi }) => ({
     const deliveryUid = getUid("delivery");
     const agents = await strapi.documents(agentUid).findMany({
       filters: { documentId: { $eq: agentDocumentId } },
-      fields: ["webhookUrl", "status", "slug"]
+      fields: ["webhookUrl", "state", "slug"]
     });
     if (!agents || agents.length === 0) {
       return;
@@ -1596,6 +1596,7 @@ const bus$1 = ({ strapi }) => ({
     return {
       messageId,
       status: "claimed",
+      // External API uses status
       claimedUntil: claimedUntil.toISOString()
     };
   }
@@ -1946,7 +1947,7 @@ const bus = ({ strapi }) => ({
       await strapi.documents(approvalUid).update({
         documentId: ctx.params.id,
         data: {
-          status: decision,
+          state: decision,
           decidedAt: (/* @__PURE__ */ new Date()).toISOString(),
           decidedByAgent: { connect: [{ documentId: caller.agentDocumentId }] },
           decidedByLabel: caller.agentSlug,
@@ -1956,7 +1957,7 @@ const bus = ({ strapi }) => ({
       const messageStatus = decision === "approved" ? "completed" : decision === "vetoed" ? "vetoed" : "declined";
       await strapi.documents(messageUid).update({
         documentId: approval2.message.documentId,
-        data: { status: messageStatus }
+        data: { state: messageStatus }
       });
       await busService.audit({
         action: "approval.decide",
