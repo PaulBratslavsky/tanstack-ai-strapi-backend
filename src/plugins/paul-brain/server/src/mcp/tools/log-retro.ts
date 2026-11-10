@@ -46,7 +46,7 @@ export const register = (strapi: Core.Strapi) => {
         failure: args.failure,
         fix: args.fix,
         fixLocation: args.fixLocation,
-        status: args.status || 'open',
+        state: args.status || 'open', // Map external status to internal state,
       };
 
       if (args.project) {

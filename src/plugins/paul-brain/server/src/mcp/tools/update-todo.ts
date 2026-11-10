@@ -73,7 +73,7 @@ export const register = (strapi: Core.Strapi) => {
       }
 
       if (args.status) {
-        updates.status = args.status;
+        updates.state = args.status // Map external status to internal state;
         if (args.status === 'done' && !todo.completedAt) {
           updates.completedAt = new Date().toISOString();
         }
@@ -102,7 +102,7 @@ export const register = (strapi: Core.Strapi) => {
       const output = {
         updated: true,
         documentId: result.documentId,
-        status: result.status,
+        status: result.state, // Map state to status for external API
       };
 
       return {

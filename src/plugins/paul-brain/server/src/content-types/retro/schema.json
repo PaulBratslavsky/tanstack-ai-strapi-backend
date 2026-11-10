@@ -35,7 +35,7 @@
     "fixLocation": {
       "type": "string"
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["open", "fixed", "declined", "wontfix"],
       "default": "open"

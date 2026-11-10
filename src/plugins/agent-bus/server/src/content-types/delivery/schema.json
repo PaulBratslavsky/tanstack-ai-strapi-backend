@@ -39,7 +39,7 @@
       "type": "string",
       "required": true
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["pending", "delivered", "failed", "exhausted", "skipped"],
       "default": "pending"

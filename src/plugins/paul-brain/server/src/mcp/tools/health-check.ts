@@ -163,7 +163,7 @@ export const register = (strapi: Core.Strapi) => {
             });
           }
 
-          if (!todo.status) {
+          if (!todo.state) {
             findings.push({
               severity: 'WARN',
               kind: 'missing_status',
@@ -174,7 +174,7 @@ export const register = (strapi: Core.Strapi) => {
             });
           }
 
-          if (todo.status === 'done' && !todo.completedAt) {
+          if (todo.state === 'done' && !todo.completedAt) {
             findings.push({
               severity: 'WARN',
               kind: 'missing_completed_at',
@@ -185,7 +185,7 @@ export const register = (strapi: Core.Strapi) => {
             });
           }
 
-          if (todo.status === 'waiting' && !todo.waitingOn) {
+          if (todo.state === 'waiting' && !todo.waitingOn) {
             findings.push({
               severity: 'WARN',
               kind: 'missing_waiting_on',

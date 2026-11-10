@@ -24,7 +24,7 @@ export const register = (strapi: Core.Strapi) => {
         category: z.string().nullish(),
         cadence: z.string(),
         target: z.string().nullish(),
-        status: z.string(),
+        state: z.string(),
         startDate: z.string().nullish(),
         currentStreak: z.number(),
         bestStreak: z.number(),
@@ -44,7 +44,7 @@ export const register = (strapi: Core.Strapi) => {
       const filters: any = {};
       
       if (args.status && args.status.length > 0) {
-        filters.status = { $in: args.status };
+        filters.state = { $in: args.status };
       }
       
       if (args.category && args.category.length > 0) {
@@ -79,7 +79,7 @@ export const register = (strapi: Core.Strapi) => {
           category: goal.category,
           cadence: goal.cadence,
           target: goal.target,
-          status: goal.status,
+          status: goal.state, // Map state to status for external API
           startDate: goal.startDate,
           currentStreak,
           bestStreak: goal.bestStreak,

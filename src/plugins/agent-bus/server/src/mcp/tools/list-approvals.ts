@@ -41,9 +41,9 @@ export const register = (strapi: Core.Strapi) => {
 
       const filters: any = {};
       if (args.status) {
-        filters.status = { $eq: args.status };
+        filters.state = { $eq: args.status };
       } else {
-        filters.status = { $eq: 'pending' };
+        filters.state = { $eq: 'pending' };
       }
 
       // If not orchestrator, scope to threads where caller is a participant
@@ -99,7 +99,7 @@ export const register = (strapi: Core.Strapi) => {
           messageId: approval.message?.documentId,
           threadId: approval.thread?.documentId,
           subject: approval.thread?.subject,
-          status: approval.status,
+          status: approval.state, // Map state to status for external API
           reviewLevel: approval.reviewLevel,
           vetoUntil: approval.vetoUntil,
           message: approval.message ? {

@@ -31,7 +31,7 @@
     "target": {
       "type": "string"
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["active", "paused", "done", "dropped"],
       "default": "active"

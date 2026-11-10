@@ -105,11 +105,11 @@ export const resolveCaller = async (
     filters: {
       tokenId: { $eq: tokenIdString },
       kind: { $eq: kind },
-      status: { $eq: 'active' },
+      state: { $eq: 'active' },
     },
     populate: {
       agent: {
-        fields: ['documentId', 'slug', 'status'],
+        fields: ['documentId', 'slug', 'state'],
       },
     },
   });
@@ -121,7 +121,7 @@ export const resolveCaller = async (
   const credential = credentials[0];
   const agent = credential.agent as any;
 
-  if (!agent || agent.status !== 'active') {
+  if (!agent || agent.state !== 'active') {
     throw new Error('Agent is not active or binding is invalid');
   }
 

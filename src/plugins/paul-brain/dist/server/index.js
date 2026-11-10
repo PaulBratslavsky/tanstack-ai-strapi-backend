@@ -20278,7 +20278,7 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.6.0";
+const PLUGIN_VERSION = "1.7.0";
 const register$y = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
@@ -21066,7 +21066,8 @@ const register$r = (strapi2) => {
         context: args.context,
         decision: args.decision,
         rationale: args.rationale,
-        status: args.status || "accepted",
+        state: args.status || "accepted",
+        // Map external status to internal state
         decided_on: args.decided_on || (/* @__PURE__ */ new Date()).toISOString()
       };
       if (args.project) {
@@ -21210,7 +21211,8 @@ const register$p = (strapi2) => {
         failure: args.failure,
         fix: args.fix,
         fixLocation: args.fixLocation,
-        status: args.status || "open"
+        state: args.status || "open"
+        // Map external status to internal state,
       };
       if (args.project) {
         const projectDocId = await brainService.resolveEntityBySlug("project", args.project);
@@ -21254,7 +21256,7 @@ const register$o = (strapi2) => {
         documentId: string(),
         slug: string(),
         title: string(),
-        status: string(),
+        state: string(),
         date: string().nullish(),
         failure: string().nullish(),
         fix: string().nullish()
@@ -21269,7 +21271,7 @@ const register$o = (strapi2) => {
       const limit = args.limit || 25;
       const filters2 = {};
       if (args.status) {
-        filters2.status = { $eq: args.status };
+        filters2.state = { $eq: args.status };
       }
       const items = await strapi22.documents(uid).findMany({
         filters: filters2,
@@ -21281,7 +21283,8 @@ const register$o = (strapi2) => {
           documentId: item.documentId,
           slug: item.slug,
           title: item.title,
-          status: item.status,
+          status: item.state,
+          // Map state to status for external API
           date: item.date,
           failure: item.failure,
           fix: item.fix
@@ -21372,7 +21375,8 @@ const register$n = (strapi2) => {
           request: args.request,
           whatWasNeeded: args.whatWasNeeded,
           count: 1,
-          status: args.status || "open"
+          state: args.status || "open"
+          // Map external status to internal state,
         };
         result = await strapi22.documents(uid).create({ data });
         created = true;
@@ -21417,7 +21421,7 @@ const register$m = (strapi2) => {
         documentId: string(),
         slug: string(),
         title: string(),
-        status: string(),
+        state: string(),
         count: number(),
         date: string().nullish(),
         request: string().nullish(),
@@ -21433,7 +21437,7 @@ const register$m = (strapi2) => {
       const limit = args.limit || 25;
       const filters2 = {};
       if (args.status) {
-        filters2.status = { $eq: args.status };
+        filters2.state = { $eq: args.status };
       }
       const items = await strapi22.documents(uid).findMany({
         filters: filters2,
@@ -21445,7 +21449,8 @@ const register$m = (strapi2) => {
           documentId: item.documentId,
           slug: item.slug,
           title: item.title,
-          status: item.status,
+          status: item.state,
+          // Map state to status for external API
           count: item.count || 1,
           date: item.date,
           request: item.request,
@@ -21770,7 +21775,7 @@ const register$h = (strapi2) => {
       object({
         documentId: string(),
         title: string(),
-        status: string(),
+        state: string(),
         priority: string(),
         merged: boolean().optional(),
         superseded: string().optional()
@@ -21790,7 +21795,8 @@ const register$h = (strapi2) => {
             candidates: candidates.map((c) => ({
               documentId: c.documentId,
               title: c.title,
-              status: c.status,
+              status: c.state,
+              // Map state to status for external API
               priority: c.priority,
               dueDate: c.dueDate,
               project: c.project
@@ -21834,7 +21840,8 @@ ${args.context}` : args.context;
             const output2 = stripNullish({
               documentId: result2.documentId,
               title: result2.title,
-              status: result2.status,
+              status: result2.state,
+              // Map state to status for external API
               priority: result2.priority,
               merged: true
             });
@@ -21859,7 +21866,8 @@ ${args.context}` : args.context;
             const output2 = stripNullish({
               documentId: newTodo.documentId,
               title: newTodo.title,
-              status: newTodo.status,
+              status: newTodo.state,
+              // Map state to status for external API
               priority: newTodo.priority,
               superseded: existing.documentId
             });
@@ -21879,7 +21887,8 @@ ${args.context}` : args.context;
       const output = stripNullish({
         documentId: result.documentId,
         title: result.title,
-        status: result.status,
+        status: result.state,
+        // Map state to status for external API
         priority: result.priority
       });
       return {
@@ -21897,7 +21906,8 @@ ${args.context}` : args.context;
 async function createNewTodo(strapi2, uid, args) {
   const data = {
     title: args.title,
-    status: args.status || "inbox",
+    state: args.status || "inbox",
+    // Map external status to internal state,
     priority: args.priority || "P2",
     dueDate: args.dueDate,
     doDate: args.doDate,
@@ -22007,7 +22017,7 @@ const register$g = (strapi2) => {
 ${args.appendContext}` : args.appendContext;
       }
       if (args.status) {
-        updates.status = args.status;
+        updates.state = args.status;
         if (args.status === "done" && !todo2.completedAt) {
           updates.completedAt = (/* @__PURE__ */ new Date()).toISOString();
         }
@@ -22032,7 +22042,8 @@ ${args.appendContext}` : args.appendContext;
       const output = {
         updated: true,
         documentId: result.documentId,
-        status: result.status
+        status: result.state
+        // Map state to status for external API
       };
       return {
         content: [
@@ -22068,7 +22079,7 @@ const register$f = (strapi2) => {
       todos: array(object({
         documentId: string(),
         title: string(),
-        status: string(),
+        state: string(),
         priority: string(),
         dueDate: string().nullish(),
         doDate: string().nullish(),
@@ -22090,7 +22101,7 @@ const register$f = (strapi2) => {
       const limit = args.limit || 50;
       const filters2 = {};
       if (args.status && args.status.length > 0) {
-        filters2.status = { $in: args.status };
+        filters2.state = { $in: args.status };
       }
       if (args.priority && args.priority.length > 0) {
         filters2.priority = { $in: args.priority };
@@ -22121,7 +22132,7 @@ const register$f = (strapi2) => {
       if (args.overdue) {
         const today = getTodayPST();
         filters2.dueDate = { $lt: today };
-        filters2.status = { $notIn: ["done", "dropped"] };
+        filters2.state = { $notIn: ["done", "dropped"] };
       }
       let todos = await strapi22.documents(uid).findMany({
         filters: filters2,
@@ -22131,7 +22142,7 @@ const register$f = (strapi2) => {
       if (args.waitingOlderThanDays !== void 0) {
         const cutoffDate = getDaysAgoPST(args.waitingOlderThanDays);
         todos = todos.filter((todo2) => {
-          if (todo2.status !== "waiting") return false;
+          if (todo2.state !== "waiting") return false;
           return todo2.updatedAt && todo2.updatedAt.slice(0, 10) < cutoffDate;
         });
       }
@@ -22150,7 +22161,8 @@ const register$f = (strapi2) => {
       const formattedTodos = todos.map((todo2) => ({
         documentId: todo2.documentId,
         title: todo2.title,
-        status: todo2.status,
+        status: todo2.state,
+        // Map state to status for external API
         priority: todo2.priority,
         dueDate: todo2.dueDate,
         doDate: todo2.doDate,
@@ -22237,7 +22249,8 @@ const register$e = (strapi2) => {
       const output = stripNullish({
         documentId: todo2.documentId,
         title: todo2.title,
-        status: todo2.status,
+        status: todo2.state,
+        // Map state to status for external API
         priority: todo2.priority,
         dueDate: todo2.dueDate,
         doDate: todo2.doDate,
@@ -22310,7 +22323,7 @@ const register$d = (strapi2) => {
       const todo2 = todos[0];
       const completedAt = (/* @__PURE__ */ new Date()).toISOString();
       const updates = {
-        status: "done",
+        state: "done",
         completedAt
       };
       if (args.closingNote) {
@@ -22391,7 +22404,8 @@ const register$c = (strapi2) => {
           title: existing.title,
           category: existing.category,
           cadence: existing.cadence,
-          status: existing.status,
+          status: existing.state,
+          // Map state to status for external API
           currentStreak: existing.currentStreak,
           bestStreak: existing.bestStreak,
           alreadyExists: true
@@ -22412,7 +22426,7 @@ const register$c = (strapi2) => {
         category: args.category,
         cadence: args.cadence || "daily",
         target: args.target,
-        status: "active",
+        state: "active",
         startDate: args.startDate || getTodayPST(),
         currentStreak: 0,
         bestStreak: 0
@@ -22423,7 +22437,8 @@ const register$c = (strapi2) => {
         title: result.title,
         category: result.category,
         cadence: result.cadence,
-        status: result.status,
+        status: result.state,
+        // Map state to status for external API
         currentStreak: result.currentStreak,
         bestStreak: result.bestStreak
       });
@@ -22461,7 +22476,7 @@ const register$b = (strapi2) => {
         category: string().nullish(),
         cadence: string(),
         target: string().nullish(),
-        status: string(),
+        state: string(),
         startDate: string().nullish(),
         currentStreak: number(),
         bestStreak: number(),
@@ -22477,7 +22492,7 @@ const register$b = (strapi2) => {
       const limit = args.limit || 50;
       const filters2 = {};
       if (args.status && args.status.length > 0) {
-        filters2.status = { $in: args.status };
+        filters2.state = { $in: args.status };
       }
       if (args.category && args.category.length > 0) {
         filters2.category = { $in: args.category };
@@ -22505,7 +22520,8 @@ const register$b = (strapi2) => {
           category: goal2.category,
           cadence: goal2.cadence,
           target: goal2.target,
-          status: goal2.status,
+          status: goal2.state,
+          // Map state to status for external API
           startDate: goal2.startDate,
           currentStreak,
           bestStreak: goal2.bestStreak,
@@ -22787,7 +22803,8 @@ const register$9 = (strapi2) => {
       const output = stripNullish({
         goalId: goal2.documentId,
         title: goal2.title,
-        status: goal2.status,
+        status: goal2.state,
+        // Map state to status for external API
         currentStreak,
         bestStreak,
         metRateLast7Days,
@@ -22851,7 +22868,7 @@ const register$8 = (strapi2) => {
       }
       const goal2 = goals[0];
       const updateData = {};
-      if (args.status !== void 0) updateData.status = args.status;
+      if (args.status !== void 0) updateData.state = args.status;
       if (args.description !== void 0) updateData.description = args.description;
       if (args.category !== void 0) updateData.category = args.category;
       if (args.target !== void 0) updateData.target = args.target;
@@ -22863,7 +22880,8 @@ const register$8 = (strapi2) => {
       const output = stripNullish({
         documentId: updated.documentId,
         title: updated.title,
-        status: updated.status,
+        status: updated.state,
+        // Map state to status for external API
         description: updated.description,
         category: updated.category,
         target: updated.target,
@@ -23010,7 +23028,7 @@ const register$7 = (strapi2) => {
               suggestedFix: `Set priority: update_todo with priority: 'P2'`
             });
           }
-          if (!todo2.status) {
+          if (!todo2.state) {
             findings.push({
               severity: "WARN",
               kind: "missing_status",
@@ -23020,7 +23038,7 @@ const register$7 = (strapi2) => {
               suggestedFix: `Set status: update_todo with status: 'inbox'`
             });
           }
-          if (todo2.status === "done" && !todo2.completedAt) {
+          if (todo2.state === "done" && !todo2.completedAt) {
             findings.push({
               severity: "WARN",
               kind: "missing_completed_at",
@@ -23030,7 +23048,7 @@ const register$7 = (strapi2) => {
               suggestedFix: `Set completedAt: update_todo or use complete_todo`
             });
           }
-          if (todo2.status === "waiting" && !todo2.waitingOn) {
+          if (todo2.state === "waiting" && !todo2.waitingOn) {
             findings.push({
               severity: "WARN",
               kind: "missing_waiting_on",
@@ -23244,7 +23262,7 @@ const register$6 = (strapi2) => {
       if (args.failure !== void 0) updates.failure = args.failure;
       if (args.fix !== void 0) updates.fix = args.fix;
       if (args.fixLocation !== void 0) updates.fixLocation = args.fixLocation;
-      if (args.status !== void 0) updates.status = args.status;
+      if (args.status !== void 0) updates.state = args.status;
       if (args.date !== void 0) updates.date = args.date;
       const result = await strapi22.documents(uid).update({
         documentId: args.documentId,
@@ -23253,7 +23271,8 @@ const register$6 = (strapi2) => {
       const output = stripNullish({
         documentId: result.documentId,
         title: result.title,
-        status: result.status,
+        status: result.state,
+        // Map state to status for external API
         message: "Retro updated successfully"
       });
       return {
@@ -23301,7 +23320,7 @@ const register$5 = (strapi2) => {
       if (args.title !== void 0) updates.title = args.title;
       if (args.request !== void 0) updates.request = args.request;
       if (args.whatWasNeeded !== void 0) updates.whatWasNeeded = args.whatWasNeeded;
-      if (args.status !== void 0) updates.status = args.status;
+      if (args.status !== void 0) updates.state = args.status;
       if (args.date !== void 0) updates.date = args.date;
       const result = await strapi22.documents(uid).update({
         documentId: args.documentId,
@@ -23310,7 +23329,8 @@ const register$5 = (strapi2) => {
       const output = stripNullish({
         documentId: result.documentId,
         title: result.title,
-        status: result.status,
+        status: result.state,
+        // Map state to status for external API
         count: result.count,
         message: "Gap updated successfully"
       });
@@ -23365,7 +23385,7 @@ const register$4 = (strapi2) => {
         documentId: string(),
         title: string(),
         priority: string(),
-        status: string(),
+        state: string(),
         dueDate: string().optional()
       })),
       recentCannotCapabilities: array(object({
@@ -23467,7 +23487,8 @@ const register$4 = (strapi2) => {
         documentId: t.documentId,
         title: t.title,
         priority: t.priority,
-        status: t.status,
+        status: t.state,
+        // Map state to status for external API
         dueDate: t.dueDate
       }));
       const ninetyDaysAgoStr = getDaysAgoPST(90);
@@ -24318,7 +24339,7 @@ const attributes$9 = {
     type: "json",
     "default": []
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "idea",
@@ -24420,7 +24441,7 @@ const attributes$8 = {
   rationale: {
     type: "richtext"
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "proposed",
@@ -24570,7 +24591,7 @@ const attributes$6 = {
   fixLocation: {
     type: "string"
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "open",
@@ -24630,7 +24651,7 @@ const attributes$5 = {
     type: "integer",
     "default": 1
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "open",
@@ -24760,7 +24781,7 @@ const attributes$2 = {
     type: "string",
     required: true
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "inbox",
@@ -24898,7 +24919,7 @@ const attributes$1 = {
   target: {
     type: "string"
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "active",

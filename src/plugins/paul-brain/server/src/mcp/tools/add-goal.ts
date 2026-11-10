@@ -52,7 +52,7 @@ export const register = (strapi: Core.Strapi) => {
           title: existing.title,
           category: existing.category,
           cadence: existing.cadence,
-          status: existing.status,
+          status: existing.state, // Map state to status for external API
           currentStreak: existing.currentStreak,
           bestStreak: existing.bestStreak,
           alreadyExists: true,
@@ -75,7 +75,7 @@ export const register = (strapi: Core.Strapi) => {
         category: args.category,
         cadence: args.cadence || 'daily',
         target: args.target,
-        status: 'active',
+        state: 'active',
         startDate: args.startDate || getTodayPST(),
         currentStreak: 0,
         bestStreak: 0,
@@ -88,7 +88,7 @@ export const register = (strapi: Core.Strapi) => {
         title: result.title,
         category: result.category,
         cadence: result.cadence,
-        status: result.status,
+        status: result.state, // Map state to status for external API
         currentStreak: result.currentStreak,
         bestStreak: result.bestStreak,
       });

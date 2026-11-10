@@ -71,7 +71,7 @@ export const register = (strapi: Core.Strapi) => {
           subject: thread?.subject,
           body: message.body,
           payload: message.payload,
-          status: message.status,
+          status: message.state, // Map state to status for external API
           priority: message.priority,
           blastRadius: message.blastRadius,
           reviewLevel: message.reviewLevel,
@@ -89,7 +89,7 @@ export const register = (strapi: Core.Strapi) => {
         thread: stripNullish({
           threadId: thread?.documentId,
           subject: thread?.subject,
-          status: thread?.status,
+          status: thread?.state, // Map state to status for external API
           turnCount: thread?.turnCount,
           maxTurns: thread?.maxTurns,
         }),

@@ -1,4 +1,7 @@
-import crypto from "crypto";
+"use strict";
+const crypto = require("crypto");
+const _interopDefault = (e) => e && e.__esModule ? e : { default: e };
+const crypto__default = /* @__PURE__ */ _interopDefault(crypto);
 const PLUGIN_NAME = "agent-bus";
 const getUid = (contentType) => `plugin::${PLUGIN_NAME}.${contentType}`;
 const PERMISSIONS = [
@@ -103,13 +106,13 @@ const startOutboxWorker = (strapi, config2) => {
       const agentUid = getUid("agent");
       const deliveries = await strapi.documents(deliveryUid).findMany({
         filters: {
-          status: { $in: ["pending", "failed"] },
+          state: { $in: ["pending", "failed"] },
           nextAttemptAt: { $lte: (/* @__PURE__ */ new Date()).toISOString() }
         },
         populate: {
-          agent: { fields: ["webhookUrl", "webhookSecret", "webhookAuthHeader", "webhookMode", "webhookTimeoutMs", "slug", "status"] },
+          agent: { fields: ["webhookUrl", "webhookSecret", "webhookAuthHeader", "webhookMode", "webhookTimeoutMs", "slug", "state"] },
           message: {
-            fields: ["type", "body", "payload", "priority", "blastRadius", "flagged"],
+            fields: ["type", "body", "payload", "priority", "blastRadius", "flagged", "state"],
             populate: {
               from: { fields: ["slug"] },
               to: { fields: ["slug"] },
@@ -122,10 +125,10 @@ const startOutboxWorker = (strapi, config2) => {
       for (const delivery2 of deliveries) {
         const agent2 = delivery2.agent;
         const message2 = delivery2.message;
-        if (agent2.status !== "active" || !agent2.webhookUrl) {
+        if (agent2.state !== "active" || !agent2.webhookUrl) {
           await strapi.documents(deliveryUid).update({
             documentId: delivery2.documentId,
-            data: { status: "skipped" }
+            data: { state: "skipped" }
           });
           continue;
         }
@@ -133,7 +136,7 @@ const startOutboxWorker = (strapi, config2) => {
           await strapi.documents(deliveryUid).update({
             documentId: delivery2.documentId,
             data: {
-              status: "skipped",
+              state: "skipped",
               lastError: "HTTP webhooks not allowed in production"
             }
           });
@@ -143,7 +146,7 @@ const startOutboxWorker = (strapi, config2) => {
           await strapi.documents(deliveryUid).update({
             documentId: delivery2.documentId,
             data: {
-              status: "exhausted",
+              state: "exhausted",
               lastError: "Max attempts exceeded"
             }
           });
@@ -180,7 +183,7 @@ const startOutboxWorker = (strapi, config2) => {
           }
           const body = JSON.stringify(payload);
           const signatureInput = `${timestamp}.${body}`;
-          const signature = crypto.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
+          const signature = crypto__default.default.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), agent2.webhookTimeoutMs || 5e3);
           const headers = {
@@ -205,16 +208,16 @@ const startOutboxWorker = (strapi, config2) => {
             await strapi.documents(deliveryUid).update({
               documentId: delivery2.documentId,
               data: {
-                status: "delivered",
+                state: "delivered",
                 deliveredAt: (/* @__PURE__ */ new Date()).toISOString(),
                 lastStatusCode: response.status,
                 lastError: null
               }
             });
-            if (message2.status === "queued") {
+            if (message2.state === "queued") {
               await strapi.documents(messageUid).update({
                 documentId: message2.documentId,
-                data: { status: "notified" }
+                data: { state: "notified" }
               });
             }
             const busService = strapi.plugin("agent-bus").service("bus");
@@ -232,7 +235,7 @@ const startOutboxWorker = (strapi, config2) => {
             await strapi.documents(deliveryUid).update({
               documentId: delivery2.documentId,
               data: {
-                status: "skipped",
+                state: "skipped",
                 lastStatusCode: response.status,
                 lastError: `Endpoint returned ${response.status}`
               }
@@ -247,7 +250,7 @@ const startOutboxWorker = (strapi, config2) => {
           await strapi.documents(deliveryUid).update({
             documentId: delivery2.documentId,
             data: {
-              status: "failed",
+              state: "failed",
               attemptCount,
               nextAttemptAt: nextAttemptAt.toISOString(),
               lastError: error.message || String(error)
@@ -275,17 +278,17 @@ const startExpiryWorker = (strapi) => {
       const now = (/* @__PURE__ */ new Date()).toISOString();
       const claimedMessages = await strapi.documents(messageUid).findMany({
         filters: {
-          status: { $in: ["claimed", "in_progress"] },
+          state: { $in: ["claimed", "in_progress"] },
           claimedUntil: { $lt: now }
         },
         limit: 50
       });
       for (const msg of claimedMessages) {
-        const newStatus = msg.status === "claimed" ? "notified" : "queued";
+        const newState = msg.state === "claimed" ? "notified" : "queued";
         await strapi.documents(messageUid).update({
           documentId: msg.documentId,
           data: {
-            status: newStatus,
+            state: newState,
             claimedBy: null,
             claimedUntil: null
           }
@@ -295,20 +298,20 @@ const startExpiryWorker = (strapi) => {
           action: "lease.expired",
           entityType: "message",
           entityDocumentId: msg.documentId,
-          metadata: { oldStatus: msg.status, newStatus }
+          metadata: { oldStatus: msg.state, newStatus: newState }
         });
       }
       const expiredMessages = await strapi.documents(messageUid).findMany({
         filters: {
           expiresAt: { $lt: now },
-          status: { $notIn: ["expired", "completed", "answered", "cancelled", "declined"] }
+          state: { $notIn: ["expired", "completed", "answered", "cancelled", "declined"] }
         },
         limit: 50
       });
       for (const msg of expiredMessages) {
         await strapi.documents(messageUid).update({
           documentId: msg.documentId,
-          data: { status: "expired" }
+          data: { state: "expired" }
         });
         const busService = strapi.plugin("agent-bus").service("bus");
         await busService.audit({
@@ -320,11 +323,11 @@ const startExpiryWorker = (strapi) => {
       }
       const scheduledApprovals = await strapi.documents(approvalUid).findMany({
         filters: {
-          status: { $eq: "pending" },
+          state: { $eq: "pending" },
           vetoUntil: { $lt: now }
         },
         populate: {
-          message: { fields: ["documentId", "status"] }
+          message: { fields: ["documentId", "state"] }
         },
         limit: 20
       });
@@ -333,16 +336,16 @@ const startExpiryWorker = (strapi) => {
         await strapi.documents(approvalUid).update({
           documentId: approval2.documentId,
           data: {
-            status: "auto_approved",
+            state: "auto_approved",
             decidedAt: now,
             decidedByLabel: "system",
             reason: "Veto window elapsed without intervention"
           }
         });
-        if (message2 && message2.status === "scheduled") {
+        if (message2 && message2.state === "scheduled") {
           await strapi.documents(messageUid).update({
             documentId: message2.documentId,
-            data: { status: "completed" }
+            data: { state: "completed" }
           });
         }
         const busService = strapi.plugin("agent-bus").service("bus");
@@ -393,7 +396,7 @@ const bootstrap = async ({ strapi }) => {
   startOutboxWorker(strapi, finalConfig);
   startExpiryWorker(strapi);
   if (strapi.ai?.mcp?.isEnabled()) {
-    const { registerMcpTools } = await import("./mcp-BM6TOgAt.mjs");
+    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-DZv4CQu_.js"));
     registerMcpTools(strapi);
   } else {
     strapi.log.info("[agent-bus] MCP is not enabled, skipping MCP tool registration");
@@ -471,7 +474,7 @@ const attributes$6 = {
     min: 1e3,
     max: 15e3
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "active",
@@ -573,7 +576,7 @@ const attributes$5 = {
   tokenName: {
     type: "string"
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "active",
@@ -620,7 +623,7 @@ const attributes$4 = {
     type: "string",
     required: true
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "open",
@@ -744,7 +747,7 @@ const attributes$3 = {
     type: "json",
     "default": {}
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "queued",
@@ -884,7 +887,7 @@ const attributes$2 = {
     target: "plugin::agent-bus.thread",
     required: true
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "pending",
@@ -974,7 +977,7 @@ const attributes$1 = {
     type: "string",
     required: true
   },
-  status: {
+  state: {
     type: "enumeration",
     "enum": [
       "pending",
@@ -1136,11 +1139,11 @@ const resolveCaller = async (strapi, ctxOrExtra) => {
     filters: {
       tokenId: { $eq: tokenIdString },
       kind: { $eq: kind2 },
-      status: { $eq: "active" }
+      state: { $eq: "active" }
     },
     populate: {
       agent: {
-        fields: ["documentId", "slug", "status"]
+        fields: ["documentId", "slug", "state"]
       }
     }
   });
@@ -1149,7 +1152,7 @@ const resolveCaller = async (strapi, ctxOrExtra) => {
   }
   const credential = credentials[0];
   const agent2 = credential.agent;
-  if (!agent2 || agent2.status !== "active") {
+  if (!agent2 || agent2.state !== "active") {
     throw new Error("Agent is not active or binding is invalid");
   }
   await strapi.documents(credentialUid).update({
@@ -1263,7 +1266,8 @@ const bus$1 = ({ strapi }) => ({
         return {
           messageId: msg.documentId,
           threadId: msg.thread?.documentId || "",
-          status: msg.status,
+          status: msg.state,
+          // Map state to status for external API
           duplicate: true
         };
       }
@@ -1275,7 +1279,7 @@ const bus$1 = ({ strapi }) => ({
           { slug: { $eq: toSlugOrId } },
           { documentId: { $eq: toSlugOrId } }
         ],
-        status: { $eq: "active" }
+        state: { $eq: "active" }
       },
       limit: 1
     });
@@ -1321,7 +1325,7 @@ const bus$1 = ({ strapi }) => ({
       thread2 = await strapi.documents(threadUid).create({
         data: {
           subject,
-          status: "open",
+          state: "open",
           originAgent: { connect: [{ documentId: caller.agentDocumentId }] },
           participants: {
             connect: [
@@ -1350,7 +1354,7 @@ const bus$1 = ({ strapi }) => ({
         type: input.type,
         body: input.body,
         payload: input.payload || {},
-        status: "queued",
+        state: "queued",
         priority: input.priority || "P2",
         blastRadius,
         reviewLevel,
@@ -1452,7 +1456,7 @@ const bus$1 = ({ strapi }) => ({
       return;
     }
     const agent2 = agents[0];
-    if (agent2.status !== "active" || !agent2.webhookUrl) {
+    if (agent2.state !== "active" || !agent2.webhookUrl) {
       return;
     }
     const idempotencyKey = `${event}:${messageDocumentId}:${agent2.slug}`;
@@ -1469,7 +1473,7 @@ const bus$1 = ({ strapi }) => ({
         agent: { connect: [{ documentId: agentDocumentId }] },
         event,
         url: agent2.webhookUrl,
-        status: "pending",
+        state: "pending",
         attemptCount: 0,
         nextAttemptAt: (/* @__PURE__ */ new Date()).toISOString(),
         idempotencyKey
@@ -1513,9 +1517,9 @@ const bus$1 = ({ strapi }) => ({
       "scheduled"
     ];
     if (options2.statuses && options2.statuses.length > 0) {
-      filters.status = { $in: options2.statuses };
+      filters.state = { $in: options2.statuses };
     } else {
-      filters.status = { $in: openStatuses };
+      filters.state = { $in: openStatuses };
     }
     if (options2.priority) {
       filters.priority = { $eq: options2.priority };
@@ -1539,14 +1543,15 @@ const bus$1 = ({ strapi }) => ({
       priority: msg.priority,
       blastRadius: msg.blastRadius,
       flagged: msg.flagged,
-      status: msg.status,
+      status: msg.state,
+      // Map state to status for external API
       createdAt: msg.createdAt,
       ...options2.includeBody ? { body: msg.body, untrusted: msg.untrusted } : {}
     }));
     const unreadCount = await strapi.documents(messageUid).count({
       filters: {
         to: { documentId: { $eq: caller.agentDocumentId } },
-        status: { $in: openStatuses }
+        state: { $in: openStatuses }
       }
     });
     return {
@@ -1571,14 +1576,14 @@ const bus$1 = ({ strapi }) => ({
       throw new Error("Not authorized to claim this message");
     }
     const claimableStatuses = ["queued", "notified", "claimed"];
-    if (!claimableStatuses.includes(message2.status)) {
-      throw new Error(`Message cannot be claimed (status: ${message2.status})`);
+    if (!claimableStatuses.includes(message2.state)) {
+      throw new Error(`Message cannot be claimed (status: ${message2.state})`);
     }
     const claimedUntil = new Date(Date.now() + leaseMinutes * 60 * 1e3);
     await strapi.documents(messageUid).update({
       documentId: messageId,
       data: {
-        status: "claimed",
+        state: "claimed",
         claimedBy: { connect: [{ documentId: caller.agentDocumentId }] },
         claimedUntil: claimedUntil.toISOString()
       }
@@ -1712,7 +1717,8 @@ const bus = ({ strapi }) => ({
     try {
       const agentUid = getUid("agent");
       const filters = {
-        status: { $eq: ctx.query.status || "active" }
+        state: { $eq: ctx.query.status || "active" }
+        // Accept status from query param but use state internally
       };
       if (ctx.query.kind) {
         filters.kind = { $eq: ctx.query.kind };
@@ -1884,9 +1890,9 @@ const bus = ({ strapi }) => ({
       const approvalUid = getUid("approval");
       const filters = {};
       if (ctx.query.status) {
-        filters.status = { $eq: ctx.query.status };
+        filters.state = { $eq: ctx.query.status };
       } else {
-        filters.status = { $eq: "pending" };
+        filters.state = { $eq: "pending" };
       }
       const limit = ctx.query.limit ? Math.min(parseInt(ctx.query.limit, 10), 50) : 20;
       const approvals = await strapi.documents(approvalUid).findMany({
@@ -1935,9 +1941,9 @@ const bus = ({ strapi }) => ({
         return;
       }
       const approval2 = approvals[0];
-      if (approval2.status !== "pending") {
+      if (approval2.state !== "pending") {
         ctx.status = 400;
-        ctx.body = { error: `Approval already decided: ${approval2.status}` };
+        ctx.body = { error: `Approval already decided: ${approval2.state}` };
         return;
       }
       await strapi.documents(approvalUid).update({
@@ -1997,9 +2003,7 @@ const index = {
   controllers,
   config
 };
-export {
-  PLUGIN_NAME as P,
-  getUid as a,
-  getActionId as g,
-  index as i
-};
+exports.PLUGIN_NAME = PLUGIN_NAME;
+exports.getActionId = getActionId;
+exports.getUid = getUid;
+exports.index = index;

@@ -41,7 +41,7 @@ export const register = (strapi: Core.Strapi) => {
         documentId: z.string(),
         title: z.string(),
         priority: z.string(),
-        status: z.string(),
+        state: z.string(),
         dueDate: z.string().optional(),
       })),
       recentCannotCapabilities: z.array(z.object({
@@ -163,7 +163,7 @@ export const register = (strapi: Core.Strapi) => {
           documentId: t.documentId,
           title: t.title,
           priority: t.priority,
-          status: t.status,
+          status: t.state, // Map state to status for external API
           dueDate: t.dueDate,
         }));
 

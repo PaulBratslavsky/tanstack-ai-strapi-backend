@@ -20,7 +20,7 @@ export const register = (strapi: Core.Strapi) => {
         documentId: z.string(),
         slug: z.string(),
         title: z.string(),
-        status: z.string(),
+        state: z.string(),
         date: z.string().nullish(),
         failure: z.string().nullish(),
         fix: z.string().nullish(),
@@ -38,7 +38,7 @@ export const register = (strapi: Core.Strapi) => {
       
       const filters: any = {};
       if (args.status) {
-        filters.status = { $eq: args.status };
+        filters.state = { $eq: args.status };
       }
 
       const items = await strapi.documents(uid).findMany({
@@ -52,7 +52,7 @@ export const register = (strapi: Core.Strapi) => {
           documentId: item.documentId,
           slug: item.slug,
           title: item.title,
-          status: item.status,
+          status: item.state, // Map state to status for external API
           date: item.date,
           failure: item.failure,
           fix: item.fix,

@@ -24,7 +24,7 @@ export const register = (strapi: Core.Strapi) => {
       todos: z.array(z.object({
         documentId: z.string(),
         title: z.string(),
-        status: z.string(),
+        state: z.string(),
         priority: z.string(),
         dueDate: z.string().nullish(),
         doDate: z.string().nullish(),
@@ -50,7 +50,7 @@ export const register = (strapi: Core.Strapi) => {
       const filters: any = {};
       
       if (args.status && args.status.length > 0) {
-        filters.status = { $in: args.status };
+        filters.state = { $in: args.status };
       }
       
       if (args.priority && args.priority.length > 0) {
@@ -86,7 +86,7 @@ export const register = (strapi: Core.Strapi) => {
       if (args.overdue) {
         const today = getTodayPST();
         filters.dueDate = { $lt: today };
-        filters.status = { $notIn: ['done', 'dropped'] };
+        filters.state = { $notIn: ['done', 'dropped'] };
       }
 
       let todos = await strapi.documents(uid).findMany({
@@ -99,7 +99,7 @@ export const register = (strapi: Core.Strapi) => {
         const cutoffDate = getDaysAgoPST(args.waitingOlderThanDays);
         
         todos = todos.filter(todo => {
-          if (todo.status !== 'waiting') return false;
+          if (todo.state !== 'waiting') return false;
           return todo.updatedAt && todo.updatedAt.slice(0, 10) < cutoffDate;
         });
       }
@@ -122,7 +122,7 @@ export const register = (strapi: Core.Strapi) => {
       const formattedTodos = todos.map(todo => ({
         documentId: todo.documentId,
         title: todo.title,
-        status: todo.status,
+        status: todo.state, // Map state to status for external API
         priority: todo.priority,
         dueDate: todo.dueDate,
         doDate: todo.doDate,

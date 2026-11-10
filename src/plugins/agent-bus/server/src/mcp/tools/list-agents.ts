@@ -44,7 +44,7 @@ export const register = (strapi: Core.Strapi) => {
       }
       
       if (args.status) {
-        filters.status = { $eq: args.status };
+        filters.state = { $eq: args.status };
       }
 
       const agents = await strapi.documents(agentUid).findMany({

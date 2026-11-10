@@ -50,7 +50,7 @@ export const register = (strapi: Core.Strapi) => {
       z.object({
         documentId: z.string(),
         title: z.string(),
-        status: z.string(),
+        state: z.string(),
         priority: z.string(),
         merged: z.boolean().optional(),
         superseded: z.string().optional(),
@@ -75,7 +75,7 @@ export const register = (strapi: Core.Strapi) => {
             candidates: candidates.map(c => ({
               documentId: c.documentId,
               title: c.title,
-              status: c.status,
+              status: c.state, // Map state to status for external API
               priority: c.priority,
               dueDate: c.dueDate,
               project: c.project,
@@ -127,7 +127,7 @@ export const register = (strapi: Core.Strapi) => {
             const output = stripNullish({
               documentId: result.documentId,
               title: result.title,
-              status: result.status,
+              status: result.state, // Map state to status for external API
               priority: result.priority,
               merged: true,
             });
@@ -156,7 +156,7 @@ export const register = (strapi: Core.Strapi) => {
             const output = stripNullish({
               documentId: newTodo.documentId,
               title: newTodo.title,
-              status: newTodo.status,
+              status: newTodo.state, // Map state to status for external API
               priority: newTodo.priority,
               superseded: existing.documentId,
             });
@@ -180,7 +180,7 @@ export const register = (strapi: Core.Strapi) => {
       const output = stripNullish({
         documentId: result.documentId,
         title: result.title,
-        status: result.status,
+        status: result.state, // Map state to status for external API
         priority: result.priority,
       });
 
@@ -200,7 +200,7 @@ export const register = (strapi: Core.Strapi) => {
 async function createNewTodo(strapi: Core.Strapi, uid: string, args: any) {
       const data: any = {
         title: args.title,
-        status: args.status || 'inbox',
+        state: args.status || 'inbox', // Map external status to internal state,
         priority: args.priority || 'P2',
         dueDate: args.dueDate,
         doDate: args.doDate,

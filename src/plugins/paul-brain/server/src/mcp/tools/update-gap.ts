@@ -38,7 +38,7 @@ export const register = (strapi: Core.Strapi) => {
       if (args.title !== undefined) updates.title = args.title;
       if (args.request !== undefined) updates.request = args.request;
       if (args.whatWasNeeded !== undefined) updates.whatWasNeeded = args.whatWasNeeded;
-      if (args.status !== undefined) updates.status = args.status;
+      if (args.status !== undefined) updates.state = args.status // Map external status to internal state;
       if (args.date !== undefined) updates.date = args.date;
 
       const result = await strapi.documents(uid).update({
@@ -49,7 +49,7 @@ export const register = (strapi: Core.Strapi) => {
       const output = stripNullish({
         documentId: result.documentId,
         title: result.title,
-        status: result.status,
+        status: result.state, // Map state to status for external API
         count: result.count,
         message: 'Gap updated successfully',
       });

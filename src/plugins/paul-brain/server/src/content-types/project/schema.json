@@ -24,7 +24,7 @@
       "type": "json",
       "default": []
     },
-    "status": {
+    "state": {
       "type": "enumeration",
       "enum": ["idea", "active", "paused", "done"],
       "default": "idea"

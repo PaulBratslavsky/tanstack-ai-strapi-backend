@@ -41,7 +41,7 @@ export const register = (strapi: Core.Strapi) => {
       const completedAt = new Date().toISOString();
       
       const updates: any = {
-        status: 'done',
+        state: 'done',
         completedAt,
       };
 

@@ -67,7 +67,7 @@ export const register = (strapi: Core.Strapi) => {
       const output = stripNullish({
         documentId: todo.documentId,
         title: todo.title,
-        status: todo.status,
+        status: todo.state, // Map state to status for external API
         priority: todo.priority,
         dueDate: todo.dueDate,
         doDate: todo.doDate,
