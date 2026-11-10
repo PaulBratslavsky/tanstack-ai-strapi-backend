@@ -9,17 +9,24 @@
 async function up(knex) {
   const strapi = global.strapi;
   
-  // Get the configured schema (for Postgres)
-  const schema = strapi?.config?.get('database.connection.schema') || 
-                 strapi?.db?.connection?.context?.client?.config?.searchPath?.[0] || 
-                 'public';
+  // Get the configured schema (for Postgres) - SQLite doesn't use schemas
+  const clientName = knex.client.config.client;
+  const isSQLite = clientName === 'sqlite' || clientName === 'sqlite3' || clientName === 'better-sqlite3';
   
-  strapi?.log?.info(`[migration] Using database schema: ${schema}`);
+  const schema = isSQLite ? null : (
+    strapi?.config?.get('database.connection.schema') || 
+    strapi?.db?.connection?.context?.client?.config?.searchPath?.[0] || 
+    'public'
+  );
+  
+  strapi?.log?.info(`[migration] Database client: ${clientName}, schema: ${schema || 'none (SQLite)'}`);
 
   // Helper to check if table exists in the configured schema
   async function tableExists(tableName) {
-    const result = await knex.schema.withSchema(schema).hasTable(tableName);
-    return result;
+    if (isSQLite) {
+      return await knex.schema.hasTable(tableName);
+    }
+    return await knex.schema.withSchema(schema).hasTable(tableName);
   }
 
   // Helper to check if column exists
@@ -27,8 +34,10 @@ async function up(knex) {
     const hasTable = await tableExists(tableName);
     if (!hasTable) return false;
     
-    const hasColumn = await knex.schema.withSchema(schema).hasColumn(tableName, columnName);
-    return hasColumn;
+    if (isSQLite) {
+      return await knex.schema.hasColumn(tableName, columnName);
+    }
+    return await knex.schema.withSchema(schema).hasColumn(tableName, columnName);
   }
 
   // All tables that need migration
@@ -79,7 +88,7 @@ async function up(knex) {
     if (migrationCount && parseInt(migrationCount.count) > 1) {
       // Multiple migrations have run, so tables should exist
       throw new Error(
-        `[migration] FATAL: Found Strapi core tables but no plugin tables in schema '${schema}'. ` +
+        `[migration] FATAL: Found Strapi core tables but no plugin tables${schema ? ` in schema '${schema}'` : ''}. ` +
         `Expected tables: ${tables.join(', ')}. ` +
         `This suggests a schema configuration problem. Migration aborted to prevent data loss.`
       );
@@ -90,7 +99,7 @@ async function up(knex) {
     }
   }
 
-  strapi?.log?.info(`[migration] Found ${existingTables.length} tables to migrate in schema '${schema}'`);
+  strapi?.log?.info(`[migration] Found ${existingTables.length} tables to migrate${schema ? ` in schema '${schema}'` : ''}`);
 
   // Default values for each table (matching schema.json defaults)
   const defaults = {
@@ -127,17 +136,27 @@ async function up(knex) {
       strapi?.log?.info(`[migration] ${tableName}: Adding 'state' column and migrating data`);
 
       // Add the new 'state' column with default
-      await knex.schema.withSchema(schema).table(tableName, (table) => {
-        table.string('state', 255).defaultTo(defaults[tableName] || 'active');
-      });
+      if (isSQLite) {
+        await knex.schema.table(tableName, (table) => {
+          table.string('state', 255).defaultTo(defaults[tableName] || 'active');
+        });
+      } else {
+        await knex.schema.withSchema(schema).table(tableName, (table) => {
+          table.string('state', 255).defaultTo(defaults[tableName] || 'active');
+        });
+      }
 
       // Copy values from 'status' to 'state', using default for nulls
       const defaultValue = defaults[tableName] || 'active';
-      await knex(tableName)
-        .withSchema(schema)
-        .update({
-          state: knex.raw(`COALESCE(status, '${defaultValue}')`),
-        });
+      const query = knex(tableName).update({
+        state: knex.raw(`COALESCE(status, '${defaultValue}')`),
+      });
+      
+      if (!isSQLite) {
+        query.withSchema(schema);
+      }
+      
+      await query;
 
       strapi?.log?.info(`[migration] ${tableName}: Migration complete`);
     } catch (error) {
