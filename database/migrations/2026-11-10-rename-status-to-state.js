@@ -61,19 +61,33 @@ async function up(knex) {
   const hasCoreTables = await tableExists('strapi_migrations') || 
                         await tableExists('admin_users');
 
-  if (hasCoreTables && existingTables.length === 0) {
-    // We found Strapi core tables but none of our plugin tables - this is an error
-    throw new Error(
-      `[migration] FATAL: Found Strapi core tables but no plugin tables in schema '${schema}'. ` +
-      `Expected tables: ${tables.join(', ')}. ` +
-      `This suggests a schema configuration problem. Migration aborted to prevent data loss.`
-    );
+  if (!hasCoreTables && existingTables.length === 0) {
+    // No tables at all - fresh database, migrations run before schema creation
+    strapi?.log?.info(`[migration] No tables found yet - fresh database, skipping migration`);
+    return;
   }
 
-  if (!hasCoreTables && existingTables.length === 0) {
-    // No tables at all - probably a fresh database
-    strapi?.log?.info(`[migration] No existing tables found - fresh database, skipping migration`);
-    return;
+  if (hasCoreTables && existingTables.length === 0) {
+    // We found Strapi core tables but none of our plugin tables
+    // This could be a schema issue OR the tables just haven't been created yet
+    // Only error if this is NOT the first Strapi boot (check for strapi_migrations content)
+    const migrationCount = await knex('strapi_migrations')
+      .withSchema(schema)
+      .count('* as count')
+      .first();
+    
+    if (migrationCount && parseInt(migrationCount.count) > 1) {
+      // Multiple migrations have run, so tables should exist
+      throw new Error(
+        `[migration] FATAL: Found Strapi core tables but no plugin tables in schema '${schema}'. ` +
+        `Expected tables: ${tables.join(', ')}. ` +
+        `This suggests a schema configuration problem. Migration aborted to prevent data loss.`
+      );
+    } else {
+      // First boot - tables will be created after migrations
+      strapi?.log?.info(`[migration] First boot detected - plugin tables will be created after migrations, skipping`);
+      return;
+    }
   }
 
   strapi?.log?.info(`[migration] Found ${existingTables.length} tables to migrate in schema '${schema}'`);
