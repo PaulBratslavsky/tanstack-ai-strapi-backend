@@ -1,11 +1,3 @@
 "use strict";
-const PLUGIN_ID = "agent-bus";
-const index = {
-  register(app) {
-    app.registerPlugin({
-      id: PLUGIN_ID,
-      name: PLUGIN_ID
-    });
-  }
-};
-module.exports = index;
+const index = require("../_chunks/index-BQuQpAqR.js");
+module.exports = index.index;

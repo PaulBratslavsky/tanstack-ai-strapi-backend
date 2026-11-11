@@ -1,7 +1,4 @@
-"use strict";
-const crypto = require("crypto");
-const _interopDefault = (e) => e && e.__esModule ? e : { default: e };
-const crypto__default = /* @__PURE__ */ _interopDefault(crypto);
+import crypto from "crypto";
 const PLUGIN_NAME = "agent-bus";
 const getUid = (contentType) => `plugin::${PLUGIN_NAME}.${contentType}`;
 const PERMISSIONS = [
@@ -183,7 +180,7 @@ const startOutboxWorker = (strapi, config2) => {
           }
           const body = JSON.stringify(payload);
           const signatureInput = `${timestamp}.${body}`;
-          const signature = crypto__default.default.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
+          const signature = crypto.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), agent2.webhookTimeoutMs || 5e3);
           const headers = {
@@ -396,11 +393,32 @@ const bootstrap = async ({ strapi }) => {
   startOutboxWorker(strapi, finalConfig);
   startExpiryWorker(strapi);
   if (strapi.ai?.mcp?.isEnabled()) {
-    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-DIvJD9ap.js"));
+    const { registerMcpTools } = await import("./mcp-DABQRTeS.mjs");
     registerMcpTools(strapi);
   } else {
     strapi.log.info("[agent-bus] MCP is not enabled, skipping MCP tool registration");
   }
+  const credentialUid = getUid("agent-credential");
+  strapi.db.lifecycles.subscribe({
+    models: ["admin::api-token"],
+    async afterDelete(event) {
+      const { result } = event;
+      if (!result || !result.id) return;
+      const tokenId = String(result.id);
+      const credentials = await strapi.documents(credentialUid).findMany({
+        filters: { tokenId: { $eq: tokenId }, state: { $eq: "active" } }
+      });
+      for (const credential of credentials) {
+        await strapi.documents(credentialUid).update({
+          documentId: credential.documentId,
+          data: { state: "revoked", tokenName: "Deleted token" }
+        });
+      }
+      if (credentials.length > 0) {
+        strapi.log.info(`[agent-bus] Revoked ${credentials.length} credential(s) for deleted token ${tokenId}`);
+      }
+    }
+  });
   strapi.log.info("[agent-bus] Bootstrap complete");
 };
 const kind$6 = "collectionType";
@@ -547,7 +565,7 @@ const options$5 = {
 };
 const pluginOptions$5 = {
   "content-manager": {
-    visible: true
+    visible: false
   },
   "content-api": {
     visible: false
@@ -586,6 +604,10 @@ const attributes$5 = {
   },
   lastUsedAt: {
     type: "datetime"
+  },
+  mintedByPlugin: {
+    type: "boolean",
+    "default": false
   }
 };
 const schema$5 = {
@@ -1608,7 +1630,31 @@ const services = {
   auth,
   bus: bus$1
 };
+const MANAGE_ACTION = "plugin::agent-bus.agent.manage";
+const adminRoute = (method, path, handler) => ({
+  method,
+  path,
+  handler,
+  config: {
+    policies: ["admin::isAuthenticatedAdmin", { name: "admin::hasPermissions", config: { actions: [MANAGE_ACTION] } }]
+  }
+});
+const adminRoutes = [
+  adminRoute("GET", "/admin/agents", "admin.listAgents"),
+  adminRoute("POST", "/admin/agents", "admin.createAgent"),
+  adminRoute("GET", "/admin/agents/:documentId", "admin.getAgent"),
+  adminRoute("PUT", "/admin/agents/:documentId", "admin.updateAgent"),
+  adminRoute("DELETE", "/admin/agents/:documentId", "admin.deleteAgent"),
+  adminRoute("POST", "/admin/agents/:documentId/bind", "admin.bindToken"),
+  adminRoute("POST", "/admin/agents/:documentId/mint", "admin.mintToken"),
+  adminRoute("DELETE", "/admin/agents/:documentId/credentials/:credentialId", "admin.revokeCredential"),
+  adminRoute("GET", "/admin/tokens", "admin.listTokens")
+];
 const routes = {
+  admin: {
+    type: "admin",
+    routes: adminRoutes
+  },
   "content-api": {
     type: "content-api",
     routes: [
@@ -1981,8 +2027,324 @@ const bus = ({ strapi }) => ({
     }
   }
 });
+const PERMISSION_PACK_ACTIONS = {
+  asker: ["agent.read", "message.send"],
+  specialist: ["agent.read", "message.send", "message.inbox"],
+  orchestrator: [
+    "agent.read",
+    "message.send",
+    "message.inbox",
+    "message.manage",
+    "approval.read",
+    "approval.decide",
+    "delivery.read"
+  ]
+};
+const adminController = ({ strapi }) => {
+  const agentUid = getUid("agent");
+  const credentialUid = getUid("agent-credential");
+  return {
+    async listAgents(ctx) {
+      try {
+        const agents = await strapi.documents(agentUid).findMany({
+          populate: {
+            credentials: {
+              fields: ["id", "kind", "tokenId", "tokenName", "state", "mintedByPlugin"]
+            }
+          },
+          sort: ["name:asc"]
+        });
+        ctx.body = { data: agents };
+      } catch (error) {
+        ctx.status = 400;
+        ctx.body = { error: error.message };
+      }
+    },
+    async getAgent(ctx) {
+      try {
+        const agents = await strapi.documents(agentUid).findMany({
+          filters: { documentId: { $eq: ctx.params.documentId } },
+          populate: {
+            credentials: {
+              fields: ["id", "kind", "tokenId", "tokenName", "state", "mintedByPlugin"]
+            }
+          }
+        });
+        if (!agents || agents.length === 0) {
+          ctx.status = 404;
+          ctx.body = { error: "Agent not found" };
+          return;
+        }
+        ctx.body = { data: agents[0] };
+      } catch (error) {
+        ctx.status = 400;
+        ctx.body = { error: error.message };
+      }
+    },
+    async createAgent(ctx) {
+      try {
+        const body = ctx.request.body ?? {};
+        const {
+          name,
+          kind: kind2,
+          permissionPack,
+          description,
+          webhookUrl,
+          webhookSecret,
+          webhookAuthHeader,
+          webhookMode,
+          credentialType,
+          tokenId
+        } = body;
+        if (!name || !name.trim()) {
+          ctx.status = 400;
+          ctx.body = { error: "name is required" };
+          return;
+        }
+        const agent2 = await strapi.documents(agentUid).create({
+          data: {
+            name: name.trim(),
+            kind: kind2 || "specialist",
+            permissionPack: permissionPack || "asker",
+            description,
+            webhookUrl,
+            webhookSecret,
+            webhookAuthHeader,
+            webhookMode: webhookMode || "reference",
+            state: "active"
+          }
+        });
+        let token = null;
+        if (credentialType === "mint") {
+          token = await mintTokenForAgent(strapi, agent2, permissionPack || "asker", ctx.state.user);
+        } else if (credentialType === "bind" && tokenId) {
+          await bindTokenToAgent(strapi, agent2, Number(tokenId));
+        }
+        const updated = await strapi.documents(agentUid).findMany({
+          filters: { documentId: { $eq: agent2.documentId } },
+          populate: {
+            credentials: {
+              fields: ["id", "kind", "tokenId", "tokenName", "state", "mintedByPlugin"]
+            }
+          }
+        });
+        ctx.status = 201;
+        ctx.body = { data: { agent: updated[0], token } };
+      } catch (error) {
+        ctx.status = 400;
+        ctx.body = { error: error.message };
+      }
+    },
+    async updateAgent(ctx) {
+      try {
+        const body = ctx.request.body ?? {};
+        const updateData = {};
+        if (body.name !== void 0) updateData.name = body.name.trim();
+        if (body.kind !== void 0) updateData.kind = body.kind;
+        if (body.permissionPack !== void 0) updateData.permissionPack = body.permissionPack;
+        if (body.description !== void 0) updateData.description = body.description;
+        if (body.state !== void 0) updateData.state = body.state;
+        if (body.webhookUrl !== void 0) updateData.webhookUrl = body.webhookUrl;
+        if (body.webhookMode !== void 0) updateData.webhookMode = body.webhookMode;
+        if (body.webhookSecret && body.webhookSecret.trim()) {
+          updateData.webhookSecret = body.webhookSecret.trim();
+        }
+        if (body.webhookAuthHeader && body.webhookAuthHeader.trim()) {
+          updateData.webhookAuthHeader = body.webhookAuthHeader.trim();
+        }
+        const agent2 = await strapi.documents(agentUid).update({
+          documentId: ctx.params.documentId,
+          data: updateData
+        });
+        ctx.body = { data: agent2 };
+      } catch (error) {
+        ctx.status = 400;
+        ctx.body = { error: error.message };
+      }
+    },
+    async deleteAgent(ctx) {
+      try {
+        await strapi.documents(agentUid).delete({
+          documentId: ctx.params.documentId
+        });
+        ctx.body = { data: { deleted: true } };
+      } catch (error) {
+        ctx.status = 400;
+        ctx.body = { error: error.message };
+      }
+    },
+    async bindToken(ctx) {
+      try {
+        const { tokenId } = ctx.request.body ?? {};
+        if (!tokenId) {
+          ctx.status = 400;
+          ctx.body = { error: "tokenId is required" };
+          return;
+        }
+        const agents = await strapi.documents(agentUid).findMany({
+          filters: { documentId: { $eq: ctx.params.documentId } }
+        });
+        if (!agents || agents.length === 0) {
+          ctx.status = 404;
+          ctx.body = { error: "Agent not found" };
+          return;
+        }
+        await bindTokenToAgent(strapi, agents[0], Number(tokenId));
+        ctx.body = { data: { bound: true } };
+      } catch (error) {
+        ctx.status = 400;
+        ctx.body = { error: error.message };
+      }
+    },
+    async mintToken(ctx) {
+      try {
+        const agents = await strapi.documents(agentUid).findMany({
+          filters: { documentId: { $eq: ctx.params.documentId } }
+        });
+        if (!agents || agents.length === 0) {
+          ctx.status = 404;
+          ctx.body = { error: "Agent not found" };
+          return;
+        }
+        const agent2 = agents[0];
+        const token = await mintTokenForAgent(strapi, agent2, agent2.permissionPack, ctx.state.user);
+        ctx.status = 201;
+        ctx.body = { data: token };
+      } catch (error) {
+        ctx.status = 400;
+        ctx.body = { error: error.message };
+      }
+    },
+    async revokeCredential(ctx) {
+      try {
+        const { credentialId } = ctx.params;
+        const credentials = await strapi.documents(credentialUid).findMany({
+          filters: { id: { $eq: Number(credentialId) } }
+        });
+        if (!credentials || credentials.length === 0) {
+          ctx.status = 404;
+          ctx.body = { error: "Credential not found" };
+          return;
+        }
+        const credential = credentials[0];
+        await strapi.documents(credentialUid).update({
+          documentId: credential.documentId,
+          data: { state: "revoked" }
+        });
+        if (credential.mintedByPlugin) {
+          try {
+            const adminTokenService = strapi.service("admin::api-token-admin");
+            await adminTokenService.revoke(Number(credential.tokenId));
+          } catch (error) {
+            strapi.log.warn(`[agent-bus] Could not revoke token ${credential.tokenId}: ${error.message}`);
+          }
+        }
+        ctx.body = { data: { revoked: true } };
+      } catch (error) {
+        ctx.status = 400;
+        ctx.body = { error: error.message };
+      }
+    },
+    async listTokens(ctx) {
+      try {
+        const tokens = await listSelectableTokens(strapi, ctx.state.user.id);
+        ctx.body = { data: tokens };
+      } catch (error) {
+        ctx.status = 400;
+        ctx.body = { error: error.message };
+      }
+    }
+  };
+};
+async function listSelectableTokens(strapi, userId) {
+  const adminTokenService = strapi.service("admin::api-token-admin");
+  const allTokens = await adminTokenService.list({ params: {} });
+  const credentialUid = getUid("agent-credential");
+  const boundCredentials = await strapi.documents(credentialUid).findMany({
+    filters: { state: { $eq: "active" } },
+    fields: ["tokenId"]
+  });
+  const boundTokenIds = new Set(boundCredentials.map((c) => c.tokenId));
+  const now = Date.now();
+  const selectableTokens = allTokens.filter((token) => {
+    if (token.kind !== "admin") return false;
+    if (token.expiresAt && new Date(token.expiresAt).getTime() <= now) return false;
+    if (boundTokenIds.has(String(token.id))) return false;
+    const ownerId = typeof token.adminUserOwner === "object" ? token.adminUserOwner?.id : token.adminUserOwner;
+    return ownerId === userId;
+  });
+  return selectableTokens.map((token) => ({
+    id: token.id,
+    name: token.name,
+    description: token.description,
+    expiresAt: token.expiresAt
+  }));
+}
+async function bindTokenToAgent(strapi, agent2, tokenId) {
+  const adminTokenService = strapi.service("admin::api-token-admin");
+  const credentialUid = getUid("agent-credential");
+  const existingBinding = await strapi.documents(credentialUid).findMany({
+    filters: { tokenId: { $eq: String(tokenId) } }
+  });
+  if (existingBinding && existingBinding.length > 0) {
+    throw new Error("Token is already bound to an agent");
+  }
+  const token = await adminTokenService.getById(tokenId);
+  if (!token || token.kind !== "admin") {
+    throw new Error("Token not found or not an admin token");
+  }
+  if (token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now()) {
+    throw new Error("Token has expired");
+  }
+  await strapi.documents(credentialUid).create({
+    data: {
+      agent: { connect: [{ documentId: agent2.documentId }] },
+      kind: "admin",
+      tokenId: String(token.id),
+      tokenName: token.name,
+      state: "active",
+      mintedByPlugin: false
+    }
+  });
+}
+async function mintTokenForAgent(strapi, agent2, permissionPack, user) {
+  const adminTokenService = strapi.service("admin::api-token-admin");
+  const credentialUid = getUid("agent-credential");
+  const actions = PERMISSION_PACK_ACTIONS[permissionPack] || PERMISSION_PACK_ACTIONS.asker;
+  const actionIds = actions.map((uid) => getActionId(uid));
+  const token = await adminTokenService.create(
+    {
+      kind: "admin",
+      name: `${agent2.name} (${permissionPack}) - ${Date.now()}`,
+      description: `Token for ${agent2.name} agent with ${permissionPack} permissions`,
+      lifespan: null,
+      adminUserOwner: user.id
+    },
+    user
+  );
+  for (const action of actionIds) {
+    await strapi.db.query("admin::permission").create({
+      data: { action, subject: null, properties: {}, conditions: [], apiToken: token.id }
+    });
+  }
+  await strapi.documents(credentialUid).create({
+    data: {
+      agent: { connect: [{ documentId: agent2.documentId }] },
+      kind: "admin",
+      tokenId: String(token.id),
+      tokenName: token.name,
+      state: "active",
+      mintedByPlugin: true
+    }
+  });
+  return {
+    accessKey: token.accessKey,
+    tokenName: token.name
+  };
+}
 const controllers = {
-  bus
+  bus,
+  admin: adminController
 };
 const config = {
   default: {
@@ -2004,7 +2366,9 @@ const index = {
   controllers,
   config
 };
-exports.PLUGIN_NAME = PLUGIN_NAME;
-exports.getActionId = getActionId;
-exports.getUid = getUid;
-exports.index = index;
+export {
+  PLUGIN_NAME as P,
+  getUid as a,
+  getActionId as g,
+  index as i
+};
