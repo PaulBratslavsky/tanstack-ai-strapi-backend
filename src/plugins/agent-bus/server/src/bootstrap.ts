@@ -49,6 +49,32 @@ const bootstrap = async ({ strapi }: { strapi: Core.Strapi }) => {
     strapi.log.info('[agent-bus] MCP is not enabled, skipping MCP tool registration');
   }
 
+  // Subscribe to token deletion to revoke credentials
+  const credentialUid = getUid('agent-credential');
+  strapi.db.lifecycles.subscribe({
+    models: ['admin::api-token'],
+    async afterDelete(event: any) {
+      const { result } = event;
+      if (!result || !result.id) return;
+
+      const tokenId = String(result.id);
+      const credentials = await strapi.documents(credentialUid).findMany({
+        filters: { tokenId: { $eq: tokenId }, state: { $eq: 'active' } },
+      });
+
+      for (const credential of credentials) {
+        await strapi.documents(credentialUid).update({
+          documentId: credential.documentId,
+          data: { state: 'revoked', tokenName: 'Deleted token' },
+        });
+      }
+
+      if (credentials.length > 0) {
+        strapi.log.info(`[agent-bus] Revoked ${credentials.length} credential(s) for deleted token ${tokenId}`);
+      }
+    },
+  });
+
   strapi.log.info('[agent-bus] Bootstrap complete');
 };
 

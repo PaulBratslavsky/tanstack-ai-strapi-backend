@@ -1,12 +1,4 @@
-const PLUGIN_ID = "agent-bus";
-const index = {
-  register(app) {
-    app.registerPlugin({
-      id: PLUGIN_ID,
-      name: PLUGIN_ID
-    });
-  }
-};
+import { b } from "../_chunks/index-965-Q6ne.mjs";
 export {
-  index as default
+  b as default
 };
