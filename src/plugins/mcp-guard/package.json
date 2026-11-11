@@ -1,6 +1,6 @@
 {
   "name": "strapi-plugin-mcp-guard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Guards Strapi's built-in MCP endpoint and reports on it from the admin panel",
   "private": true,
   "type": "commonjs",
@@ -52,6 +52,8 @@
     "typescript": "^5"
   },
   "peerDependencies": {
+    "@strapi/design-system": "^2.0.0",
+    "@strapi/icons": "^2.0.0",
     "@strapi/strapi": "^5.0.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
