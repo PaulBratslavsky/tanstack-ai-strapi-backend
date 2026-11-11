@@ -1,7 +1,4 @@
-"use strict";
-const crypto = require("crypto");
-const _interopDefault = (e) => e && e.__esModule ? e : { default: e };
-const crypto__default = /* @__PURE__ */ _interopDefault(crypto);
+import crypto from "crypto";
 const PLUGIN_NAME = "agent-bus";
 const getUid = (contentType) => `plugin::${PLUGIN_NAME}.${contentType}`;
 const PERMISSIONS = [
@@ -183,7 +180,7 @@ const startOutboxWorker = (strapi, config2) => {
           }
           const body = JSON.stringify(payload);
           const signatureInput = `${timestamp}.${body}`;
-          const signature = crypto__default.default.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
+          const signature = crypto.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), agent2.webhookTimeoutMs || 5e3);
           const headers = {
@@ -396,7 +393,7 @@ const bootstrap = async ({ strapi }) => {
   startOutboxWorker(strapi, finalConfig);
   startExpiryWorker(strapi);
   if (strapi.ai?.mcp?.isEnabled()) {
-    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-B5duIJU9.js"));
+    const { registerMcpTools } = await import("./mcp-YHPv4efF.mjs");
     registerMcpTools(strapi);
   } else {
     strapi.log.info("[agent-bus] MCP is not enabled, skipping MCP tool registration");
@@ -2128,13 +2125,26 @@ const adminController = ({ strapi }) => {
           return;
         }
         const finalSlug = slug && slug.trim() ? slug.trim() : generateSlug(name);
-        if (finalSlug === "chief") {
-          const existing = await strapi.documents(agentUid).findMany({
-            filters: { slug: { $eq: "chief" } }
-          });
-          if (existing && existing.length > 0) {
+        const chiefExists = await strapi.documents(agentUid).findMany({
+          filters: { slug: { $eq: "chief" } }
+        });
+        if (chiefExists && chiefExists.length > 0) {
+          if (finalSlug === "chief") {
             ctx.status = 400;
             ctx.body = { error: 'slug "chief" is reserved and already exists' };
+            return;
+          }
+          if (kind2 === "orchestrator") {
+            ctx.status = 400;
+            ctx.body = { error: "Only one orchestrator (chief) is allowed" };
+            return;
+          }
+        }
+        if (credentialType === "mint") {
+          const hasPermission = await checkMintPermissions(strapi, permissionPack || "asker", ctx.state.user);
+          if (!hasPermission.allowed) {
+            ctx.status = 403;
+            ctx.body = { error: `Cannot mint ${permissionPack || "asker"} token: missing permissions - ${hasPermission.missing.join(", ")}` };
             return;
           }
         }
@@ -2154,12 +2164,6 @@ const adminController = ({ strapi }) => {
         });
         let token = null;
         if (credentialType === "mint") {
-          const hasPermission = await checkMintPermissions(strapi, permissionPack || "asker", ctx.state.user);
-          if (!hasPermission.allowed) {
-            ctx.status = 403;
-            ctx.body = { error: `Cannot mint ${permissionPack || "asker"} token: missing permissions - ${hasPermission.missing.join(", ")}` };
-            return;
-          }
           token = await mintTokenForAgent(strapi, agent2, permissionPack || "asker", ctx.state.user);
         } else if (credentialType === "bind" && tokenId) {
           await bindTokenToAgent(strapi, agent2, Number(tokenId));
@@ -2184,7 +2188,6 @@ const adminController = ({ strapi }) => {
         const body = ctx.request.body ?? {};
         const updateData = {};
         if (body.name !== void 0) updateData.name = body.name.trim();
-        if (body.kind !== void 0) updateData.kind = body.kind;
         if (body.permissionPack !== void 0) updateData.permissionPack = body.permissionPack;
         if (body.description !== void 0) updateData.description = body.description;
         if (body.state !== void 0) updateData.state = body.state;
@@ -2196,6 +2199,25 @@ const adminController = ({ strapi }) => {
         if (body.webhookAuthHeader && body.webhookAuthHeader.trim()) {
           updateData.webhookAuthHeader = body.webhookAuthHeader.trim();
         }
+        const currentAgent = await strapi.documents(agentUid).findMany({
+          filters: { documentId: { $eq: ctx.params.documentId } }
+        });
+        if (!currentAgent || currentAgent.length === 0) {
+          ctx.status = 404;
+          ctx.body = { error: "Agent not found" };
+          return;
+        }
+        if (body.kind !== void 0 && body.kind === "orchestrator") {
+          const chiefExists = await strapi.documents(agentUid).findMany({
+            filters: { slug: { $eq: "chief" } }
+          });
+          if (chiefExists && chiefExists.length > 0 && currentAgent[0].slug !== "chief") {
+            ctx.status = 400;
+            ctx.body = { error: "Only one orchestrator (chief) is allowed" };
+            return;
+          }
+        }
+        if (body.kind !== void 0) updateData.kind = body.kind;
         const agent2 = await strapi.documents(agentUid).update({
           documentId: ctx.params.documentId,
           data: updateData
@@ -2233,9 +2255,9 @@ const adminController = ({ strapi }) => {
           return;
         }
         const agent2 = agents[0];
-        if (agent2.slug === "chief" || agent2.kind === "orchestrator") {
+        if (agent2.slug === "chief") {
           ctx.status = 400;
-          ctx.body = { error: "Cannot delete the orchestrator/chief agent" };
+          ctx.body = { error: "Cannot delete the chief agent" };
           return;
         }
         const credentials = agent2.credentials || [];
@@ -2365,32 +2387,32 @@ async function listSelectableTokens(strapi, userId) {
   });
   const boundTokenIds = new Set(boundCredentials.map((c) => c.tokenId));
   const now = Date.now();
+  const user = await strapi.db.query("admin::user").findOne({
+    where: { id: userId },
+    populate: ["roles"]
+  });
+  const isSuperAdmin = user?.roles?.some((role) => role.code === "strapi-super-admin");
   const adminTokens = await strapi.db.query("admin::api-token").findMany({
-    where: {
-      adminUserOwner: userId
-    }
+    where: isSuperAdmin ? {} : { adminUserOwner: userId },
+    populate: ["adminUserOwner"]
   });
   const contentApiTokens = await strapi.db.query("admin::api-token").findMany({
     where: {
-      type: "custom"
+      type: { $in: ["custom", "read-only", "full-access"] }
     }
   });
   const allTokens = [...adminTokens, ...contentApiTokens];
   const selectableTokens = allTokens.filter((token) => {
     if (token.expiresAt && new Date(token.expiresAt).getTime() <= now) return false;
     if (boundTokenIds.has(String(token.id))) return false;
-    if (token.type === "admin" || token.kind === "admin") {
-      const ownerId = typeof token.adminUserOwner === "object" ? token.adminUserOwner?.id : token.adminUserOwner;
-      return ownerId === userId;
-    }
-    return token.type === "custom";
+    return true;
   });
   return selectableTokens.map((token) => ({
     id: token.id,
     name: token.name,
     description: token.description,
     expiresAt: token.expiresAt,
-    kind: token.type === "custom" ? "content-api" : "admin"
+    kind: token.kind || (token.type === "admin" ? "admin" : "content-api")
   }));
 }
 async function bindTokenToAgent(strapi, agent2, tokenId) {
@@ -2410,7 +2432,7 @@ async function bindTokenToAgent(strapi, agent2, tokenId) {
   if (!token) {
     throw new Error("Token not found");
   }
-  const tokenKind = token.type === "custom" ? "content-api" : "admin";
+  const tokenKind = token.kind || (token.type === "admin" ? "admin" : "content-api");
   if (token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now()) {
     throw new Error("Token has expired");
   }
@@ -2520,7 +2542,9 @@ const index = {
   controllers,
   config
 };
-exports.PLUGIN_NAME = PLUGIN_NAME;
-exports.getActionId = getActionId;
-exports.getUid = getUid;
-exports.index = index;
+export {
+  PLUGIN_NAME as P,
+  getUid as a,
+  getActionId as g,
+  index as i
+};
