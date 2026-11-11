@@ -150,6 +150,7 @@ const AddAgentModal = ({ onCreated, tokens }: { onCreated: () => void; tokens: T
   const { toggleNotification } = useNotification();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
   const [kind, setKind] = useState('specialist');
   const [permissionPack, setPermissionPack] = useState('asker');
   const [description, setDescription] = useState('');
@@ -162,8 +163,24 @@ const AddAgentModal = ({ onCreated, tokens }: { onCreated: () => void; tokens: T
   const [created, setCreated] = useState<CreatedToken | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const generateSlug = (value: string) => {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    if (!slug || slug === generateSlug(name)) {
+      setSlug(generateSlug(value));
+    }
+  };
+
   const reset = () => {
     setName('');
+    setSlug('');
     setKind('specialist');
     setPermissionPack('asker');
     setDescription('');
@@ -181,6 +198,7 @@ const AddAgentModal = ({ onCreated, tokens }: { onCreated: () => void; tokens: T
     try {
       const { data } = await post<{ data: { agent: Agent; token?: CreatedToken } }>(`/${PLUGIN_ID}/admin/agents`, {
         name,
+        slug: slug.trim() || undefined,
         kind,
         permissionPack,
         description,
@@ -234,7 +252,13 @@ const AddAgentModal = ({ onCreated, tokens }: { onCreated: () => void; tokens: T
             <Flex direction="column" alignItems="stretch" gap={4}>
               <Field.Root name="name" required>
                 <Field.Label>Name</Field.Label>
-                <TextInput value={name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)} placeholder="My Agent" />
+                <TextInput value={name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleNameChange(e.target.value)} placeholder="My Agent" />
+              </Field.Root>
+
+              <Field.Root name="slug" required hint="Auto-generated from name. Use lowercase letters, numbers, and hyphens only.">
+                <Field.Label>Slug</Field.Label>
+                <TextInput value={slug} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSlug(e.target.value)} placeholder="my-agent" />
+                <Field.Hint />
               </Field.Root>
 
               <Field.Root name="kind">

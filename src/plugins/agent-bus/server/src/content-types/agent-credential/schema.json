@@ -33,7 +33,8 @@
     },
     "tokenId": {
       "type": "string",
-      "required": true
+      "required": true,
+      "unique": true
     },
     "tokenName": {
       "type": "string"

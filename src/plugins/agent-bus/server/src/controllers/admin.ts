@@ -16,6 +16,37 @@ const PERMISSION_PACK_ACTIONS: Record<string, string[]> = {
   ],
 };
 
+function sanitizeAgent(agent: any): any {
+  if (!agent) return null;
+  
+  const sanitized = { ...agent };
+  delete sanitized.webhookSecret;
+  delete sanitized.webhookAuthHeader;
+  
+  sanitized.webhookConfigured = Boolean(agent.webhookUrl);
+  sanitized.hasAuthHeader = Boolean(agent.webhookAuthHeader);
+  
+  if (agent.credentials && Array.isArray(agent.credentials)) {
+    sanitized.credentials = agent.credentials.map((cred: any) => ({
+      id: cred.id,
+      kind: cred.kind,
+      tokenName: cred.tokenName,
+      state: cred.state,
+      mintedByPlugin: cred.mintedByPlugin,
+    }));
+  }
+  
+  return sanitized;
+}
+
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
   const agentUid = getUid('agent');
   const credentialUid = getUid('agent-credential');
@@ -32,7 +63,7 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
           sort: ['name:asc'],
         });
 
-        ctx.body = { data: agents };
+        ctx.body = { data: agents.map(sanitizeAgent) };
       } catch (error: any) {
         ctx.status = 400;
         ctx.body = { error: error.message };
@@ -56,7 +87,7 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
           return;
         }
 
-        ctx.body = { data: agents[0] };
+        ctx.body = { data: sanitizeAgent(agents[0]) };
       } catch (error: any) {
         ctx.status = 400;
         ctx.body = { error: error.message };
@@ -68,6 +99,7 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         const body = ctx.request.body ?? {};
         const {
           name,
+          slug,
           kind,
           permissionPack,
           description,
@@ -85,9 +117,23 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
           return;
         }
 
+        const finalSlug = slug && slug.trim() ? slug.trim() : generateSlug(name);
+
+        if (finalSlug === 'chief') {
+          const existing = await strapi.documents(agentUid).findMany({
+            filters: { slug: { $eq: 'chief' } },
+          });
+          if (existing && existing.length > 0) {
+            ctx.status = 400;
+            ctx.body = { error: 'slug "chief" is reserved and already exists' };
+            return;
+          }
+        }
+
         const agent = await strapi.documents(agentUid).create({
           data: {
             name: name.trim(),
+            slug: finalSlug,
             kind: kind || 'specialist',
             permissionPack: permissionPack || 'asker',
             description,
@@ -102,6 +148,12 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         let token = null;
 
         if (credentialType === 'mint') {
+          const hasPermission = await checkMintPermissions(strapi, permissionPack || 'asker', ctx.state.user);
+          if (!hasPermission.allowed) {
+            ctx.status = 403;
+            ctx.body = { error: `Cannot mint ${permissionPack || 'asker'} token: missing permissions - ${hasPermission.missing.join(', ')}` };
+            return;
+          }
           token = await mintTokenForAgent(strapi, agent, permissionPack || 'asker', ctx.state.user);
         } else if (credentialType === 'bind' && tokenId) {
           await bindTokenToAgent(strapi, agent, Number(tokenId));
@@ -117,7 +169,7 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         });
 
         ctx.status = 201;
-        ctx.body = { data: { agent: updated[0], token } };
+        ctx.body = { data: { agent: sanitizeAgent(updated[0]), token } };
       } catch (error: any) {
         ctx.status = 400;
         ctx.body = { error: error.message };
@@ -150,7 +202,22 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
           data: updateData,
         });
 
-        ctx.body = { data: agent };
+        if (!agent) {
+          ctx.status = 404;
+          ctx.body = { error: 'Agent not found' };
+          return;
+        }
+
+        const updated = await strapi.documents(agentUid).findMany({
+          filters: { documentId: { $eq: agent.documentId } },
+          populate: {
+            credentials: {
+              fields: ['id', 'kind', 'tokenId', 'tokenName', 'state', 'mintedByPlugin'],
+            },
+          },
+        });
+
+        ctx.body = { data: sanitizeAgent(updated[0]) };
       } catch (error: any) {
         ctx.status = 400;
         ctx.body = { error: error.message };
@@ -159,6 +226,45 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
 
     async deleteAgent(ctx: any) {
       try {
+        const agents = await strapi.documents(agentUid).findMany({
+          filters: { documentId: { $eq: ctx.params.documentId } },
+          populate: {
+            credentials: true,
+          },
+        });
+
+        if (!agents || agents.length === 0) {
+          ctx.status = 404;
+          ctx.body = { error: 'Agent not found' };
+          return;
+        }
+
+        const agent = agents[0];
+
+        if (agent.slug === 'chief' || agent.kind === 'orchestrator') {
+          ctx.status = 400;
+          ctx.body = { error: 'Cannot delete the orchestrator/chief agent' };
+          return;
+        }
+
+        const credentials = agent.credentials || [];
+        const adminTokenService = strapi.service('admin::api-token-admin') as any;
+
+        for (const credential of credentials) {
+          await strapi.documents(credentialUid).update({
+            documentId: credential.documentId,
+            data: { state: 'revoked' },
+          });
+
+          if (credential.mintedByPlugin) {
+            try {
+              await adminTokenService.revoke(Number(credential.tokenId));
+            } catch (error) {
+              strapi.log.warn(`[agent-bus] Could not revoke token ${credential.tokenId}: ${(error as Error).message}`);
+            }
+          }
+        }
+
         await strapi.documents(agentUid).delete({
           documentId: ctx.params.documentId,
         });
@@ -212,6 +318,14 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         }
 
         const agent = agents[0];
+        
+        const hasPermission = await checkMintPermissions(strapi, agent.permissionPack, ctx.state.user);
+        if (!hasPermission.allowed) {
+          ctx.status = 403;
+          ctx.body = { error: `Cannot mint ${agent.permissionPack} token: missing permissions - ${hasPermission.missing.join(', ')}` };
+          return;
+        }
+        
         const token = await mintTokenForAgent(strapi, agent, agent.permissionPack, ctx.state.user);
 
         ctx.status = 201;
@@ -224,10 +338,11 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
 
     async revokeCredential(ctx: any) {
       try {
-        const { credentialId } = ctx.params;
+        const { credentialId, documentId } = ctx.params;
 
         const credentials = await strapi.documents(credentialUid).findMany({
           filters: { id: { $eq: Number(credentialId) } },
+          populate: { agent: { fields: ['documentId'] } },
         });
 
         if (!credentials || credentials.length === 0) {
@@ -237,6 +352,12 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         }
 
         const credential = credentials[0];
+        
+        if (credential.agent?.documentId !== documentId) {
+          ctx.status = 404;
+          ctx.body = { error: 'Credential not found' };
+          return;
+        }
 
         await strapi.documents(credentialUid).update({
           documentId: credential.documentId,
@@ -272,9 +393,6 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
 };
 
 async function listSelectableTokens(strapi: Core.Strapi, userId: number) {
-  const adminTokenService = strapi.service('admin::api-token-admin') as any;
-  const allTokens = await adminTokenService.list({ params: {} });
-
   const credentialUid = getUid('agent-credential');
   const boundCredentials = await strapi.documents(credentialUid).findMany({
     filters: { state: { $eq: 'active' } },
@@ -282,15 +400,32 @@ async function listSelectableTokens(strapi: Core.Strapi, userId: number) {
   });
 
   const boundTokenIds = new Set(boundCredentials.map((c: any) => c.tokenId));
-
   const now = Date.now();
+
+  const adminTokens = await strapi.db.query('admin::api-token').findMany({
+    where: {
+      adminUserOwner: userId,
+    },
+  });
+
+  const contentApiTokens = await strapi.db.query('admin::api-token').findMany({
+    where: {
+      type: 'custom',
+    },
+  });
+
+  const allTokens = [...adminTokens, ...contentApiTokens];
+
   const selectableTokens = allTokens.filter((token: any) => {
-    if (token.kind !== 'admin') return false;
     if (token.expiresAt && new Date(token.expiresAt).getTime() <= now) return false;
     if (boundTokenIds.has(String(token.id))) return false;
-
-    const ownerId = typeof token.adminUserOwner === 'object' ? token.adminUserOwner?.id : token.adminUserOwner;
-    return ownerId === userId;
+    
+    if (token.type === 'admin' || token.kind === 'admin') {
+      const ownerId = typeof token.adminUserOwner === 'object' ? token.adminUserOwner?.id : token.adminUserOwner;
+      return ownerId === userId;
+    }
+    
+    return token.type === 'custom';
   });
 
   return selectableTokens.map((token: any) => ({
@@ -298,40 +433,90 @@ async function listSelectableTokens(strapi: Core.Strapi, userId: number) {
     name: token.name,
     description: token.description,
     expiresAt: token.expiresAt,
+    kind: token.type === 'custom' ? 'content-api' : 'admin',
   }));
 }
 
 async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number) {
-  const adminTokenService = strapi.service('admin::api-token-admin') as any;
   const credentialUid = getUid('agent-credential');
 
   const existingBinding = await strapi.documents(credentialUid).findMany({
-    filters: { tokenId: { $eq: String(tokenId) } },
+    filters: { 
+      tokenId: { $eq: String(tokenId) },
+      state: { $eq: 'active' }
+    },
   });
 
   if (existingBinding && existingBinding.length > 0) {
     throw new Error('Token is already bound to an agent');
   }
 
-  const token = await adminTokenService.getById(tokenId);
-  if (!token || token.kind !== 'admin') {
-    throw new Error('Token not found or not an admin token');
+  const token = await strapi.db.query('admin::api-token').findOne({
+    where: { id: tokenId },
+  });
+
+  if (!token) {
+    throw new Error('Token not found');
   }
+
+  const tokenKind = token.type === 'custom' ? 'content-api' : 'admin';
 
   if (token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now()) {
     throw new Error('Token has expired');
   }
 
-  await strapi.documents(credentialUid).create({
-    data: {
-      agent: { connect: [{ documentId: agent.documentId }] },
-      kind: 'admin',
-      tokenId: String(token.id),
-      tokenName: token.name,
-      state: 'active',
-      mintedByPlugin: false,
+  const revokedBinding = await strapi.documents(credentialUid).findMany({
+    filters: { 
+      tokenId: { $eq: String(tokenId) },
+      state: { $eq: 'revoked' }
     },
+    limit: 1,
   });
+
+  if (revokedBinding && revokedBinding.length > 0) {
+    await strapi.documents(credentialUid).update({
+      documentId: revokedBinding[0].documentId,
+      data: {
+        agent: { connect: [{ documentId: agent.documentId }] },
+        kind: tokenKind,
+        tokenName: token.name,
+        state: 'active',
+        mintedByPlugin: false,
+      },
+    });
+  } else {
+    await strapi.documents(credentialUid).create({
+      data: {
+        agent: { connect: [{ documentId: agent.documentId }] },
+        kind: tokenKind,
+        tokenId: String(token.id),
+        tokenName: token.name,
+        state: 'active',
+        mintedByPlugin: false,
+      },
+    });
+  }
+}
+
+async function checkMintPermissions(strapi: Core.Strapi, permissionPack: string, user: any): Promise<{ allowed: boolean; missing: string[] }> {
+  const actions = PERMISSION_PACK_ACTIONS[permissionPack] || PERMISSION_PACK_ACTIONS.asker;
+  const actionIds = actions.map((uid) => getActionId(uid));
+  
+  const isSuperAdmin = user.roles?.some((role: any) => role.code === 'strapi-super-admin');
+  if (isSuperAdmin) {
+    return { allowed: true, missing: [] };
+  }
+  
+  const permissionService = strapi.service('admin::permission') as any;
+  const userPermissions = await permissionService.findUserPermissions(user);
+  const userActionIds = new Set(userPermissions.map((p: any) => p.action));
+  
+  const missing = actionIds.filter(actionId => !userActionIds.has(actionId));
+  
+  return {
+    allowed: missing.length === 0,
+    missing,
+  };
 }
 
 async function mintTokenForAgent(strapi: Core.Strapi, agent: any, permissionPack: string, user: any) {
