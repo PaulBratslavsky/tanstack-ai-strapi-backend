@@ -119,13 +119,29 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
 
         const finalSlug = slug && slug.trim() ? slug.trim() : generateSlug(name);
 
-        if (finalSlug === 'chief') {
-          const existing = await strapi.documents(agentUid).findMany({
-            filters: { slug: { $eq: 'chief' } },
-          });
-          if (existing && existing.length > 0) {
+        const chiefExists = await strapi.documents(agentUid).findMany({
+          filters: { slug: { $eq: 'chief' } },
+        });
+
+        if (chiefExists && chiefExists.length > 0) {
+          if (finalSlug === 'chief') {
             ctx.status = 400;
             ctx.body = { error: 'slug "chief" is reserved and already exists' };
+            return;
+          }
+          
+          if (kind === 'orchestrator') {
+            ctx.status = 400;
+            ctx.body = { error: 'Only one orchestrator (chief) is allowed' };
+            return;
+          }
+        }
+
+        if (credentialType === 'mint') {
+          const hasPermission = await checkMintPermissions(strapi, permissionPack || 'asker', ctx.state.user);
+          if (!hasPermission.allowed) {
+            ctx.status = 403;
+            ctx.body = { error: `Cannot mint ${permissionPack || 'asker'} token: missing permissions - ${hasPermission.missing.join(', ')}` };
             return;
           }
         }
@@ -148,12 +164,6 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         let token = null;
 
         if (credentialType === 'mint') {
-          const hasPermission = await checkMintPermissions(strapi, permissionPack || 'asker', ctx.state.user);
-          if (!hasPermission.allowed) {
-            ctx.status = 403;
-            ctx.body = { error: `Cannot mint ${permissionPack || 'asker'} token: missing permissions - ${hasPermission.missing.join(', ')}` };
-            return;
-          }
           token = await mintTokenForAgent(strapi, agent, permissionPack || 'asker', ctx.state.user);
         } else if (credentialType === 'bind' && tokenId) {
           await bindTokenToAgent(strapi, agent, Number(tokenId));
@@ -182,7 +192,6 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         const updateData: any = {};
 
         if (body.name !== undefined) updateData.name = body.name.trim();
-        if (body.kind !== undefined) updateData.kind = body.kind;
         if (body.permissionPack !== undefined) updateData.permissionPack = body.permissionPack;
         if (body.description !== undefined) updateData.description = body.description;
         if (body.state !== undefined) updateData.state = body.state;
@@ -196,6 +205,30 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         if (body.webhookAuthHeader && body.webhookAuthHeader.trim()) {
           updateData.webhookAuthHeader = body.webhookAuthHeader.trim();
         }
+
+        const currentAgent = await strapi.documents(agentUid).findMany({
+          filters: { documentId: { $eq: ctx.params.documentId } },
+        });
+
+        if (!currentAgent || currentAgent.length === 0) {
+          ctx.status = 404;
+          ctx.body = { error: 'Agent not found' };
+          return;
+        }
+
+        if (body.kind !== undefined && body.kind === 'orchestrator') {
+          const chiefExists = await strapi.documents(agentUid).findMany({
+            filters: { slug: { $eq: 'chief' } },
+          });
+          
+          if (chiefExists && chiefExists.length > 0 && currentAgent[0].slug !== 'chief') {
+            ctx.status = 400;
+            ctx.body = { error: 'Only one orchestrator (chief) is allowed' };
+            return;
+          }
+        }
+
+        if (body.kind !== undefined) updateData.kind = body.kind;
 
         const agent = await strapi.documents(agentUid).update({
           documentId: ctx.params.documentId,
@@ -241,9 +274,9 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
 
         const agent = agents[0];
 
-        if (agent.slug === 'chief' || agent.kind === 'orchestrator') {
+        if (agent.slug === 'chief') {
           ctx.status = 400;
-          ctx.body = { error: 'Cannot delete the orchestrator/chief agent' };
+          ctx.body = { error: 'Cannot delete the chief agent' };
           return;
         }
 
@@ -402,15 +435,21 @@ async function listSelectableTokens(strapi: Core.Strapi, userId: number) {
   const boundTokenIds = new Set(boundCredentials.map((c: any) => c.tokenId));
   const now = Date.now();
 
+  const user = await strapi.db.query('admin::user').findOne({
+    where: { id: userId },
+    populate: ['roles'],
+  });
+  
+  const isSuperAdmin = user?.roles?.some((role: any) => role.code === 'strapi-super-admin');
+
   const adminTokens = await strapi.db.query('admin::api-token').findMany({
-    where: {
-      adminUserOwner: userId,
-    },
+    where: isSuperAdmin ? {} : { adminUserOwner: userId },
+    populate: ['adminUserOwner'],
   });
 
   const contentApiTokens = await strapi.db.query('admin::api-token').findMany({
     where: {
-      type: 'custom',
+      type: { $in: ['custom', 'read-only', 'full-access'] },
     },
   });
 
@@ -419,13 +458,7 @@ async function listSelectableTokens(strapi: Core.Strapi, userId: number) {
   const selectableTokens = allTokens.filter((token: any) => {
     if (token.expiresAt && new Date(token.expiresAt).getTime() <= now) return false;
     if (boundTokenIds.has(String(token.id))) return false;
-    
-    if (token.type === 'admin' || token.kind === 'admin') {
-      const ownerId = typeof token.adminUserOwner === 'object' ? token.adminUserOwner?.id : token.adminUserOwner;
-      return ownerId === userId;
-    }
-    
-    return token.type === 'custom';
+    return true;
   });
 
   return selectableTokens.map((token: any) => ({
@@ -433,7 +466,7 @@ async function listSelectableTokens(strapi: Core.Strapi, userId: number) {
     name: token.name,
     description: token.description,
     expiresAt: token.expiresAt,
-    kind: token.type === 'custom' ? 'content-api' : 'admin',
+    kind: token.kind || (token.type === 'admin' ? 'admin' : 'content-api'),
   }));
 }
 
@@ -459,7 +492,7 @@ async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number
     throw new Error('Token not found');
   }
 
-  const tokenKind = token.type === 'custom' ? 'content-api' : 'admin';
+  const tokenKind = token.kind || (token.type === 'admin' ? 'admin' : 'content-api');
 
   if (token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now()) {
     throw new Error('Token has expired');
