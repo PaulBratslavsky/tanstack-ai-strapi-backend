@@ -12,7 +12,7 @@
   },
   "pluginOptions": {
     "content-manager": {
-      "visible": true
+      "visible": false
     },
     "content-api": {
       "visible": false
@@ -45,6 +45,10 @@
     },
     "lastUsedAt": {
       "type": "datetime"
+    },
+    "mintedByPlugin": {
+      "type": "boolean",
+      "default": false
     }
   }
 }
