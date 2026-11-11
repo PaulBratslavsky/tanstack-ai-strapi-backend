@@ -166,7 +166,7 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         if (credentialType === 'mint') {
           token = await mintTokenForAgent(strapi, agent, permissionPack || 'asker', ctx.state.user);
         } else if (credentialType === 'bind' && tokenId) {
-          await bindTokenToAgent(strapi, agent, Number(tokenId));
+          await bindTokenToAgent(strapi, agent, Number(tokenId), ctx.state.user.id);
         }
 
         const updated = await strapi.documents(agentUid).findMany({
@@ -214,6 +214,19 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
           ctx.status = 404;
           ctx.body = { error: 'Agent not found' };
           return;
+        }
+
+        if (currentAgent[0].slug === 'chief') {
+          if (body.kind !== undefined && body.kind !== currentAgent[0].kind) {
+            ctx.status = 400;
+            ctx.body = { error: 'Cannot change chief kind' };
+            return;
+          }
+          if (body.slug !== undefined && body.slug !== 'chief') {
+            ctx.status = 400;
+            ctx.body = { error: 'Cannot change chief slug' };
+            return;
+          }
         }
 
         if (body.kind !== undefined && body.kind === 'orchestrator') {
@@ -329,7 +342,7 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
           return;
         }
 
-        await bindTokenToAgent(strapi, agents[0], Number(tokenId));
+        await bindTokenToAgent(strapi, agents[0], Number(tokenId), ctx.state.user.id);
 
         ctx.body = { data: { bound: true } };
       } catch (error: any) {
@@ -443,19 +456,25 @@ async function listSelectableTokens(strapi: Core.Strapi, userId: number) {
   const isSuperAdmin = user?.roles?.some((role: any) => role.code === 'strapi-super-admin');
 
   const adminTokens = await strapi.db.query('admin::api-token').findMany({
-    where: isSuperAdmin ? {} : { adminUserOwner: userId },
+    where: {
+      kind: 'admin',
+      ...(isSuperAdmin ? {} : { adminUserOwner: userId }),
+    },
     populate: ['adminUserOwner'],
   });
 
   const contentApiTokens = await strapi.db.query('admin::api-token').findMany({
     where: {
-      type: { $in: ['custom', 'read-only', 'full-access'] },
+      kind: 'content-api',
     },
   });
 
   const allTokens = [...adminTokens, ...contentApiTokens];
+  const seenIds = new Set<number>();
 
   const selectableTokens = allTokens.filter((token: any) => {
+    if (seenIds.has(token.id)) return false;
+    seenIds.add(token.id);
     if (token.expiresAt && new Date(token.expiresAt).getTime() <= now) return false;
     if (boundTokenIds.has(String(token.id))) return false;
     return true;
@@ -470,7 +489,7 @@ async function listSelectableTokens(strapi: Core.Strapi, userId: number) {
   }));
 }
 
-async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number) {
+async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number, userId: number) {
   const credentialUid = getUid('agent-credential');
 
   const existingBinding = await strapi.documents(credentialUid).findMany({
@@ -486,6 +505,7 @@ async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number
 
   const token = await strapi.db.query('admin::api-token').findOne({
     where: { id: tokenId },
+    populate: ['adminUserOwner'],
   });
 
   if (!token) {
@@ -493,6 +513,22 @@ async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number
   }
 
   const tokenKind = token.kind || (token.type === 'admin' ? 'admin' : 'content-api');
+
+  if (tokenKind === 'admin') {
+    const user = await strapi.db.query('admin::user').findOne({
+      where: { id: userId },
+      populate: ['roles'],
+    });
+    
+    const isSuperAdmin = user?.roles?.some((role: any) => role.code === 'strapi-super-admin');
+    
+    if (!isSuperAdmin) {
+      const tokenOwnerId = typeof token.adminUserOwner === 'object' ? token.adminUserOwner?.id : token.adminUserOwner;
+      if (tokenOwnerId !== userId) {
+        throw new Error('Cannot bind admin token owned by another user');
+      }
+    }
+  }
 
   if (token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now()) {
     throw new Error('Token has expired');

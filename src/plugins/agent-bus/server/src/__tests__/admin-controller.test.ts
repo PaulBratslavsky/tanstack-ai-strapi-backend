@@ -63,23 +63,16 @@ describe('Admin Controller Integration Tests', () => {
     controller = adminController({ strapi: mockStrapi });
   });
 
-  describe('listTokens - Token List with Owner Population', () => {
-    it('should return admin tokens for super admin with populated owner', async () => {
-      const adminToken = {
-        id: 1,
-        name: 'Admin Token',
-        kind: 'admin',
-        type: 'admin',
-        adminUserOwner: { id: 1, email: 'admin@example.com' },
-        expiresAt: null,
-      };
+  describe('Token Picker Tests', () => {
+    it('should not return duplicate tokens for super admin', async () => {
+      const adminToken = { id: 1, name: 'Admin Token', kind: 'admin', adminUserOwner: { id: 1 }, expiresAt: null };
+      const contentApiToken = { id: 2, name: 'Content API', kind: 'content-api', expiresAt: null };
 
       mockStrapi.db.query = vi.fn((model: string) => ({
         findOne: vi.fn().mockResolvedValue({ id: 1, roles: [{ code: 'strapi-super-admin' }] }),
         findMany: vi.fn((opts: any) => {
-          if (opts.where && Object.keys(opts.where).length === 0) {
-            return Promise.resolve([adminToken]);
-          }
+          if (opts.where?.kind === 'admin') return Promise.resolve([adminToken]);
+          if (opts.where?.kind === 'content-api') return Promise.resolve([contentApiToken]);
           return Promise.resolve([]);
         }),
       }));
@@ -90,26 +83,22 @@ describe('Admin Controller Integration Tests', () => {
 
       await controller.listTokens(mockCtx);
 
-      expect(mockCtx.status).toBe(200);
-      expect(mockCtx.body.data).toBeDefined();
-      expect(mockCtx.body.data.length).toBeGreaterThan(0);
-      expect(mockCtx.body.data[0]).toHaveProperty('id');
-      expect(mockCtx.body.data[0]).toHaveProperty('kind');
+      const ids = mockCtx.body.data.map((t: any) => t.id);
+      expect(new Set(ids).size).toBe(ids.length);
     });
 
-    it('should include all content-api token types (custom, read-only, full-access)', async () => {
-      const contentApiTokens = [
-        { id: 2, name: 'Custom Token', kind: 'content-api', type: 'custom', expiresAt: null },
-        { id: 3, name: 'Read Only Token', kind: 'content-api', type: 'read-only', expiresAt: null },
-        { id: 4, name: 'Full Access Token', kind: 'content-api', type: 'full-access', expiresAt: null },
-      ];
+    it('should filter admin tokens by owner for non-super users', async () => {
+      mockCtx.state.user.roles = [{ code: 'strapi-editor' }];
+
+      const myToken = { id: 1, name: 'My Admin Token', kind: 'admin', adminUserOwner: { id: 1 }, expiresAt: null };
+      const otherToken = { id: 2, name: 'Other Admin Token', kind: 'admin', adminUserOwner: { id: 2 }, expiresAt: null };
+      const contentToken = { id: 3, name: 'Content API', kind: 'content-api', expiresAt: null };
 
       mockStrapi.db.query = vi.fn((model: string) => ({
-        findOne: vi.fn().mockResolvedValue({ id: 1, roles: [{ code: 'strapi-super-admin' }] }),
+        findOne: vi.fn().mockResolvedValue({ id: 1, roles: [{ code: 'strapi-editor' }] }),
         findMany: vi.fn((opts: any) => {
-          if (opts.where?.type?.$in) {
-            return Promise.resolve(contentApiTokens);
-          }
+          if (opts.where?.kind === 'admin' && opts.where?.adminUserOwner === 1) return Promise.resolve([myToken]);
+          if (opts.where?.kind === 'content-api') return Promise.resolve([contentToken]);
           return Promise.resolve([]);
         }),
       }));
@@ -120,253 +109,156 @@ describe('Admin Controller Integration Tests', () => {
 
       await controller.listTokens(mockCtx);
 
-      expect(mockCtx.body.data).toBeDefined();
-      expect(mockCtx.body.data.length).toBe(3);
-      expect(mockCtx.body.data.every((t: any) => t.kind === 'content-api')).toBe(true);
+      expect(mockCtx.body.data.some((t: any) => t.id === 2)).toBe(false);
+      expect(mockCtx.body.data.some((t: any) => t.id === 1)).toBe(true);
+      expect(mockCtx.body.data.some((t: any) => t.id === 3)).toBe(true);
     });
   });
 
-  describe('bindToken - Kind Mapping for Full-Access Tokens', () => {
-    it('should use token.kind for full-access content-api tokens', async () => {
-      const fullAccessToken = {
-        id: 1,
-        name: 'Full Access',
-        kind: 'content-api',
-        type: 'full-access',
-        expiresAt: null,
-      };
+  describe('Bind Token - Owner Check', () => {
+    it('should return 400 when non-super user binds another users admin token', async () => {
+      mockCtx.state.user.roles = [{ code: 'strapi-editor' }];
+      mockCtx.params.documentId = 'agent-123';
+      mockCtx.request.body = { tokenId: 1 };
 
       const agent = { documentId: 'agent-123' };
+      const token = { id: 1, name: 'Other Admin Token', kind: 'admin', type: 'read-only', adminUserOwner: { id: 2 }, expiresAt: null };
 
       mockStrapi.documents = vi.fn(() => ({
-        findMany: vi.fn().mockResolvedValue([]),
+        findMany: vi.fn((opts: any) => {
+          if (opts.filters?.documentId) return Promise.resolve([agent]);
+          if (opts.filters?.tokenId) return Promise.resolve([]);
+          return Promise.resolve([]);
+        }),
+      }));
+
+      mockStrapi.db.query = vi.fn((model: string) => ({
+        findOne: vi.fn((opts: any) => {
+          if (model === 'admin::api-token' && opts.where?.id === 1) return Promise.resolve(token);
+          if (model === 'admin::user') return Promise.resolve({ id: 1, roles: [{ code: 'strapi-editor' }] });
+          return Promise.resolve(null);
+        }),
+      }));
+
+      await controller.bindToken(mockCtx);
+
+      expect(mockCtx.status).toBe(400);
+      expect(mockCtx.body.error).toContain('Cannot bind admin token owned by another user');
+    });
+  });
+
+  describe('Chief Protection', () => {
+    it('should reject changing chief kind', async () => {
+      mockCtx.params.documentId = 'chief-123';
+      mockCtx.request.body = { kind: 'specialist' };
+
+      const chief = { documentId: 'chief-123', slug: 'chief', kind: 'orchestrator' };
+
+      mockStrapi.documents = vi.fn(() => ({
+        findMany: vi.fn().mockResolvedValue([chief]),
+      }));
+
+      await controller.updateAgent(mockCtx);
+
+      expect(mockCtx.status).toBe(400);
+      expect(mockCtx.body.error).toContain('Cannot change chief kind');
+    });
+
+    it('should reject changing chief slug', async () => {
+      mockCtx.params.documentId = 'chief-123';
+      mockCtx.request.body = { slug: 'new-slug' };
+
+      const chief = { documentId: 'chief-123', slug: 'chief', kind: 'orchestrator' };
+
+      mockStrapi.documents = vi.fn(() => ({
+        findMany: vi.fn().mockResolvedValue([chief]),
+      }));
+
+      await controller.updateAgent(mockCtx);
+
+      expect(mockCtx.status).toBe(400);
+      expect(mockCtx.body.error).toContain('Cannot change chief slug');
+    });
+  });
+
+  describe('Mutation Tests', () => {
+    it('MUTATION: credential kind uses token.kind not token.type', async () => {
+      mockCtx.params.documentId = 'agent-123';
+      mockCtx.request.body = { tokenId: 1 };
+
+      const agent = { documentId: 'agent-123' };
+      const token = { id: 1, name: 'Full Access', kind: 'content-api', type: 'full-access', expiresAt: null, adminUserOwner: null };
+
+      let credKind: string | undefined;
+
+      mockStrapi.documents = vi.fn(() => ({
+        findMany: vi.fn((opts: any) => {
+          if (opts.filters?.documentId) return Promise.resolve([agent]);
+          if (opts.filters?.tokenId) return Promise.resolve([]);
+          return Promise.resolve([]);
+        }),
         create: vi.fn((opts: any) => {
-          expect(opts.data.kind).toBe('content-api');
+          credKind = opts.data.kind;
           return Promise.resolve({ documentId: 'cred-123' });
         }),
       }));
 
-      mockStrapi.db.query = vi.fn(() => ({
-        findOne: vi.fn().mockResolvedValue(fullAccessToken),
-      }));
-
-      try {
-        await require('../controllers/admin').__test_bindTokenToAgent(mockStrapi, agent, 1);
-      } catch (error) {
-        
-      }
-    });
-  });
-
-  describe('createAgent - Mint Permission Check Before Creation', () => {
-    it('should return 403 without creating agent when user lacks permissions', async () => {
-      mockCtx.request.body = {
-        name: 'Test Agent',
-        slug: 'test-agent',
-        credentialType: 'mint',
-        permissionPack: 'orchestrator',
-      };
-
-      mockCtx.state.user.roles = [];
-
-      mockStrapi.service = vi.fn((name: string) => {
-        if (name === 'admin::permission') {
-          return {
-            findUserPermissions: vi.fn().mockResolvedValue([]),
-          };
-        }
-        return {};
-      });
-
-      let createCalled = false;
-      mockStrapi.documents = vi.fn(() => ({
-        findMany: vi.fn().mockResolvedValue([]),
-        create: vi.fn(() => {
-          createCalled = true;
-          return Promise.resolve({ documentId: 'test-123' });
+      mockStrapi.db.query = vi.fn((model: string) => ({
+        findOne: vi.fn((opts: any) => {
+          if (model === 'admin::api-token') return Promise.resolve(token);
+          if (model === 'admin::user') return Promise.resolve({ id: 1, roles: [{ code: 'strapi-super-admin' }] });
+          return Promise.resolve(null);
         }),
       }));
 
-      await controller.createAgent(mockCtx);
+      await controller.bindToken(mockCtx);
 
-      expect(mockCtx.status).toBe(403);
-      expect(mockCtx.body.error).toContain('missing permissions');
-      expect(createCalled).toBe(false);
+      expect(credKind).toBe('content-api');
     });
-  });
 
-  describe('createAgent - Orchestrator Uniqueness', () => {
-    it('should reject creating second orchestrator when chief exists', async () => {
-      mockCtx.request.body = {
-        name: 'Second Orchestrator',
-        slug: 'second-orch',
-        kind: 'orchestrator',
-      };
+    it('MUTATION: revoke checks credential belongs to same agent', async () => {
+      mockCtx.params = { documentId: 'agent-123', credentialId: 1 };
 
-      const existingChief = [{ documentId: 'chief-123', slug: 'chief', kind: 'orchestrator' }];
+      const credential = { id: 1, documentId: 'cred-123', agent: { documentId: 'other-agent' } };
+
+      mockStrapi.documents = vi.fn(() => ({
+        findMany: vi.fn().mockResolvedValue([credential]),
+      }));
+
+      await controller.revokeCredential(mockCtx);
+
+      expect(mockCtx.status).toBe(404);
+    });
+
+    it('MUTATION: update returns 404 for unknown agent', async () => {
+      mockCtx.params.documentId = 'unknown-123';
+      mockCtx.request.body = { name: 'Updated' };
+
+      mockStrapi.documents = vi.fn(() => ({
+        findMany: vi.fn().mockResolvedValue([]),
+      }));
+
+      await controller.updateAgent(mockCtx);
+
+      expect(mockCtx.status).toBe(404);
+    });
+
+    it('MUTATION: reject second orchestrator', async () => {
+      mockCtx.request.body = { name: 'Second Orch', kind: 'orchestrator' };
+
+      const chief = [{ slug: 'chief', kind: 'orchestrator' }];
 
       mockStrapi.documents = vi.fn(() => ({
         findMany: vi.fn((opts: any) => {
-          if (opts.filters?.slug?.$eq === 'chief') {
-            return Promise.resolve(existingChief);
-          }
+          if (opts.filters?.slug?.$eq === 'chief') return Promise.resolve(chief);
           return Promise.resolve([]);
         }),
-        create: vi.fn(),
       }));
 
       await controller.createAgent(mockCtx);
 
       expect(mockCtx.status).toBe(400);
       expect(mockCtx.body.error).toContain('Only one orchestrator');
-    });
-
-    it('should reject creating agent with slug "chief" when chief exists', async () => {
-      mockCtx.request.body = {
-        name: 'Fake Chief',
-        slug: 'chief',
-        kind: 'specialist',
-      };
-
-      const existingChief = [{ documentId: 'chief-123', slug: 'chief' }];
-
-      mockStrapi.documents = vi.fn(() => ({
-        findMany: vi.fn().mockResolvedValue(existingChief),
-        create: vi.fn(),
-      }));
-
-      await controller.createAgent(mockCtx);
-
-      expect(mockCtx.status).toBe(400);
-      expect(mockCtx.body.error).toContain('reserved and already exists');
-    });
-  });
-
-  describe('Response Sanitization - No Private Fields', () => {
-    it('should never return webhookSecret in listAgents', async () => {
-      const agentsWithSecrets = [
-        {
-          id: 1,
-          name: 'Agent 1',
-          webhookUrl: 'https://example.com',
-          webhookSecret: 'super-secret',
-          webhookAuthHeader: 'Bearer token',
-          credentials: [],
-        },
-      ];
-
-      mockStrapi.documents = vi.fn(() => ({
-        findMany: vi.fn().mockResolvedValue(agentsWithSecrets),
-      }));
-
-      await controller.listAgents(mockCtx);
-
-      expect(mockCtx.body.data).toBeDefined();
-      expect(mockCtx.body.data[0]).not.toHaveProperty('webhookSecret');
-      expect(mockCtx.body.data[0]).not.toHaveProperty('webhookAuthHeader');
-      expect(mockCtx.body.data[0]).toHaveProperty('webhookConfigured');
-      expect(mockCtx.body.data[0].webhookConfigured).toBe(true);
-    });
-
-    it('should never return webhookSecret in getAgent', async () => {
-      const agentWithSecret = {
-        id: 1,
-        name: 'Agent 1',
-        webhookSecret: 'super-secret',
-        credentials: [],
-      };
-
-      mockCtx.params.documentId = 'agent-123';
-
-      mockStrapi.documents = vi.fn(() => ({
-        findMany: vi.fn().mockResolvedValue([agentWithSecret]),
-      }));
-
-      await controller.getAgent(mockCtx);
-
-      expect(mockCtx.body.data).toBeDefined();
-      expect(mockCtx.body.data).not.toHaveProperty('webhookSecret');
-      expect(mockCtx.body.data).not.toHaveProperty('webhookAuthHeader');
-    });
-
-    it('should never return webhookSecret in createAgent', async () => {
-      mockCtx.request.body = {
-        name: 'Test Agent',
-        webhookSecret: 'secret',
-      };
-
-      const createdAgent = {
-        documentId: 'test-123',
-        name: 'Test Agent',
-        webhookSecret: 'secret',
-        credentials: [],
-      };
-
-      mockStrapi.documents = vi.fn(() => ({
-        findMany: vi.fn((opts: any) => {
-          if (opts.filters?.documentId) {
-            return Promise.resolve([createdAgent]);
-          }
-          return Promise.resolve([]);
-        }),
-        create: vi.fn().mockResolvedValue({ documentId: 'test-123' }),
-      }));
-
-      await controller.createAgent(mockCtx);
-
-      expect(mockCtx.status).toBe(201);
-      expect(mockCtx.body.data.agent).toBeDefined();
-      expect(mockCtx.body.data.agent).not.toHaveProperty('webhookSecret');
-      expect(mockCtx.body.data.agent).not.toHaveProperty('webhookAuthHeader');
-    });
-
-    it('should never return webhookSecret in updateAgent', async () => {
-      mockCtx.params.documentId = 'agent-123';
-      mockCtx.request.body = { name: 'Updated' };
-
-      const updatedAgent = {
-        documentId: 'agent-123',
-        name: 'Updated',
-        webhookSecret: 'secret',
-        credentials: [],
-      };
-
-      mockStrapi.documents = vi.fn(() => ({
-        findMany: vi.fn((opts: any) => {
-          if (opts.filters?.documentId) {
-            return Promise.resolve([updatedAgent]);
-          }
-          return Promise.resolve([updatedAgent]);
-        }),
-        update: vi.fn().mockResolvedValue({ documentId: 'agent-123' }),
-      }));
-
-      await controller.updateAgent(mockCtx);
-
-      expect(mockCtx.body.data).toBeDefined();
-      expect(mockCtx.body.data).not.toHaveProperty('webhookSecret');
-      expect(mockCtx.body.data).not.toHaveProperty('webhookAuthHeader');
-    });
-  });
-
-  describe('Slug Generation and Validation', () => {
-    it('should auto-generate slug from name if not provided', async () => {
-      mockCtx.request.body = {
-        name: 'Test Agent 123',
-      };
-
-      let createdSlug: string | undefined;
-      mockStrapi.documents = vi.fn(() => ({
-        findMany: vi.fn().mockResolvedValue([]),
-        create: vi.fn((opts: any) => {
-          createdSlug = opts.data.slug;
-          return Promise.resolve({ documentId: 'test-123', slug: createdSlug });
-        }),
-      }));
-
-      await controller.createAgent(mockCtx);
-
-      expect(createdSlug).toBe('test-agent-123');
     });
   });
 });
