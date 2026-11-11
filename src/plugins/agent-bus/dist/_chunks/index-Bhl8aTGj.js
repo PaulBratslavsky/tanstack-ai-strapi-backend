@@ -396,7 +396,7 @@ const bootstrap = async ({ strapi }) => {
   startOutboxWorker(strapi, finalConfig);
   startExpiryWorker(strapi);
   if (strapi.ai?.mcp?.isEnabled()) {
-    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-gNWDJaPX.js"));
+    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-ClPnES2y.js"));
     registerMcpTools(strapi);
   } else {
     strapi.log.info("[agent-bus] MCP is not enabled, skipping MCP tool registration");
@@ -2044,6 +2044,16 @@ const PERMISSION_PACK_ACTIONS = {
     "delivery.read"
   ]
 };
+class AdminRouteError extends Error {
+  constructor(status, message2) {
+    super(message2);
+    this.name = "AdminRouteError";
+    this.status = status;
+  }
+}
+function errorStatus(error) {
+  return error instanceof AdminRouteError ? error.status : 400;
+}
 function sanitizeAgent(agent2) {
   if (!agent2) return null;
   const sanitized = { ...agent2 };
@@ -2151,6 +2161,15 @@ const adminController = ({ strapi }) => {
             return;
           }
         }
+        let bindTarget = null;
+        if (credentialType === "bind") {
+          if (!tokenId) {
+            ctx.status = 400;
+            ctx.body = { error: "tokenId is required" };
+            return;
+          }
+          bindTarget = await validateBindableToken(strapi, Number(tokenId), ctx.state.user.id);
+        }
         const agent2 = await strapi.documents(agentUid).create({
           data: {
             name: name.trim(),
@@ -2166,10 +2185,21 @@ const adminController = ({ strapi }) => {
           }
         });
         let token = null;
-        if (credentialType === "mint") {
-          token = await mintTokenForAgent(strapi, agent2, permissionPack || "asker", ctx.state.user);
-        } else if (credentialType === "bind" && tokenId) {
-          await bindTokenToAgent(strapi, agent2, Number(tokenId), ctx.state.user.id);
+        try {
+          if (credentialType === "mint") {
+            token = await mintTokenForAgent(strapi, agent2, permissionPack || "asker", ctx.state.user);
+          } else if (bindTarget) {
+            await writeBinding(strapi, agent2, bindTarget);
+          }
+        } catch (credentialError) {
+          try {
+            await strapi.documents(agentUid).delete({ documentId: agent2.documentId });
+          } catch (rollbackError) {
+            strapi.log.warn(
+              `[agent-bus] Could not roll back agent ${agent2.documentId}: ${rollbackError.message}`
+            );
+          }
+          throw credentialError;
         }
         const updated = await strapi.documents(agentUid).findMany({
           filters: { documentId: { $eq: agent2.documentId } },
@@ -2182,7 +2212,7 @@ const adminController = ({ strapi }) => {
         ctx.status = 201;
         ctx.body = { data: { agent: sanitizeAgent(updated[0]), token } };
       } catch (error) {
-        ctx.status = 400;
+        ctx.status = errorStatus(error);
         ctx.body = { error: error.message };
       }
     },
@@ -2318,7 +2348,7 @@ const adminController = ({ strapi }) => {
         await bindTokenToAgent(strapi, agents[0], Number(tokenId), ctx.state.user.id);
         ctx.body = { data: { bound: true } };
       } catch (error) {
-        ctx.status = 400;
+        ctx.status = errorStatus(error);
         ctx.body = { error: error.message };
       }
     },
@@ -2436,7 +2466,7 @@ async function listSelectableTokens(strapi, userId) {
     kind: token.kind || (token.type === "admin" ? "admin" : "content-api")
   }));
 }
-async function bindTokenToAgent(strapi, agent2, tokenId, userId) {
+async function validateBindableToken(strapi, tokenId, userId) {
   const credentialUid = getUid("agent-credential");
   const existingBinding = await strapi.documents(credentialUid).findMany({
     filters: {
@@ -2445,16 +2475,16 @@ async function bindTokenToAgent(strapi, agent2, tokenId, userId) {
     }
   });
   if (existingBinding && existingBinding.length > 0) {
-    throw new Error("Token is already bound to an agent");
+    throw new AdminRouteError(400, "Token is already bound to an agent");
   }
   const token = await strapi.db.query("admin::api-token").findOne({
     where: { id: tokenId },
     populate: ["adminUserOwner"]
   });
   if (!token) {
-    throw new Error("Token not found");
+    throw new AdminRouteError(400, "Token not found");
   }
-  const tokenKind = token.kind || (token.type === "admin" ? "admin" : "content-api");
+  const tokenKind = token.kind === "admin" || token.kind === "content-api" ? token.kind : token.type === "admin" ? "admin" : "content-api";
   if (tokenKind === "admin") {
     const user = await strapi.db.query("admin::user").findOne({
       where: { id: userId },
@@ -2462,18 +2492,23 @@ async function bindTokenToAgent(strapi, agent2, tokenId, userId) {
     });
     const isSuperAdmin = user?.roles?.some((role) => role.code === "strapi-super-admin");
     if (!isSuperAdmin) {
-      const tokenOwnerId = typeof token.adminUserOwner === "object" ? token.adminUserOwner?.id : token.adminUserOwner;
+      const tokenOwnerId = token.adminUserOwner && typeof token.adminUserOwner === "object" ? token.adminUserOwner.id : token.adminUserOwner;
       if (tokenOwnerId !== userId) {
-        throw new Error("Cannot bind admin token owned by another user");
+        throw new AdminRouteError(403, "Cannot bind admin token owned by another user");
       }
     }
   }
   if (token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now()) {
-    throw new Error("Token has expired");
+    throw new AdminRouteError(400, "Token has expired");
   }
+  return { token, tokenKind };
+}
+async function writeBinding(strapi, agent2, target) {
+  const credentialUid = getUid("agent-credential");
+  const { token, tokenKind } = target;
   const revokedBinding = await strapi.documents(credentialUid).findMany({
     filters: {
-      tokenId: { $eq: String(tokenId) },
+      tokenId: { $eq: String(token.id) },
       state: { $eq: "revoked" }
     },
     limit: 1
@@ -2501,6 +2536,10 @@ async function bindTokenToAgent(strapi, agent2, tokenId, userId) {
       }
     });
   }
+}
+async function bindTokenToAgent(strapi, agent2, tokenId, userId) {
+  const target = await validateBindableToken(strapi, tokenId, userId);
+  await writeBinding(strapi, agent2, target);
 }
 async function checkMintPermissions(strapi, permissionPack, user) {
   const actions = PERMISSION_PACK_ACTIONS[permissionPack] || PERMISSION_PACK_ACTIONS.asker;
@@ -2533,21 +2572,30 @@ async function mintTokenForAgent(strapi, agent2, permissionPack, user) {
     },
     user
   );
-  for (const action of actionIds) {
-    await strapi.db.query("admin::permission").create({
-      data: { action, subject: null, properties: {}, conditions: [], apiToken: token.id }
-    });
-  }
-  await strapi.documents(credentialUid).create({
-    data: {
-      agent: { connect: [{ documentId: agent2.documentId }] },
-      kind: "admin",
-      tokenId: String(token.id),
-      tokenName: token.name,
-      state: "active",
-      mintedByPlugin: true
+  try {
+    for (const action of actionIds) {
+      await strapi.db.query("admin::permission").create({
+        data: { action, subject: null, properties: {}, conditions: [], apiToken: token.id }
+      });
     }
-  });
+    await strapi.documents(credentialUid).create({
+      data: {
+        agent: { connect: [{ documentId: agent2.documentId }] },
+        kind: "admin",
+        tokenId: String(token.id),
+        tokenName: token.name,
+        state: "active",
+        mintedByPlugin: true
+      }
+    });
+  } catch (error) {
+    try {
+      await adminTokenService.revoke(token.id);
+    } catch (revokeError) {
+      strapi.log.warn(`[agent-bus] Could not revoke token ${token.id}: ${revokeError.message}`);
+    }
+    throw error;
+  }
   return {
     accessKey: token.accessKey,
     tokenName: token.name

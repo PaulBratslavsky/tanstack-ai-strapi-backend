@@ -16,6 +16,20 @@ const PERMISSION_PACK_ACTIONS: Record<string, string[]> = {
   ],
 };
 
+export class AdminRouteError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'AdminRouteError';
+    this.status = status;
+  }
+}
+
+function errorStatus(error: any): number {
+  return error instanceof AdminRouteError ? error.status : 400;
+}
+
 function sanitizeAgent(agent: any): any {
   if (!agent) return null;
   
@@ -146,6 +160,18 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
           }
         }
 
+        // Validate a bind target fully BEFORE creating the agent so a rejected
+        // bind (403 owner, expired, already bound, unknown) never leaves an orphan agent.
+        let bindTarget: BindTarget | null = null;
+        if (credentialType === 'bind') {
+          if (!tokenId) {
+            ctx.status = 400;
+            ctx.body = { error: 'tokenId is required' };
+            return;
+          }
+          bindTarget = await validateBindableToken(strapi, Number(tokenId), ctx.state.user.id);
+        }
+
         const agent = await strapi.documents(agentUid).create({
           data: {
             name: name.trim(),
@@ -163,10 +189,22 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
 
         let token = null;
 
-        if (credentialType === 'mint') {
-          token = await mintTokenForAgent(strapi, agent, permissionPack || 'asker', ctx.state.user);
-        } else if (credentialType === 'bind' && tokenId) {
-          await bindTokenToAgent(strapi, agent, Number(tokenId), ctx.state.user.id);
+        try {
+          if (credentialType === 'mint') {
+            token = await mintTokenForAgent(strapi, agent, permissionPack || 'asker', ctx.state.user);
+          } else if (bindTarget) {
+            await writeBinding(strapi, agent, bindTarget);
+          }
+        } catch (credentialError) {
+          // Roll back the agent so a failed credential step never leaves an orphan.
+          try {
+            await strapi.documents(agentUid).delete({ documentId: agent.documentId });
+          } catch (rollbackError) {
+            strapi.log.warn(
+              `[agent-bus] Could not roll back agent ${agent.documentId}: ${(rollbackError as Error).message}`
+            );
+          }
+          throw credentialError;
         }
 
         const updated = await strapi.documents(agentUid).findMany({
@@ -181,7 +219,7 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
         ctx.status = 201;
         ctx.body = { data: { agent: sanitizeAgent(updated[0]), token } };
       } catch (error: any) {
-        ctx.status = 400;
+        ctx.status = errorStatus(error);
         ctx.body = { error: error.message };
       }
     },
@@ -346,7 +384,7 @@ const adminController = ({ strapi }: { strapi: Core.Strapi }) => {
 
         ctx.body = { data: { bound: true } };
       } catch (error: any) {
-        ctx.status = 400;
+        ctx.status = errorStatus(error);
         ctx.body = { error: error.message };
       }
     },
@@ -489,18 +527,27 @@ async function listSelectableTokens(strapi: Core.Strapi, userId: number) {
   }));
 }
 
-async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number, userId: number) {
+interface BindTarget {
+  token: any;
+  tokenKind: 'admin' | 'content-api';
+}
+
+/**
+ * Checks that a token can be bound by this user, without writing anything:
+ * unbound, exists, owner check for admin tokens (403), not expired.
+ */
+async function validateBindableToken(strapi: Core.Strapi, tokenId: number, userId: number): Promise<BindTarget> {
   const credentialUid = getUid('agent-credential');
 
   const existingBinding = await strapi.documents(credentialUid).findMany({
-    filters: { 
+    filters: {
       tokenId: { $eq: String(tokenId) },
-      state: { $eq: 'active' }
+      state: { $eq: 'active' },
     },
   });
 
   if (existingBinding && existingBinding.length > 0) {
-    throw new Error('Token is already bound to an agent');
+    throw new AdminRouteError(400, 'Token is already bound to an agent');
   }
 
   const token = await strapi.db.query('admin::api-token').findOne({
@@ -509,35 +556,50 @@ async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number
   });
 
   if (!token) {
-    throw new Error('Token not found');
+    throw new AdminRouteError(400, 'Token not found');
   }
 
-  const tokenKind = token.kind || (token.type === 'admin' ? 'admin' : 'content-api');
+  const tokenKind: 'admin' | 'content-api' =
+    token.kind === 'admin' || token.kind === 'content-api'
+      ? token.kind
+      : token.type === 'admin'
+        ? 'admin'
+        : 'content-api';
 
   if (tokenKind === 'admin') {
     const user = await strapi.db.query('admin::user').findOne({
       where: { id: userId },
       populate: ['roles'],
     });
-    
+
     const isSuperAdmin = user?.roles?.some((role: any) => role.code === 'strapi-super-admin');
-    
+
     if (!isSuperAdmin) {
-      const tokenOwnerId = typeof token.adminUserOwner === 'object' ? token.adminUserOwner?.id : token.adminUserOwner;
+      const tokenOwnerId =
+        token.adminUserOwner && typeof token.adminUserOwner === 'object'
+          ? token.adminUserOwner.id
+          : token.adminUserOwner;
       if (tokenOwnerId !== userId) {
-        throw new Error('Cannot bind admin token owned by another user');
+        throw new AdminRouteError(403, 'Cannot bind admin token owned by another user');
       }
     }
   }
 
   if (token.expiresAt && new Date(token.expiresAt).getTime() <= Date.now()) {
-    throw new Error('Token has expired');
+    throw new AdminRouteError(400, 'Token has expired');
   }
 
+  return { token, tokenKind };
+}
+
+async function writeBinding(strapi: Core.Strapi, agent: any, target: BindTarget) {
+  const credentialUid = getUid('agent-credential');
+  const { token, tokenKind } = target;
+
   const revokedBinding = await strapi.documents(credentialUid).findMany({
-    filters: { 
-      tokenId: { $eq: String(tokenId) },
-      state: { $eq: 'revoked' }
+    filters: {
+      tokenId: { $eq: String(token.id) },
+      state: { $eq: 'revoked' },
     },
     limit: 1,
   });
@@ -565,6 +627,11 @@ async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number
       },
     });
   }
+}
+
+async function bindTokenToAgent(strapi: Core.Strapi, agent: any, tokenId: number, userId: number) {
+  const target = await validateBindableToken(strapi, tokenId, userId);
+  await writeBinding(strapi, agent, target);
 }
 
 async function checkMintPermissions(strapi: Core.Strapi, permissionPack: string, user: any): Promise<{ allowed: boolean; missing: string[] }> {
@@ -606,22 +673,32 @@ async function mintTokenForAgent(strapi: Core.Strapi, agent: any, permissionPack
     user
   );
 
-  for (const action of actionIds) {
-    await strapi.db.query('admin::permission').create({
-      data: { action, subject: null, properties: {}, conditions: [], apiToken: token.id },
-    });
-  }
+  try {
+    for (const action of actionIds) {
+      await strapi.db.query('admin::permission').create({
+        data: { action, subject: null, properties: {}, conditions: [], apiToken: token.id },
+      });
+    }
 
-  await strapi.documents(credentialUid).create({
-    data: {
-      agent: { connect: [{ documentId: agent.documentId }] },
-      kind: 'admin',
-      tokenId: String(token.id),
-      tokenName: token.name,
-      state: 'active',
-      mintedByPlugin: true,
-    },
-  });
+    await strapi.documents(credentialUid).create({
+      data: {
+        agent: { connect: [{ documentId: agent.documentId }] },
+        kind: 'admin',
+        tokenId: String(token.id),
+        tokenName: token.name,
+        state: 'active',
+        mintedByPlugin: true,
+      },
+    });
+  } catch (error) {
+    // Don't leave a half-configured token behind.
+    try {
+      await adminTokenService.revoke(token.id);
+    } catch (revokeError) {
+      strapi.log.warn(`[agent-bus] Could not revoke token ${token.id}: ${(revokeError as Error).message}`);
+    }
+    throw error;
+  }
 
   return {
     accessKey: token.accessKey,
