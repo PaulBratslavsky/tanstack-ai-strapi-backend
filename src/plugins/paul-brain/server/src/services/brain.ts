@@ -37,6 +37,52 @@ interface SearchResult {
   linkedPersonIds?: string[];
 }
 
+/** Page size for recall scans. Strapi's default page is too small to search a real brain. */
+export const SEARCH_PAGE_SIZE = 100;
+
+/**
+ * Newest-first rows scored in memory per content type.
+ * Text matches older than this window are still loaded via a database $containsi filter.
+ */
+export const SEARCH_SCAN_CAP = 1000;
+
+/** Scalar text fields only. JSON tags/aliases stay in memory (Postgres jsonb LIKE is unsafe). */
+const TEXT_SEARCH_FIELDS: Record<string, string[]> = {
+  note: ['title', 'body', 'summary', 'howToRecheck', 'videoId', 'source_bot'],
+  person: ['name', 'role', 'org', 'email', 'notes_md'],
+  project: ['name', 'summary', 'goals', 'repo_url', 'url'],
+  decision: ['title', 'context', 'decision', 'rationale'],
+  source: ['title', 'excerpt', 'url', 'videoId', 'external_id'],
+  retro: ['title', 'task', 'failure', 'fix', 'fixLocation'],
+  gap: ['title', 'request', 'whatWasNeeded'],
+  capability: ['system', 'capability', 'howVerified', 'notes'],
+  rule: ['name', 'match', 'action'],
+  todo: ['title', 'goal', 'acceptanceCriteria', 'context', 'waitingOn', 'closingNote', 'capturedBy'],
+  goal: ['title', 'description', 'target'],
+  'goal-checkin': ['note', 'loggedBy'],
+};
+
+function searchKeywords(query: string): string[] {
+  return query.toLowerCase().split(/\s+/).filter((keyword) => keyword.length > 2);
+}
+
+function rowsFromFindMany(page: unknown): any[] {
+  if (Array.isArray(page)) return page;
+  if (page && typeof page === 'object' && Array.isArray((page as { results?: unknown[] }).results)) {
+    return (page as { results: any[] }).results;
+  }
+  return [];
+}
+
+function textMatchFilter(keywords: string[], fields: string[]): Record<string, unknown> | null {
+  if (keywords.length === 0 || fields.length === 0) return null;
+  return {
+    $or: keywords.flatMap((keyword) =>
+      fields.map((field) => ({ [field]: { $containsi: keyword } }))
+    ),
+  };
+}
+
 const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
   slugify(text: string): string {
     return text
@@ -116,7 +162,6 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
     
     const results: SearchResult[] = [];
     const queryLower = query.toLowerCase();
-    const keywords = queryLower.split(/\s+/).filter(k => k.length > 2);
 
     for (const type of types) {
       const uid = `plugin::${PLUGIN_NAME}.${type}`;
@@ -136,13 +181,62 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
           filters.videoId = { $eq: videoId };
         }
 
-        const populate = type === 'note' ? ['sources', 'people'] : undefined;
+        if (type === 'note' && sourceId) {
+          filters.sources = { documentId: { $eq: sourceId } };
+        }
 
-        const entities = await strapi.documents(uid).findMany({
-          filters,
-          populate,
-          limit: 100,
-        });
+        const populate = type === 'note' ? ['sources', 'people'] : undefined;
+        const keywords = searchKeywords(query);
+
+        const collect = async (queryFilters: Record<string, unknown>) => {
+          const collected: any[] = [];
+          const seen = new Set<string>();
+
+          for (let start = 0; collected.length < SEARCH_SCAN_CAP; start += SEARCH_PAGE_SIZE) {
+            const pageLimit = Math.min(SEARCH_PAGE_SIZE, SEARCH_SCAN_CAP - collected.length);
+            const page = await strapi.documents(uid).findMany({
+              filters: queryFilters,
+              populate,
+              sort: ['updatedAt:desc'],
+              start,
+              limit: pageLimit,
+            });
+            const rows = rowsFromFindMany(page);
+            if (rows.length === 0) break;
+
+            let added = 0;
+            for (const row of rows) {
+              if (!row?.documentId || seen.has(row.documentId)) continue;
+              seen.add(row.documentId);
+              collected.push(row);
+              added += 1;
+              if (collected.length >= SEARCH_SCAN_CAP) break;
+            }
+
+            // Repeated documentIds mean this page was not advanced.
+            if (added === 0 || rows.length < pageLimit) break;
+          }
+
+          return collected;
+        };
+
+        const entities = await collect(filters);
+
+        // The newest-first window can hide older text matches. Ask the database
+        // for those directly, then merge. Tags and aliases stay in the JS scorer.
+        if (entities.length >= SEARCH_SCAN_CAP) {
+          const textFilter = textMatchFilter(keywords, TEXT_SEARCH_FIELDS[type] || []);
+          if (textFilter) {
+            const olderMatches = await collect({ ...filters, ...textFilter });
+            const seen = new Set(entities.map((entity) => entity.documentId));
+            for (const match of olderMatches) {
+              if (!seen.has(match.documentId)) {
+                seen.add(match.documentId);
+                entities.push(match);
+              }
+            }
+          }
+        }
 
         for (const entity of entities) {
           // Apply tag filter in JS for DB-agnostic compatibility
@@ -156,16 +250,6 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
             }
           }
 
-          // Apply sourceId filter
-          if (sourceId && type === 'note') {
-            const sources = Array.isArray(entity.sources) ? entity.sources : [];
-            const hasMatchingSource = sources.some((s: any) => 
-              s.documentId === sourceId
-            );
-            if (!hasMatchingSource) {
-              continue;
-            }
-          }
           let score = 0;
           let snippet = '';
 

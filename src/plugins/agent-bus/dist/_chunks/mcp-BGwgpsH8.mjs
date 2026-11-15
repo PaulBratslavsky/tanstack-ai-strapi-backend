@@ -9,7 +9,7 @@ import require$$0$7 from "buffer";
 import require$$0$6 from "stream";
 import require$$2$1 from "util";
 import "node:stream";
-import { g as getActionId, a as getUid, P as PLUGIN_NAME } from "./index-B-Z8lwvj.mjs";
+import { g as getActionId, a as getUid, P as PLUGIN_NAME } from "./index-BUNyxk5V.mjs";
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x) {
   return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
@@ -19731,7 +19731,7 @@ const stripNullish = (obj) => {
   }
   return result;
 };
-const register$d = (strapi2) => {
+const register$e = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "agent_bus__list_agents",
     title: "List Agents",
@@ -19792,6 +19792,135 @@ const register$d = (strapi2) => {
   });
 };
 const listAgents = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$e
+}, Symbol.toStringTag, { value: "Module" }));
+const KINDS = ["orchestrator", "specialist", "human", "app"];
+const PACKS = ["asker", "specialist", "orchestrator", "custom"];
+const WEBHOOK_MODES = ["reference", "full"];
+const STATUSES = ["active", "disabled"];
+function slugifyAgentName(name) {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+const register$d = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "agent_bus__register_agent",
+    title: "Register Agent",
+    description: "Create or update an agent in the registry. Matches an existing agent by slug, then by name. Returns documentId and whether it was created. Does not set webhook secrets.",
+    resolveInputSchema: () => object({
+      name: string().min(1).describe("Agent display name"),
+      slug: string().optional().describe("Stable slug. Generated from name when omitted"),
+      description: string().optional().describe("What this agent does"),
+      capabilities: array(any()).optional().describe("Public capability card (JSON array)"),
+      kind: _enum(KINDS).optional().describe("Agent kind (default: specialist). Only one orchestrator is allowed"),
+      permissionPack: _enum(PACKS).optional().describe("Permission pack (default: asker)"),
+      status: _enum(STATUSES).optional().describe("active or disabled (default: active)"),
+      notes: string().optional().describe("Private notes"),
+      webhookUrl: string().optional().describe("Wake-up webhook URL"),
+      webhookMode: _enum(WEBHOOK_MODES).optional().describe("reference (ids only) or full (default: reference)"),
+      rateLimitPerMinute: number().int().optional().describe("Per-minute send cap"),
+      rateLimitPerDay: number().int().optional().describe("Per-day send cap"),
+      maxTurnsPerThread: number().int().optional().describe("Turn limit per thread")
+    }),
+    resolveOutputSchema: () => object({
+      created: boolean(),
+      documentId: string(),
+      slug: string(),
+      name: string(),
+      status: string(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("agent.manage") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const agentUid = getUid("agent");
+      const name = args.name.trim();
+      const explicitSlug = args.slug?.trim();
+      const slug = explicitSlug || slugifyAgentName(name);
+      if (!slug) {
+        throw new Error("Could not derive a slug from name. Pass slug explicitly.");
+      }
+      const bySlug = await strapi22.documents(agentUid).findMany({
+        filters: { slug: { $eq: slug } },
+        limit: 1
+      });
+      let existing = bySlug[0];
+      if (!existing) {
+        const byName = await strapi22.documents(agentUid).findMany({
+          filters: { name: { $eqi: name } },
+          limit: 1
+        });
+        existing = byName[0];
+      }
+      const nextKind = args.kind ?? existing?.kind;
+      if (nextKind === "orchestrator") {
+        const orchestrators = await strapi22.documents(agentUid).findMany({
+          filters: { kind: { $eq: "orchestrator" } },
+          limit: 5
+        });
+        const other = orchestrators.find((agent) => agent.documentId !== existing?.documentId);
+        if (other) {
+          throw new Error("Only one orchestrator is allowed");
+        }
+      }
+      const data = { name };
+      if (args.description !== void 0) data.description = args.description;
+      if (args.capabilities !== void 0) data.capabilities = args.capabilities;
+      if (args.kind !== void 0) data.kind = args.kind;
+      if (args.permissionPack !== void 0) data.permissionPack = args.permissionPack;
+      if (args.status !== void 0) data.state = args.status;
+      if (args.notes !== void 0) data.notes = args.notes;
+      if (args.webhookUrl !== void 0) data.webhookUrl = args.webhookUrl;
+      if (args.webhookMode !== void 0) data.webhookMode = args.webhookMode;
+      if (args.rateLimitPerMinute !== void 0) data.rateLimitPerMinute = args.rateLimitPerMinute;
+      if (args.rateLimitPerDay !== void 0) data.rateLimitPerDay = args.rateLimitPerDay;
+      if (args.maxTurnsPerThread !== void 0) data.maxTurnsPerThread = args.maxTurnsPerThread;
+      if (explicitSlug && explicitSlug !== existing?.slug) data.slug = explicitSlug;
+      let created = false;
+      let message = "Updated existing agent";
+      let result;
+      if (existing) {
+        result = await strapi22.documents(agentUid).update({
+          documentId: existing.documentId,
+          data
+        });
+      } else {
+        result = await strapi22.documents(agentUid).create({
+          data: {
+            ...data,
+            slug,
+            kind: args.kind || "specialist",
+            permissionPack: args.permissionPack || "asker",
+            webhookMode: args.webhookMode || "reference",
+            state: args.status || "active",
+            capabilities: args.capabilities || []
+          }
+        });
+        created = true;
+        message = "Created new agent";
+      }
+      const output = stripNullish({
+        created,
+        documentId: result.documentId,
+        slug: result.slug || slug,
+        name: result.name || name,
+        status: result.state || args.status || existing?.state || "active",
+        message
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(output, null, 2)
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const registerAgent = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   register: register$d
 }, Symbol.toStringTag, { value: "Module" }));
@@ -20772,6 +20901,7 @@ const cancel = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProper
 }, Symbol.toStringTag, { value: "Module" }));
 const tools = [
   listAgents,
+  registerAgent,
   sendMessage,
   checkInbox,
   claimMessage,

@@ -19876,7 +19876,7 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 - **Uniform results are suspect**: If all/none/zero results come back, verify by checking one raw record
 - **Write negatives down**: Record what systems CANNOT do (capabilities table)
 - **Build new skills from gaps and retros**: When we fail or lack something repeatedly, that's the signal to improve
-- **Start every session with get_briefing**: Load context about lessons, open issues, and urgent work
+- **Start every session with get_briefing**: Load context about lessons, open issues, urgent work, and standing rules
 - **Log retros after real failures**: Don't let lessons slip away
 - **Handle duplicate candidates**: When remember or add_todo returns needsDecision, choose merge/new/supersede
 
@@ -19952,7 +19952,8 @@ Get a compact session briefing to start every session.
 - Open retros and gaps
 - P0/P1 or overdue todos
 - Recent 'cannot' capabilities (last 90 days)
-- Call this first to load context
+- Enabled standing rules (\`rules\`: name, match, action, priority), highest priority first, up to 20
+- Call this first to load context, including routing rules. \`summary.rulesCount\` is the number returned
 
 ### kb_stats
 Get knowledge base statistics to understand what's in the brain.
@@ -19993,6 +19994,7 @@ Search across all brain types with ranked results (searches note body/content an
 - Recent items rank higher
 - Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
 - Always search before creating notes to avoid duplicates
+- Each type is paged newest-first (\`updatedAt\` desc) up to 1000 rows. Text matches older than that window are still included via a database filter on scalar fields (title, body, and the type's other text fields). Tag and alias matches are scored in memory on the scanned rows
 
 ### get_entity
 Fetch one entity by type + documentId or slug.
@@ -20012,20 +20014,20 @@ Patch a note's fields.
 
 ### upsert_person
 Create or update a person (matches by slug/alias, updates or creates).
-- Fields: name, role, org, email, handles (JSON: {github, x, linkedin}), notes_md, last_contact
+- Fields: name, role, org, email, handles (JSON: {github, x, linkedin}), notes_md, last_contact (YYYY-MM-DD)
 - Idempotent: safe to call multiple times with same name
 - Returns created: true/false and documentId
 
 ### upsert_source
 Create or update a source (matches by slug, videoId, or url).
-- Fields: title, type, url, videoId, external_id, excerpt, captured_on
+- Fields: title, type, url, videoId, external_id, excerpt, captured_on (YYYY-MM-DD)
 - Matches by slug (from title), videoId, or url
 - Updates matched source or creates new
 - Use for YouTube videos: pass videoId and url to join with central yt-kb transcripts
 
 ### update_source
 Update an existing source by documentId or slug.
-- Fields: title, type, url, videoId, external_id, excerpt, captured_on
+- Fields: title, type, url, videoId, external_id, excerpt, captured_on (YYYY-MM-DD)
 - All fields optional (only updates provided fields)
 - Use when you know the source exists
 - For YouTube videos, ensure videoId is set to join with central yt-kb transcripts
@@ -20163,7 +20165,7 @@ Update goal fields.
 
 ## Best Practices
 
-1. **Start with briefing**: Call \`get_briefing\` at session start to load lessons, open issues, and urgent todos
+1. **Start with briefing**: Call \`get_briefing\` at session start to load lessons, open issues, urgent todos, and enabled standing rules
 2. **Check KB stats**: Use \`kb_stats\` to understand what's in the brain and find transcripts without notes
 3. **Search before writing**: Always \`recall\` before creating notes to avoid duplicates
 4. **Handle duplicates**: When \`remember\` or \`add_todo\` returns needsDecision with candidates, review and choose merge/new/supersede
@@ -20266,7 +20268,7 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.7.0";
+const PLUGIN_VERSION = "1.8.0";
 const register$y = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
@@ -20321,6 +20323,10 @@ function stripNullish(obj) {
   }
   return obj;
 }
+function toDateOnly(value) {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+  return match ? match[1] : value.trim();
+}
 function getTodayPST() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
@@ -20343,7 +20349,7 @@ const register$x = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "recall",
     title: "Recall from Brain",
-    description: "Search across all brain types (notes, people, projects, decisions, sources) with ranked keyword search. Searches note body/content and tags. Returns snippets, documentIds, and linked source/person ids. Results ranked by: title match (×3) > alias/tag match (×2) > body match (×1), plus recency decay and pinned boost. See get_brain_guide for usage.",
+    description: "Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Tag and alias matches are scored in memory. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       query: string().describe("Search query (keywords)"),
       types: array(_enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin"])).optional().describe("Limit search to these types (default: all)"),
@@ -23342,7 +23348,7 @@ const register$4 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_briefing",
     title: "Get Briefing",
-    description: "Get a compact session briefing with pinned/recent lessons, open retros, open gaps, P0/P1/overdue todos, and recent cannot capabilities.",
+    description: "Get a compact session briefing with pinned/recent lessons, open retros, open gaps, P0/P1/overdue todos, recent cannot capabilities, and enabled standing rules (highest priority first).",
     resolveInputSchema: () => object({
       lessonLimit: number().optional().describe("Max number of lessons to return (default: 10)"),
       todoLimit: number().optional().describe("Max number of todos to return (default: 10)")
@@ -23383,12 +23389,20 @@ const register$4 = (strapi2) => {
         verifiedAt: string().optional(),
         notes: string().optional()
       })),
+      rules: array(object({
+        documentId: string(),
+        name: string(),
+        match: string(),
+        action: string(),
+        priority: number()
+      })),
       summary: object({
         lessonsCount: number(),
         openRetrosCount: number(),
         openGapsCount: number(),
         urgentTodosCount: number(),
-        cannotCount: number()
+        cannotCount: number(),
+        rulesCount: number()
       })
     }),
     auth: {
@@ -23402,6 +23416,7 @@ const register$4 = (strapi2) => {
       const gapUid = getUid("gap");
       const todoUid = getUid("todo");
       const capabilityUid = getUid("capability");
+      const ruleUid = getUid("rule");
       const pinnedLessons = await strapi22.documents(noteUid).findMany({
         filters: {
           kind: { $eq: "lesson" },
@@ -23495,18 +23510,32 @@ const register$4 = (strapi2) => {
         verifiedAt: c.verifiedAt,
         notes: c.notes
       }));
+      const standingRules = await strapi22.documents(ruleUid).findMany({
+        filters: { enabled: { $eq: true } },
+        sort: ["priority:desc"],
+        limit: 20
+      });
+      const rules = standingRules.map((rule2) => ({
+        documentId: rule2.documentId,
+        name: rule2.name || "",
+        match: rule2.match || "",
+        action: rule2.action || "",
+        priority: typeof rule2.priority === "number" ? rule2.priority : 0
+      }));
       const output = stripNullish({
         lessons,
         openRetros: retros,
         openGaps: gaps,
         urgentTodos,
         recentCannotCapabilities: cannotCapabilities,
+        rules,
         summary: {
           lessonsCount: lessons.length,
           openRetrosCount: retros.length,
           openGapsCount: gaps.length,
           urgentTodosCount: urgentTodos.length,
-          cannotCount: cannotCapabilities.length
+          cannotCount: cannotCapabilities.length,
+          rulesCount: rules.length
         }
       });
       return {
@@ -23802,7 +23831,7 @@ const register$2 = (strapi2) => {
       videoId: string().optional().describe("YouTube video ID"),
       external_id: string().optional().describe("External ID (e.g., video ID, article ID)"),
       excerpt: string().optional().describe("Excerpt or description"),
-      captured_on: string().optional().describe("Date captured (ISO format)")
+      captured_on: string().optional().describe("Date captured (YYYY-MM-DD)")
     }),
     resolveOutputSchema: () => object({
       created: boolean(),
@@ -23848,7 +23877,7 @@ const register$2 = (strapi2) => {
         if (args.videoId) updates.videoId = args.videoId;
         if (args.external_id) updates.external_id = args.external_id;
         if (args.excerpt) updates.excerpt = args.excerpt;
-        if (args.captured_on) updates.captured_on = args.captured_on;
+        if (args.captured_on) updates.captured_on = toDateOnly(args.captured_on);
         result = await strapi22.documents(uid).update({
           documentId: existing.documentId,
           data: updates
@@ -23864,7 +23893,7 @@ const register$2 = (strapi2) => {
             videoId: args.videoId,
             external_id: args.external_id,
             excerpt: args.excerpt,
-            captured_on: args.captured_on
+            captured_on: args.captured_on ? toDateOnly(args.captured_on) : args.captured_on
           }
         });
         created = true;
@@ -23905,7 +23934,7 @@ const register$1 = (strapi2) => {
       videoId: string().optional().describe("YouTube video ID"),
       external_id: string().optional().describe("External ID"),
       excerpt: string().optional().describe("Excerpt or description"),
-      captured_on: string().optional().describe("Date captured (ISO format)")
+      captured_on: string().optional().describe("Date captured (YYYY-MM-DD)")
     }),
     resolveOutputSchema: () => object({
       updated: boolean(),
@@ -23929,7 +23958,7 @@ const register$1 = (strapi2) => {
       if (args.videoId !== void 0) updates.videoId = args.videoId;
       if (args.external_id !== void 0) updates.external_id = args.external_id;
       if (args.excerpt !== void 0) updates.excerpt = args.excerpt;
-      if (args.captured_on !== void 0) updates.captured_on = args.captured_on;
+      if (args.captured_on !== void 0) updates.captured_on = toDateOnly(args.captured_on);
       if (Object.keys(updates).length === 0) {
         throw new Error("No fields to update");
       }
@@ -23970,7 +23999,7 @@ const register = (strapi2) => {
       email: string().email().optional().describe("Email address"),
       handles: record(string()).optional().describe('Social handles (e.g., {github: "username", x: "username"})'),
       notes_md: string().optional().describe("Rich text notes about this person"),
-      last_contact: string().optional().describe("Last contact date (ISO format)")
+      last_contact: string().optional().describe("Last contact date (YYYY-MM-DD)")
     }),
     resolveOutputSchema: () => object({
       created: boolean(),
@@ -23998,7 +24027,7 @@ const register = (strapi2) => {
         if (args.email !== void 0) updates.email = args.email;
         if (args.handles !== void 0) updates.handles = args.handles;
         if (args.notes_md !== void 0) updates.notes_md = args.notes_md;
-        if (args.last_contact !== void 0) updates.last_contact = args.last_contact;
+        if (args.last_contact !== void 0) updates.last_contact = toDateOnly(args.last_contact);
         result = await strapi22.documents(uid).update({
           documentId: existing.documentId,
           data: updates
@@ -24014,7 +24043,7 @@ const register = (strapi2) => {
             email: args.email,
             handles: args.handles || {},
             notes_md: args.notes_md,
-            last_contact: args.last_contact
+            last_contact: args.last_contact ? toDateOnly(args.last_contact) : args.last_contact
           }
         });
         created = true;
@@ -25005,6 +25034,40 @@ const contentTypes = {
   "goal-checkin": goalCheckin
 };
 const PLUGIN_NAME = "paul-brain";
+const SEARCH_PAGE_SIZE = 100;
+const SEARCH_SCAN_CAP = 1e3;
+const TEXT_SEARCH_FIELDS = {
+  note: ["title", "body", "summary", "howToRecheck", "videoId", "source_bot"],
+  person: ["name", "role", "org", "email", "notes_md"],
+  project: ["name", "summary", "goals", "repo_url", "url"],
+  decision: ["title", "context", "decision", "rationale"],
+  source: ["title", "excerpt", "url", "videoId", "external_id"],
+  retro: ["title", "task", "failure", "fix", "fixLocation"],
+  gap: ["title", "request", "whatWasNeeded"],
+  capability: ["system", "capability", "howVerified", "notes"],
+  rule: ["name", "match", "action"],
+  todo: ["title", "goal", "acceptanceCriteria", "context", "waitingOn", "closingNote", "capturedBy"],
+  goal: ["title", "description", "target"],
+  "goal-checkin": ["note", "loggedBy"]
+};
+function searchKeywords(query) {
+  return query.toLowerCase().split(/\s+/).filter((keyword) => keyword.length > 2);
+}
+function rowsFromFindMany(page) {
+  if (Array.isArray(page)) return page;
+  if (page && typeof page === "object" && Array.isArray(page.results)) {
+    return page.results;
+  }
+  return [];
+}
+function textMatchFilter(keywords, fields2) {
+  if (keywords.length === 0 || fields2.length === 0) return null;
+  return {
+    $or: keywords.flatMap(
+      (keyword) => fields2.map((field) => ({ [field]: { $containsi: keyword } }))
+    )
+  };
+}
 const brain = ({ strapi: strapi2 }) => ({
   slugify(text) {
     return text.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -25063,7 +25126,6 @@ ${data.body}`;
     const { query, types = ["note", "person", "project", "decision", "source"], kind: kind2, tag, videoId, sourceId, since, limit = 25 } = options2;
     const results = [];
     const queryLower = query.toLowerCase();
-    const keywords = queryLower.split(/\s+/).filter((k) => k.length > 2);
     for (const type of types) {
       const uid = `plugin::${PLUGIN_NAME}.${type}`;
       try {
@@ -25077,12 +25139,51 @@ ${data.body}`;
         if (type === "note" && videoId) {
           filters2.videoId = { $eq: videoId };
         }
+        if (type === "note" && sourceId) {
+          filters2.sources = { documentId: { $eq: sourceId } };
+        }
         const populate2 = type === "note" ? ["sources", "people"] : void 0;
-        const entities = await strapi2.documents(uid).findMany({
-          filters: filters2,
-          populate: populate2,
-          limit: 100
-        });
+        const keywords = searchKeywords(query);
+        const collect = async (queryFilters) => {
+          const collected = [];
+          const seen = /* @__PURE__ */ new Set();
+          for (let start = 0; collected.length < SEARCH_SCAN_CAP; start += SEARCH_PAGE_SIZE) {
+            const pageLimit = Math.min(SEARCH_PAGE_SIZE, SEARCH_SCAN_CAP - collected.length);
+            const page = await strapi2.documents(uid).findMany({
+              filters: queryFilters,
+              populate: populate2,
+              sort: ["updatedAt:desc"],
+              start,
+              limit: pageLimit
+            });
+            const rows = rowsFromFindMany(page);
+            if (rows.length === 0) break;
+            let added = 0;
+            for (const row of rows) {
+              if (!row?.documentId || seen.has(row.documentId)) continue;
+              seen.add(row.documentId);
+              collected.push(row);
+              added += 1;
+              if (collected.length >= SEARCH_SCAN_CAP) break;
+            }
+            if (added === 0 || rows.length < pageLimit) break;
+          }
+          return collected;
+        };
+        const entities = await collect(filters2);
+        if (entities.length >= SEARCH_SCAN_CAP) {
+          const textFilter = textMatchFilter(keywords, TEXT_SEARCH_FIELDS[type] || []);
+          if (textFilter) {
+            const olderMatches = await collect({ ...filters2, ...textFilter });
+            const seen = new Set(entities.map((entity) => entity.documentId));
+            for (const match of olderMatches) {
+              if (!seen.has(match.documentId)) {
+                seen.add(match.documentId);
+                entities.push(match);
+              }
+            }
+          }
+        }
         for (const entity of entities) {
           if (tag && type === "note") {
             const entityTags2 = Array.isArray(entity.tags) ? entity.tags : [];
@@ -25090,15 +25191,6 @@ ${data.body}`;
               (t) => t.toLowerCase() === tag.toLowerCase()
             );
             if (!hasMatchingTag) {
-              continue;
-            }
-          }
-          if (sourceId && type === "note") {
-            const sources = Array.isArray(entity.sources) ? entity.sources : [];
-            const hasMatchingSource = sources.some(
-              (s) => s.documentId === sourceId
-            );
-            if (!hasMatchingSource) {
               continue;
             }
           }

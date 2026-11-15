@@ -8,7 +8,7 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'recall',
     title: 'Recall from Brain',
-    description: 'Search across all brain types (notes, people, projects, decisions, sources) with ranked keyword search. Searches note body/content and tags. Returns snippets, documentIds, and linked source/person ids. Results ranked by: title match (×3) > alias/tag match (×2) > body match (×1), plus recency decay and pinned boost. See get_brain_guide for usage.',
+    description: 'Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Tag and alias matches are scored in memory. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
       query: z.string().describe('Search query (keywords)'),

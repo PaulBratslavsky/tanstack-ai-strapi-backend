@@ -8,7 +8,7 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'get_briefing',
     title: 'Get Briefing',
-    description: 'Get a compact session briefing with pinned/recent lessons, open retros, open gaps, P0/P1/overdue todos, and recent cannot capabilities.',
+    description: 'Get a compact session briefing with pinned/recent lessons, open retros, open gaps, P0/P1/overdue todos, recent cannot capabilities, and enabled standing rules (highest priority first).',
     
     resolveInputSchema: () => z.object({
       lessonLimit: z.number().optional().describe('Max number of lessons to return (default: 10)'),
@@ -51,12 +51,20 @@ export const register = (strapi: Core.Strapi) => {
         verifiedAt: z.string().optional(),
         notes: z.string().optional(),
       })),
+      rules: z.array(z.object({
+        documentId: z.string(),
+        name: z.string(),
+        match: z.string(),
+        action: z.string(),
+        priority: z.number(),
+      })),
       summary: z.object({
         lessonsCount: z.number(),
         openRetrosCount: z.number(),
         openGapsCount: z.number(),
         urgentTodosCount: z.number(),
         cannotCount: z.number(),
+        rulesCount: z.number(),
       }),
     }),
     
@@ -73,6 +81,7 @@ export const register = (strapi: Core.Strapi) => {
       const gapUid = getUid('gap');
       const todoUid = getUid('todo');
       const capabilityUid = getUid('capability');
+      const ruleUid = getUid('rule');
 
       // Get pinned lessons
       const pinnedLessons = await strapi.documents(noteUid).findMany({
@@ -187,18 +196,34 @@ export const register = (strapi: Core.Strapi) => {
         notes: c.notes,
       }));
 
+      const standingRules = await strapi.documents(ruleUid).findMany({
+        filters: { enabled: { $eq: true } },
+        sort: ['priority:desc'],
+        limit: 20,
+      });
+
+      const rules = standingRules.map(rule => ({
+        documentId: rule.documentId,
+        name: rule.name || '',
+        match: rule.match || '',
+        action: rule.action || '',
+        priority: typeof rule.priority === 'number' ? rule.priority : 0,
+      }));
+
       const output = stripNullish({
         lessons,
         openRetros: retros,
         openGaps: gaps,
         urgentTodos,
         recentCannotCapabilities: cannotCapabilities,
+        rules,
         summary: {
           lessonsCount: lessons.length,
           openRetrosCount: retros.length,
           openGapsCount: gaps.length,
           urgentTodosCount: urgentTodos.length,
           cannotCount: cannotCapabilities.length,
+          rulesCount: rules.length,
         },
       });
 

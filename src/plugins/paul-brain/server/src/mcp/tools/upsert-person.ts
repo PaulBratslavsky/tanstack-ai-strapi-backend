@@ -3,7 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import type { BrainService } from '../../services/brain';
-import { stripNullish } from '../utils';
+import { stripNullish, toDateOnly } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -18,7 +18,7 @@ export const register = (strapi: Core.Strapi) => {
       email: z.string().email().optional().describe('Email address'),
       handles: z.record(z.string()).optional().describe('Social handles (e.g., {github: "username", x: "username"})'),
       notes_md: z.string().optional().describe('Rich text notes about this person'),
-      last_contact: z.string().optional().describe('Last contact date (ISO format)'),
+      last_contact: z.string().optional().describe('Last contact date (YYYY-MM-DD)'),
     }),
     
     resolveOutputSchema: () => z.object({
@@ -55,7 +55,7 @@ export const register = (strapi: Core.Strapi) => {
         if (args.email !== undefined) updates.email = args.email;
         if (args.handles !== undefined) updates.handles = args.handles;
         if (args.notes_md !== undefined) updates.notes_md = args.notes_md;
-        if (args.last_contact !== undefined) updates.last_contact = args.last_contact;
+        if (args.last_contact !== undefined) updates.last_contact = toDateOnly(args.last_contact);
 
         result = await strapi.documents(uid).update({
           documentId: existing.documentId!,
@@ -73,7 +73,7 @@ export const register = (strapi: Core.Strapi) => {
             email: args.email,
             handles: args.handles || {},
             notes_md: args.notes_md,
-            last_contact: args.last_contact,
+            last_contact: args.last_contact ? toDateOnly(args.last_contact) : args.last_contact,
           },
         });
         created = true;

@@ -36,6 +36,15 @@ export function stripNullish<T>(obj: T): T {
  * 
  * @returns Today's date as YYYY-MM-DD string in America/Los_Angeles timezone
  */
+/**
+ * Coerce an ISO-ish timestamp to the YYYY-MM-DD date Strapi date fields store.
+ * A full ISO datetime is rejected by date attributes.
+ */
+export function toDateOnly(value: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+  return match ? match[1] : value.trim();
+}
+
 export function getTodayPST(): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Los_Angeles',
