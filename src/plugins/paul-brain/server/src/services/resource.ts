@@ -1,6 +1,27 @@
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import path from 'path';
 import type { Core } from '@strapi/strapi';
 import { getUid } from '../mcp/types';
-import { sinceToUpdatedAt, stripNullish } from '../mcp/utils';
+import { getTodayPST, sinceToUpdatedAt, stripNullish } from '../mcp/utils';
+import {
+  BASE64_INLINE_LIMIT,
+  captionResource,
+  decodeFileBase64,
+  extractResourceText,
+  fetchRemoteFile,
+  hashBuffer,
+  isAllowedResourceMime,
+  loadFileBytes,
+  normalizeMime,
+  normalizeResourceUrl,
+  publicFileView,
+  safeFilename,
+  serverPublicBase,
+  signedFilePath,
+  signFileToken,
+  type UploadFileRecord,
+} from './resource-file';
 
 /**
  * Stored as `state`. Strapi's document service reserves `status` for draft/publish,
@@ -20,7 +41,15 @@ export type ResourceFormat = (typeof RESOURCE_FORMATS)[number];
 export const AUTHOR_ATTRIBUTE = 'author';
 
 /** Scalar text recall searches. Title is also scored on its own. */
-export const RESOURCE_TEXT_FIELDS = ['title', 'summary', 'body', 'extractedText', 'altText'] as const;
+export const RESOURCE_TEXT_FIELDS = [
+  'title',
+  'summary',
+  'body',
+  'extractedText',
+  'altText',
+  'caption',
+  'snapshotMarkdown',
+] as const;
 
 const RESOURCE_UID = getUid('resource');
 const POPULATE = ['notes', 'projects', 'people', 'sources', 'file', 'supersededBy'] as const;
@@ -53,6 +82,10 @@ export interface SaveResourceArgs {
   summary?: string;
   extractedText?: string;
   altText?: string;
+  caption?: string;
+  snapshotMarkdown?: string;
+  snapshotAt?: string;
+  contentHash?: string;
   externalUrl?: string;
   status?: ResourceStatus;
   tags?: string[];
@@ -72,6 +105,10 @@ export interface UpdateResourceArgs {
   summary?: string;
   extractedText?: string;
   altText?: string;
+  caption?: string;
+  snapshotMarkdown?: string;
+  snapshotAt?: string;
+  contentHash?: string;
   externalUrl?: string;
   status?: ResourceStatus;
   tags?: string[];
@@ -100,6 +137,14 @@ export interface LinkResourceArgs {
   relation: RelationName;
   targets: string[];
   operation: 'connect' | 'disconnect';
+}
+
+export interface AttachResourceFileArgs {
+  identifier: string;
+  filename: string;
+  mime: string;
+  fileBase64?: string;
+  fileUrl?: string;
 }
 
 function asRows(page: unknown): any[] {
@@ -133,6 +178,39 @@ function assertExternalUrl(format: string, externalUrl: string | undefined) {
   if (!externalUrl || !/^https?:\/\//i.test(externalUrl)) {
     throw new Error(`${format} resources require an http(s) externalUrl`);
   }
+}
+
+function assertSnapshotAt(snapshotAt: string | undefined) {
+  if (snapshotAt === undefined) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotAt)) {
+    throw new Error('snapshotAt must be YYYY-MM-DD');
+  }
+}
+
+function applySnapshot(data: Record<string, unknown>, args: { snapshotMarkdown?: string; snapshotAt?: string }) {
+  assertSnapshotAt(args.snapshotAt);
+  if (args.snapshotMarkdown !== undefined) {
+    data.snapshotMarkdown = args.snapshotMarkdown;
+    data.snapshotAt = args.snapshotAt ?? getTodayPST();
+  } else if (args.snapshotAt !== undefined) {
+    data.snapshotAt = args.snapshotAt;
+  }
+}
+
+function copySnapshot(
+  data: Record<string, unknown>,
+  args: { snapshotMarkdown?: string; snapshotAt?: string },
+  existing: { snapshotMarkdown?: unknown; snapshotAt?: unknown }
+) {
+  assertSnapshotAt(args.snapshotAt);
+  if (args.snapshotMarkdown !== undefined) {
+    data.snapshotMarkdown = args.snapshotMarkdown;
+    data.snapshotAt = args.snapshotAt ?? getTodayPST();
+    return;
+  }
+  if (existing.snapshotMarkdown != null) data.snapshotMarkdown = existing.snapshotMarkdown;
+  if (args.snapshotAt !== undefined) data.snapshotAt = args.snapshotAt;
+  else if (existing.snapshotAt != null) data.snapshotAt = existing.snapshotAt;
 }
 
 function relationIds(value: unknown): string[] {
@@ -220,23 +298,7 @@ function relationSummaries(value: unknown) {
 }
 
 function fileSummary(file: unknown) {
-  if (!file || typeof file !== 'object') return undefined;
-  const row = file as {
-    id?: number;
-    url?: string;
-    name?: string;
-    mime?: string;
-    ext?: string;
-    alternativeText?: string;
-  };
-  return stripNullish({
-    id: row.id,
-    url: row.url,
-    name: row.name,
-    mime: row.mime,
-    ext: row.ext,
-    alternativeText: row.alternativeText,
-  });
+  return publicFileView(file);
 }
 
 function supersededSummary(value: unknown) {
@@ -275,6 +337,10 @@ function toDetail(row: any) {
     summary: row.summary,
     extractedText: row.extractedText,
     altText: row.altText,
+    caption: row.caption,
+    snapshotMarkdown: row.snapshotMarkdown,
+    snapshotAt: row.snapshotAt,
+    contentHash: row.contentHash,
     externalUrl: row.externalUrl,
     createdBy: row[AUTHOR_ATTRIBUTE],
     tags: Array.isArray(row.tags) ? row.tags : [],
@@ -327,6 +393,42 @@ export function createResourceService(strapi: Core.Strapi) {
     return rows[0] ?? null;
   }
 
+  async function findByContentHash(contentHash: string) {
+    const rows = await findMany(RESOURCE_UID, {
+      filters: { contentHash: { $eq: contentHash } },
+      sort: ['updatedAt:desc'],
+      limit: 1,
+    });
+    return rows[0] ?? null;
+  }
+
+  async function findByExternalUrl(url: string) {
+    const normalized = normalizeResourceUrl(url);
+    const keys = [...new Set([url.trim(), normalized].filter(Boolean))];
+    if (keys.length === 0) return null;
+    const rows = await findMany(RESOURCE_UID, {
+      filters: { $or: keys.map((value) => ({ externalUrl: { $eq: value } })) },
+      sort: ['updatedAt:desc'],
+      limit: 1,
+    });
+    return rows[0] ?? null;
+  }
+
+  function dedupedResult(row: any, reason: 'url' | 'contentHash') {
+    return {
+      created: false,
+      deduped: true,
+      documentId: row.documentId,
+      slug: row.slug,
+      status: row.state || 'final',
+      format: row.format,
+      message:
+        reason === 'url'
+          ? 'Returned existing resource with the same url'
+          : 'Returned existing resource with the same file content hash',
+    };
+  }
+
   async function allocateSlug(title: string): Promise<string> {
     const root = slugify(title);
     if (!root) {
@@ -371,19 +473,35 @@ export function createResourceService(strapi: Core.Strapi) {
     }
   }
 
+  function storedUrl(url: string | undefined): string | undefined {
+    if (url === undefined) return undefined;
+    const normalized = normalizeResourceUrl(url);
+    return normalized || undefined;
+  }
+
   return {
     async save(args: SaveResourceArgs) {
       if (!args.title?.trim()) throw new Error('title is required');
       assertFormat(args.format);
       assertSummary(args.summary);
+      assertSnapshotAt(args.snapshotAt);
       if (args.status) assertStatus(args.status);
 
       const slug = slugify(args.slug || args.title);
       if (!slug) throw new Error('Title must include letters or numbers so a slug can be generated');
 
       const existing = await findBySlug(slug);
-      const externalUrl = args.externalUrl !== undefined ? args.externalUrl : existing?.externalUrl;
+      const externalUrl = storedUrl(args.externalUrl !== undefined ? args.externalUrl : existing?.externalUrl);
       assertExternalUrl(args.format, externalUrl);
+
+      if (args.contentHash) {
+        const hashRow = await findByContentHash(args.contentHash);
+        if (hashRow && hashRow.documentId !== existing?.documentId) return dedupedResult(hashRow, 'contentHash');
+      }
+      if (args.externalUrl) {
+        const urlRow = await findByExternalUrl(args.externalUrl);
+        if (urlRow && urlRow.documentId !== existing?.documentId) return dedupedResult(urlRow, 'url');
+      }
 
       const links = await resolvedLinks(args);
 
@@ -396,10 +514,13 @@ export function createResourceService(strapi: Core.Strapi) {
         if (args.summary !== undefined) data.summary = args.summary;
         if (args.extractedText !== undefined) data.extractedText = args.extractedText;
         if (args.altText !== undefined) data.altText = args.altText;
-        if (args.externalUrl !== undefined) data.externalUrl = args.externalUrl;
+        if (args.caption !== undefined) data.caption = args.caption;
+        if (args.contentHash !== undefined) data.contentHash = args.contentHash;
+        if (args.externalUrl !== undefined) data.externalUrl = externalUrl;
         if (args.status !== undefined) data.state = args.status;
         if (args.tags !== undefined) data.tags = args.tags;
         if (args.createdBy !== undefined) data[AUTHOR_ATTRIBUTE] = args.createdBy;
+        applySnapshot(data, args);
         assignLinks(data, links);
 
         const updated = await documents(RESOURCE_UID).update({
@@ -409,6 +530,7 @@ export function createResourceService(strapi: Core.Strapi) {
 
         return {
           created: false,
+          deduped: false,
           documentId: updated.documentId,
           slug: updated.slug || slug,
           status: updated.state || args.status || existing.state || 'final',
@@ -428,13 +550,17 @@ export function createResourceService(strapi: Core.Strapi) {
       if (args.summary !== undefined) data.summary = args.summary;
       if (args.extractedText !== undefined) data.extractedText = args.extractedText;
       if (args.altText !== undefined) data.altText = args.altText;
-      if (args.externalUrl !== undefined) data.externalUrl = args.externalUrl;
+      if (args.caption !== undefined) data.caption = args.caption;
+      if (args.contentHash !== undefined) data.contentHash = args.contentHash;
+      if (args.externalUrl !== undefined) data.externalUrl = externalUrl;
       if (args.createdBy !== undefined) data[AUTHOR_ATTRIBUTE] = args.createdBy;
+      applySnapshot(data, args);
       assignLinks(data, links);
 
       const created = await documents(RESOURCE_UID).create({ data });
       return {
         created: true,
+        deduped: false,
         documentId: created.documentId,
         slug: created.slug || slug,
         status: created.state || data.state,
@@ -540,11 +666,12 @@ export function createResourceService(strapi: Core.Strapi) {
       const existing = await findByIdentifier(RESOURCE_UID, args.identifier, POPULATE);
       if (!existing) throw new Error(`Resource not found: ${args.identifier}`);
       assertSummary(args.summary);
+      assertSnapshotAt(args.snapshotAt);
       if (args.format) assertFormat(args.format);
       if (args.status) assertStatus(args.status);
 
       const format = args.format ?? existing.format;
-      const externalUrl = args.externalUrl !== undefined ? args.externalUrl : existing.externalUrl;
+      const externalUrl = args.externalUrl !== undefined ? storedUrl(args.externalUrl) : existing.externalUrl;
       if (args.format !== undefined || args.externalUrl !== undefined || args.newVersion) {
         assertExternalUrl(format, externalUrl);
       }
@@ -571,6 +698,11 @@ export function createResourceService(strapi: Core.Strapi) {
         else if (existing.extractedText != null) data.extractedText = existing.extractedText;
         if (args.altText !== undefined) data.altText = args.altText;
         else if (existing.altText != null) data.altText = existing.altText;
+        if (args.caption !== undefined) data.caption = args.caption;
+        else if (existing.caption != null) data.caption = existing.caption;
+        if (args.contentHash !== undefined) data.contentHash = args.contentHash;
+        else if (existing.contentHash != null) data.contentHash = existing.contentHash;
+        copySnapshot(data, args, existing);
         if (externalUrl !== undefined) data.externalUrl = externalUrl;
         if (args.createdBy !== undefined) data[AUTHOR_ATTRIBUTE] = args.createdBy;
         else if (existing[AUTHOR_ATTRIBUTE] != null) data[AUTHOR_ATTRIBUTE] = existing[AUTHOR_ATTRIBUTE];
@@ -609,8 +741,11 @@ export function createResourceService(strapi: Core.Strapi) {
       if (args.summary !== undefined) data.summary = args.summary;
       if (args.extractedText !== undefined) data.extractedText = args.extractedText;
       if (args.altText !== undefined) data.altText = args.altText;
-      if (args.externalUrl !== undefined) data.externalUrl = args.externalUrl;
+      if (args.caption !== undefined) data.caption = args.caption;
+      if (args.contentHash !== undefined) data.contentHash = args.contentHash;
+      if (args.externalUrl !== undefined) data.externalUrl = externalUrl;
       if (args.status !== undefined) data.state = args.status;
+      applySnapshot(data, args);
       if (args.createdBy !== undefined) data[AUTHOR_ATTRIBUTE] = args.createdBy;
       const tags = applyTags(existing.tags, args);
       if (tags !== undefined) data.tags = tags;
@@ -662,7 +797,217 @@ export function createResourceService(strapi: Core.Strapi) {
         message: `${verb} ${ids.length} ${args.relation}`,
       };
     },
+
+    async attach(args: AttachResourceFileArgs) {
+      if (!args.filename?.trim()) throw new Error('filename is required');
+      if (!args.mime?.trim()) throw new Error('mime is required');
+      const hasBase64 = Boolean(args.fileBase64);
+      const hasUrl = Boolean(args.fileUrl);
+      if (hasBase64 === hasUrl) throw new Error('Provide exactly one of fileBase64 or fileUrl');
+
+      const resource = await findByIdentifier(RESOURCE_UID, args.identifier, POPULATE);
+      if (!resource) throw new Error(`Resource not found: ${args.identifier}`);
+
+      const filename = safeFilename(args.filename);
+      const fetchImpl = (strapi as { fetch?: typeof fetch }).fetch;
+      const resolveHost = (strapi as { resolveHost?: (hostname: string) => Promise<string[]> }).resolveHost;
+      let buffer: Buffer;
+      let mime = normalizeMime(args.mime, filename);
+      if (hasBase64) {
+        buffer = decodeFileBase64(args.fileBase64 as string);
+      } else {
+        const fetched = await fetchRemoteFile(args.fileUrl as string, { fetchImpl, resolveHost });
+        buffer = fetched.buffer;
+        mime = normalizeMime(args.mime || fetched.mime, filename);
+      }
+      if (!isAllowedResourceMime(mime)) throw new Error(`File type "${mime}" is not allowed`);
+
+      const contentHash = hashBuffer(buffer);
+      const hashRow = await findByContentHash(contentHash);
+      if (hashRow && hashRow.documentId !== resource.documentId) {
+        return {
+          attached: false,
+          deduped: true,
+          documentId: hashRow.documentId,
+          slug: hashRow.slug,
+          contentHash,
+          filename,
+          mime,
+          size: buffer.length,
+          extractedTextStored: false,
+          captioned: false,
+          message: 'Returned existing resource with the same file content hash',
+        };
+      }
+      if (hashRow && hashRow.documentId === resource.documentId) {
+        const current = await resolveUploadFile(resource.file);
+        return {
+          attached: true,
+          deduped: true,
+          documentId: resource.documentId,
+          slug: resource.slug,
+          contentHash,
+          filename: current?.name || filename,
+          mime: current?.mime || mime,
+          size: buffer.length,
+          extractedTextStored: Boolean(resource.extractedText),
+          captioned: Boolean(resource.caption),
+          message: 'File already attached to this resource',
+        };
+      }
+
+      let extracted = '';
+      try {
+        extracted = extractResourceText(buffer, mime, filename);
+      } catch (err) {
+        strapi.log?.warn?.('[paul-brain] text extraction skipped:', err);
+      }
+
+      let caption: string | undefined;
+      try {
+        const model = strapi.config?.get?.('plugin::tanstack-ai.chat.model');
+        caption = await captionResource({
+          buffer,
+          mime,
+          fetchImpl,
+          model: typeof model === 'string' ? model : undefined,
+        });
+      } catch (err) {
+        strapi.log?.warn?.('[paul-brain] caption skipped:', err);
+      }
+
+      const uploadService = strapi.plugin('upload').service('upload') as {
+        upload: (input: { data: Record<string, unknown>; files: Record<string, unknown> }) => Promise<UploadFileRecord | UploadFileRecord[]>;
+        remove?: (file: unknown) => Promise<unknown>;
+      };
+      if (!uploadService?.upload) throw new Error('Upload plugin is not available');
+
+      const dir = await mkdtemp(path.join(tmpdir(), 'paul-brain-'));
+      const filepath = path.join(dir, filename);
+      let stored: UploadFileRecord;
+      try {
+        await writeFile(filepath, buffer);
+        const uploaded = await uploadService.upload({
+          data: { fileInfo: { name: filename, alternativeText: caption } },
+          files: {
+            filepath,
+            path: filepath,
+            originalFilename: filename,
+            name: filename,
+            mimetype: mime,
+            type: mime,
+            size: buffer.length,
+          },
+        });
+        const file = Array.isArray(uploaded) ? uploaded[0] : uploaded;
+        if (!file || typeof file.id !== 'number') throw new Error('Upload did not return a file id');
+        stored = file;
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+
+      const previousId = mediaId(resource.file);
+      const data: Record<string, unknown> = { file: stored.id, contentHash };
+      if (extracted) data.extractedText = extracted;
+      if (caption) {
+        data.caption = caption;
+        if (!resource.altText) data.altText = caption;
+      }
+      if (resource.format === 'other') {
+        if (mime.startsWith('image/')) data.format = 'image';
+        else if (mime === 'application/pdf') data.format = 'pdf';
+      }
+      await documents(RESOURCE_UID).update({ documentId: resource.documentId, data });
+
+      if (previousId != null && previousId !== stored.id && uploadService.remove) {
+        try {
+          await uploadService.remove({ id: previousId });
+        } catch (err) {
+          strapi.log?.warn?.('[paul-brain] could not remove the previous file:', err);
+        }
+      }
+
+      return {
+        attached: true,
+        deduped: false,
+        documentId: resource.documentId,
+        slug: resource.slug,
+        contentHash,
+        filename,
+        mime,
+        size: buffer.length,
+        extractedTextStored: Boolean(extracted),
+        captioned: Boolean(caption),
+        message: 'Attached file',
+      };
+    },
+
+    async fileContent(identifier: string) {
+      const resource = await findByIdentifier(RESOURCE_UID, identifier, POPULATE);
+      if (!resource) throw new Error(`Resource not found: ${identifier}`);
+      const file = await resolveUploadFile(resource.file);
+      if (!file) throw new Error('Resource has no file');
+      const fetchImpl = (strapi as { fetch?: typeof fetch }).fetch;
+      const resolveHost = (strapi as { resolveHost?: (hostname: string) => Promise<string[]> }).resolveHost;
+      const buffer = await loadFileBytes(strapi, file, { fetchImpl, resolveHost });
+      return {
+        documentId: resource.documentId as string,
+        filename: file.name || 'file',
+        mime: file.mime || 'application/octet-stream',
+        buffer,
+      };
+    },
+
+    async readFile(identifier: string) {
+      const file = await this.fileContent(identifier);
+      const payload = {
+        documentId: file.documentId,
+        filename: file.filename,
+        mime: file.mime,
+        size: file.buffer.length,
+      };
+      if (file.buffer.length <= BASE64_INLINE_LIMIT) {
+        return {
+          ...payload,
+          encoding: 'base64' as const,
+          content: file.buffer.toString('base64'),
+          message: 'File bytes are inline. The public upload URL is not included.',
+        };
+      }
+      const signed = signFileToken(strapi, file.documentId);
+      const base = serverPublicBase(strapi);
+      return {
+        ...payload,
+        encoding: 'signed-url' as const,
+        accessUrl: `${base}${signedFilePath(signed.token)}`,
+        expiresAt: signed.expiresAt,
+        message:
+          'File is above the inline limit. Fetch accessUrl before expiresAt. This is a short-lived signed link, not the public upload URL.',
+      };
+    },
   };
+
+  async function resolveUploadFile(file: unknown): Promise<UploadFileRecord | null> {
+    if (file && typeof file === 'object') {
+      const row = file as UploadFileRecord;
+      if (row.mime || row.name || row.url || Buffer.isBuffer(row.buffer)) return row;
+    }
+    const id = mediaId(file);
+    if (id == null) return null;
+    const query = (strapi as { db?: { query?: (uid: string) => { findOne?: (params: unknown) => Promise<UploadFileRecord | null> } } }).db?.query?.(
+      'plugin::upload.file'
+    );
+    if (query?.findOne) {
+      const row = await query.findOne({ where: { id } });
+      if (row) return row;
+    }
+    const upload = strapi.plugin('upload').service('upload') as { findOne?: (fileId: number) => Promise<UploadFileRecord | null> | UploadFileRecord | null };
+    if (typeof upload?.findOne === 'function') {
+      const row = await upload.findOne(id);
+      if (row) return row;
+    }
+    return null;
+  }
 }
 
 export type ResourceService = ReturnType<typeof createResourceService>;

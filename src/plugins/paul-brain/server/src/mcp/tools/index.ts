@@ -38,6 +38,8 @@ import * as getResource from './get-resource';
 import * as listResources from './list-resources';
 import * as updateResource from './update-resource';
 import * as linkResource from './link-resource';
+import * as attachResourceFile from './attach-resource-file';
+import * as getResourceFile from './get-resource-file';
 
 export const tools = [
   getBrainGuide,
@@ -55,6 +57,8 @@ export const tools = [
   listResources,
   updateResource,
   linkResource,
+  attachResourceFile,
+  getResourceFile,
   link,
   logDecision,
   forget,

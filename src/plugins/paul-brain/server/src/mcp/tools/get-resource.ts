@@ -16,7 +16,7 @@ export const register = (strapi: Core.Strapi) => {
     name: 'get_resource',
     title: 'Get Resource',
     description:
-      'Fetch one resource by documentId or slug, including notes, projects, people, sources, file metadata, and supersededBy. See get_brain_guide.',
+      'Fetch one resource by documentId or slug, including notes, projects, people, sources, private file metadata, and supersededBy. File output never includes the public upload URL; use get_resource_file for contents. See get_brain_guide.',
 
     resolveInputSchema: () =>
       z.object({
@@ -36,6 +36,10 @@ export const register = (strapi: Core.Strapi) => {
             summary: z.string().nullish(),
             extractedText: z.string().nullish(),
             altText: z.string().nullish(),
+            caption: z.string().nullish(),
+            snapshotMarkdown: z.string().nullish(),
+            snapshotAt: z.string().nullish(),
+            contentHash: z.string().nullish(),
             externalUrl: z.string().nullish(),
             createdBy: z.string().nullish(),
             tags: z.array(z.string()),
@@ -48,10 +52,10 @@ export const register = (strapi: Core.Strapi) => {
             file: z
               .object({
                 id: z.number().nullish(),
-                url: z.string().nullish(),
                 name: z.string().nullish(),
                 mime: z.string().nullish(),
                 ext: z.string().nullish(),
+                size: z.number().nullish(),
                 alternativeText: z.string().nullish(),
               })
               .nullish(),

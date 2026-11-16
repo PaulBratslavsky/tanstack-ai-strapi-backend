@@ -21,6 +21,8 @@ export const register = (strapi: Core.Strapi) => {
         summary: z.string().max(280).optional().describe('New summary (280 characters max)'),
         extractedText: z.string().optional().describe('Replace extracted text'),
         altText: z.string().optional().describe('Replace alt text'),
+        snapshotMarkdown: z.string().optional().describe('Markdown snapshot of a Page or canvas'),
+        snapshotAt: z.string().optional().describe('Snapshot date (YYYY-MM-DD, Pacific). Defaults to today when snapshotMarkdown is set'),
         externalUrl: z.string().optional().describe('New Page or link URL'),
         status: z.enum(RESOURCE_STATUSES).optional().describe('draft, final, or archived'),
         tags: z.array(z.string()).optional().describe('Replace tags'),

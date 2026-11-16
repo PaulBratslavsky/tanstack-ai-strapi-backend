@@ -10,6 +10,10 @@ const require$$0$7 = require("buffer");
 const require$$0$6 = require("stream");
 const require$$2$1 = require("util");
 require("node:stream");
+const promises = require("dns/promises");
+const net = require("net");
+const zlib = require("zlib");
+const promises$1 = require("fs/promises");
 const _interopDefault = (e) => e && e.__esModule ? e : { default: e };
 const require$$1__default = /* @__PURE__ */ _interopDefault(require$$1);
 const require$$0__default = /* @__PURE__ */ _interopDefault(require$$0$1);
@@ -23,7 +27,7 @@ const require$$0__default$5 = /* @__PURE__ */ _interopDefault(require$$0$6);
 const require$$2__default$1 = /* @__PURE__ */ _interopDefault(require$$2$1);
 const PLUGIN_NAME$1 = "paul-brain";
 const CONTENT_TYPES = ["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin", "resource"];
-const getUid = (type) => `plugin::${PLUGIN_NAME$1}.${type}`;
+const getUid$1 = (type) => `plugin::${PLUGIN_NAME$1}.${type}`;
 const PERMISSIONS = [
   // Memory subcategory
   {
@@ -157,7 +161,7 @@ const PERMISSIONS = [
   }
 ];
 const getActionId = (uid) => `plugin::${PLUGIN_NAME$1}.${uid}`;
-const register$E = ({ strapi: strapi2 }) => {
+const register$G = ({ strapi: strapi2 }) => {
   const actionProvider = strapi2.service("admin::permission").actionProvider;
   const existingActions = PERMISSIONS.filter(
     (permission) => actionProvider.has(`plugin::paul-brain.${permission.uid}`)
@@ -5832,8 +5836,8 @@ const curry = (fn, arity = fn.length) => {
   };
   return curried;
 };
-const parallelWithOrderedErrors = async (promises) => {
-  const results = await Promise.allSettled(promises);
+const parallelWithOrderedErrors = async (promises2) => {
+  const results = await Promise.allSettled(promises2);
   for (let i = 0; i < results.length; i += 1) {
     const result = results[i];
     if (result.status === "rejected") {
@@ -19898,7 +19902,7 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 **Note on YouTube Transcripts**: Raw YouTube transcripts now live centrally in a separate Strapi Cloud app (yt-kb plugin at https://deserving-harmony-9f5ca04daf.strapiapp.com). Access them via the \`yt_kb__*\` MCP tools on the \`strapi-prod\` MCP server (e.g., \`yt_kb__get_transcript\`, \`yt_kb__search_transcript\`, \`yt_kb__add_video\`, etc.). Paul-brain stores only notes/sources/people that reference videos by YouTube videoId, enabling joins between notes and transcripts.
 
 **Core Principles for Team Brain**:
-- **Notes are drafts, resources are deliverables**: Save work-in-progress as notes, not polished outputs. When you finish a guide, brief, report, plan, or other document Paul may want again, save it with \`save_resource\` before you end the turn. Markdown goes in \`body\` (\`format: "md"\`). A Page gets \`format: "page"\`, the Page URL in \`externalUrl\`, and a markdown snapshot in \`body\`. A bare link is \`format: "link"\` plus \`externalUrl\`. Do not leave the only copy in \`/workspace\` or in a Page
+- **Notes are drafts, resources are deliverables**: Save work-in-progress as notes, not polished outputs. When you finish a guide, brief, report, plan, or other document Paul may want again, save it with \`save_resource\` before you end the turn. Markdown goes in \`body\` (\`format: "md"\`). A Page gets \`format: "page"\`, the Page URL in \`externalUrl\`, and a markdown snapshot in \`snapshotMarkdown\`. A bare link is \`format: "link"\` plus \`externalUrl\`. A file uses \`attach_resource_file\`. Do not leave the only copy in \`/workspace\` or in a Page
 - **Uniform results are suspect**: If all/none/zero results come back, verify by checking one raw record
 - **Write negatives down**: Record what systems CANNOT do (capabilities table)
 - **Build new skills from gaps and retros**: When we fail or lack something repeatedly, that's the signal to improve
@@ -19970,16 +19974,19 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
    - Fields: goal (relation), date (required), met (boolean, required), note, loggedBy
    - One check-in per goal per date (updates existing instead of creating duplicate)
 
-13. **resource** — Finished deliverables (guides, briefs, reports, plans, Pages, links)
-   - Formats: \`md\`, \`page\`, \`link\`, \`pdf\`, \`image\`, \`other\`. This version is for \`md\`, \`page\`, and \`link\`. \`pdf\` / \`image\` / \`other\` exist on the type, but there is no upload flow and \`extractedText\` stays empty
-   - \`body\`: markdown. For a Page, also store the snapshot here so the text survives if the Page link does not
-   - \`externalUrl\`: required for \`page\` and \`link\` (http or https)
-   - \`summary\` (280 characters), \`altText\`, \`tags\` (JSON, same as notes)
-   - \`status\`: \`draft\`, \`final\` (default), \`archived\`. Stored as \`state\`, same as todos and goals, so it does not collide with Strapi's publication status. Tools accept and return \`status\`
-   - \`createdBy\`: bot or agent name. Stored as \`author\` because Strapi reserves \`createdBy\` for the admin user
-   - \`file\`: optional single media field. Nothing writes it yet
-   - Relations: notes, projects, people, sources. \`supersededBy\` points at the newer row, the same way notes and todos version themselves
-   - \`save_resource\` upserts by slug. A new version is \`update_resource\` with \`newVersion: true\`
+13. **resource** — Finished deliverables (guides, briefs, reports, plans, Pages, links, and files)
+   - Formats: \`md\`, \`page\`, \`link\`, \`pdf\`, \`image\`, \`other\`
+   - \`body\`: markdown for an \`md\` deliverable
+   - \`externalUrl\`: required for \`page\` and \`link\` (http or https). Saving the same URL again returns the existing resource with \`deduped: true\`
+   - \`snapshotMarkdown\` plus \`snapshotAt\` (YYYY-MM-DD, America/Los_Angeles): markdown snapshot of a Page or canvas. \`recall\` searches it. \`snapshotAt\` defaults to today when the snapshot is set
+   - \`summary\` (280 characters), \`altText\`, \`caption\`, \`tags\` (JSON, same as notes)
+   - \`status\`: \`draft\`, \`final\` (default), \`archived\`. Stored as \`state\`. Tools accept and return \`status\`
+   - \`createdBy\`: bot or agent name. Stored as \`author\`
+   - \`file\`: one private media file (documents, images, video, audio, max 25 MB). \`attach_resource_file\` writes it. Tool output never includes the public upload URL. Read bytes with \`get_resource_file\`
+   - \`extractedText\`: filled from text, markdown, PDF, and DOCX when the file is attached. \`recall\` searches it
+   - \`contentHash\`: SHA-256 of the attached file. The same hash on \`save_resource\` or \`attach_resource_file\` returns the existing resource (\`deduped: true\`)
+   - Relations: notes, projects, people, sources. \`supersededBy\` points at the newer row
+   - \`save_resource\` upserts by slug unless the URL or content hash already belongs to a different row. A new version is \`update_resource\` with \`newVersion: true\`
 
 ## When to Use Which Tool
 
@@ -20020,9 +20027,9 @@ Create a new note with duplicate detection.
 - Use \`createMissing: true\` to auto-create linked entities by name
 
 ### recall
-Search across brain types with ranked results, including resources (title, summary, body, extractedText, and altText) as well as note body and tags.
+Search across brain types with ranked results, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown) as well as note body and tags.
 - Use specific queries: "strapi mcp tools" not just "strapi"
-- Filter by type: \`["note", "person"]\`. Resources are included by default. Use \`types: ["resource"]\` to search only deliverables. Resource matches look at title, summary, body, extractedText, and altText
+- Filter by type: \`["note", "person"]\`. Resources are included by default. Use \`types: ["resource"]\` to search only deliverables. Resource matches look at title, summary, body, extractedText, altText, caption, and snapshotMarkdown
 - Filter by kind: \`"video"\`, \`"lesson"\`, \`"fact"\`, etc.
 - Filter by tag: \`"strapi"\` (notes and resources)
 - Filter by videoId: find notes for a specific YouTube video
@@ -20073,16 +20080,33 @@ Update an existing source by documentId or slug.
 ### save_resource
 Create a finished deliverable, or update the row that already has that slug.
 - \`format: "md"\` with the full markdown in \`body\` for a guide, brief, report, or plan
-- \`format: "page"\` with \`externalUrl\` set to the Page and a markdown snapshot in \`body\`
+- \`format: "page"\` with \`externalUrl\` set to the Page and the markdown snapshot in \`snapshotMarkdown\` (\`snapshotAt\` is YYYY-MM-DD Pacific, default today)
 - \`format: "link"\` with \`externalUrl\` when the deliverable is only a URL
 - \`status\` defaults to \`final\`. Use \`draft\` only while it is still being written
 - Always set \`createdBy\` to your bot name, plus \`summary\` and \`tags\`
 - Pass \`notes\`, \`projects\`, \`people\`, \`sources\` as documentIds or slugs to attach them
+- The same \`externalUrl\` or \`contentHash\` returns the existing resource with \`deduped: true\` and does not create or modify a row
 - Call \`recall\` with \`types: ["resource"]\` first. Saving the same slug updates that row
 - Do not paste the only copy into \`/workspace\` or leave it only on a Page
 
+### attach_resource_file
+Attach one file to a resource that already exists.
+- Pass \`fileBase64\` or \`fileUrl\`, plus \`filename\` and \`mime\`
+- Documents, images, video, and audio. Maximum 25 MB. SVG and executables are rejected
+- Text, markdown, PDF, and DOCX text is stored on \`extractedText\` when it can be read. Scanned PDFs and legacy .doc are left empty
+- Images are captioned when \`ANTHROPIC_API_KEY\` is set. Video and audio captions are skipped. A missing key does not fail the upload
+- The same file hash returns the existing resource with \`deduped: true\`
+- The response never includes the public upload URL
+
+### get_resource_file
+Read a resource file. Requires \`plugin::paul-brain.resource.read\`.
+- Files up to 120 KB come back as base64
+- Larger files come back as \`accessUrl\`, a signed link that lasts about 10 minutes
+- That link is not the upload provider's public URL
+- Admins with \`resource.read\` can also \`GET /paul-brain/resources/:documentId/file\`
+
 ### get_resource
-Fetch one resource by documentId or slug, with notes, projects, people, sources, file metadata, and \`supersededBy\`.
+Fetch one resource by documentId or slug, with notes, projects, people, sources, file metadata (no public URL), caption, snapshot, and \`supersededBy\`.
 
 ### list_resources
 Browse resources newest first.
@@ -20093,7 +20117,8 @@ Browse resources newest first.
 
 ### update_resource
 Patch a resource. Use \`appendBody\` to add markdown without replacing \`body\`.
-- \`newVersion: true\` creates a new row (its own slug) and sets \`supersededBy\` on the previous row to that new row. Relations, tags, and the media id are copied onto the new row. The previous row's text is left as it was
+- \`newVersion: true\` creates a new row (its own slug) and sets \`supersededBy\` on the previous row to that new row. Relations, tags, the media id, content hash, caption, and snapshot are copied onto the new row. The previous row's text is left as it was
+- \`snapshotMarkdown\` and \`snapshotAt\` update the Page snapshot. \`snapshotAt\` is YYYY-MM-DD in America/Los_Angeles and defaults to today when a new snapshot is set
 
 ### link_resource
 Attach or detach notes, projects, people, or sources.
@@ -20311,10 +20336,11 @@ Update goal fields.
 
 ### Saving a finished document
 1. \`recall\` with \`types: ["resource"]\` and a few words from the title
-2. \`save_resource\` with \`format: "md"\` and the markdown in \`body\`, or \`format: "page"\` with \`externalUrl\` and a markdown snapshot
-3. Set \`status: "final"\`, \`createdBy\`, \`summary\`, and \`tags\`
+2. \`save_resource\` with \`format: "md"\` and the markdown in \`body\`, or \`format: "page"\` with \`externalUrl\` and \`snapshotMarkdown\`
+3. Set \`createdBy\`, \`summary\`, and \`tags\`. \`status\` defaults to \`final\`
 4. Pass the related project, note, person, and source ids
-5. A later revision uses \`update_resource\` with \`newVersion: true\`
+5. A file uses \`attach_resource_file\` after the resource exists
+6. A later revision uses \`update_resource\` with \`newVersion: true\`
 
 ### Tracking goals
 1. \`add_goal\` to create a new goal with category and target
@@ -20331,8 +20357,8 @@ Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.health.read\` — health_check
 - \`plugin::paul-brain.brief.read\` — get_briefing
 - \`plugin::paul-brain.note.write\` — remember, update_note, link
-- \`plugin::paul-brain.resource.read\` — get_resource, list_resources
-- \`plugin::paul-brain.resource.write\` — save_resource, update_resource, link_resource
+- \`plugin::paul-brain.resource.read\` — get_resource, list_resources, get_resource_file
+- \`plugin::paul-brain.resource.write\` — save_resource, update_resource, link_resource, attach_resource_file
 - \`plugin::paul-brain.entity.write\` — upsert_person, upsert_source, update_source
 - \`plugin::paul-brain.decision.write\` — log_decision
 - \`plugin::paul-brain.meta.write\` — log_retro, log_gap, record_capability
@@ -20346,8 +20372,8 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.9.0";
-const register$D = (strapi2) => {
+const PLUGIN_VERSION = "1.10.0";
+const register$F = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
     title: "Get Brain Usage Guide",
@@ -20381,7 +20407,7 @@ Plugin version: ${PLUGIN_VERSION}`
 };
 const getBrainGuide = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$D
+  register: register$F
 }, Symbol.toStringTag, { value: "Module" }));
 function stripNullish(obj) {
   if (obj === null || obj === void 0) {
@@ -20458,11 +20484,11 @@ function sinceToUpdatedAt(since) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return pacificMidnightIso(trimmed);
   return trimmed;
 }
-const register$C = (strapi2) => {
+const register$E = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "recall",
     title: "Recall from Brain",
-    description: "Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Resources are included and match title, summary, body, extractedText, and altText. Tag and alias matches are scored in memory. See get_brain_guide for usage.",
+    description: "Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Resources are included and match title, summary, body, extractedText, altText, caption, and snapshotMarkdown. Tag and alias matches are scored in memory. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       query: string().describe("Search query (keywords)"),
       types: array(_enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin", "resource"])).optional().describe("Limit search to these types (default: notes, people, projects, decisions, sources, and resources)"),
@@ -20521,9 +20547,466 @@ const register$C = (strapi2) => {
 };
 const recall = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$C
+  register: register$E
 }, Symbol.toStringTag, { value: "Module" }));
-const register$B = (strapi2) => {
+const EXTRACTED_TEXT_MAX = 5e5;
+const TEXT_MIMES = /* @__PURE__ */ new Set([
+  "text/plain",
+  "text/markdown",
+  "text/x-markdown",
+  "text/csv",
+  "text/html"
+]);
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+function cap(text) {
+  const trimmed = text.replace(/\u0000/g, "").trim();
+  if (trimmed.length <= EXTRACTED_TEXT_MAX) return trimmed;
+  return trimmed.slice(0, EXTRACTED_TEXT_MAX);
+}
+function decodeXml(value) {
+  return value.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+}
+function unescapePdfString(input) {
+  let out = "";
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (char !== "\\") {
+      out += char;
+      continue;
+    }
+    const next = input[i += 1];
+    if (next === void 0) break;
+    if (next === "n") out += "\n";
+    else if (next === "r") out += "\r";
+    else if (next === "t") out += "	";
+    else if (next === "(" || next === ")" || next === "\\") out += next;
+    else if (next >= "0" && next <= "7") {
+      let octal = next;
+      for (let extra = 0; extra < 2; extra += 1) {
+        const digit = input[i + 1];
+        if (digit === void 0 || digit < "0" || digit > "7") break;
+        octal += digit;
+        i += 1;
+      }
+      out += String.fromCharCode(parseInt(octal, 8));
+    } else {
+      out += next;
+    }
+  }
+  return out;
+}
+function mostlyPrintable(text) {
+  if (!text) return false;
+  let ok = 0;
+  for (const char of text) {
+    const code = char.charCodeAt(0);
+    if (char === "\n" || char === "	" || char === "\r" || code >= 32 && code !== 127) ok += 1;
+  }
+  return ok / text.length > 0.85;
+}
+function stringsFromPdfContent(content) {
+  const parts = [];
+  const literal2 = /\(((?:\\.|[^\\)])*)\)\s*Tj/g;
+  let match;
+  while (match = literal2.exec(content)) {
+    const text = unescapePdfString(match[1]);
+    if (text.trim() && mostlyPrintable(text)) parts.push(text);
+  }
+  const arrays = /\[([\s\S]*?)\]\s*TJ/g;
+  while (match = arrays.exec(content)) {
+    const inner = match[1];
+    const pieces = [...inner.matchAll(/\(((?:\\.|[^\\)])*)\)/g)].map((item) => unescapePdfString(item[1]));
+    const text = pieces.join("");
+    if (text.trim() && mostlyPrintable(text)) parts.push(text);
+  }
+  return parts.join("\n");
+}
+function inflatePdfStream(raw) {
+  try {
+    return zlib.inflateSync(raw);
+  } catch {
+    return zlib.inflateRawSync(raw);
+  }
+}
+function pdfStreams(buffer) {
+  const latin = buffer.toString("latin1");
+  const marker = /stream\r?\n/g;
+  const outputs = [];
+  let match;
+  while (match = marker.exec(latin)) {
+    const start = match.index + match[0].length;
+    const endRel = latin.indexOf("endstream", start);
+    if (endRel < 0) break;
+    let end = endRel;
+    if (latin[end - 1] === "\n") end -= 1;
+    if (latin[end - 1] === "\r") end -= 1;
+    const raw = buffer.subarray(start, end);
+    const dict = latin.slice(Math.max(0, match.index - 500), match.index);
+    const flate = /FlateDecode/.test(dict);
+    try {
+      const decoded = flate ? inflatePdfStream(raw) : raw;
+      outputs.push(decoded.toString("latin1"));
+    } catch {
+      outputs.push(raw.toString("latin1"));
+    }
+  }
+  return outputs;
+}
+function extractPdfText(buffer) {
+  const chunks = pdfStreams(buffer);
+  if (chunks.length === 0) chunks.push(buffer.toString("latin1"));
+  return cap(chunks.map(stringsFromPdfContent).filter(Boolean).join("\n"));
+}
+function unzipStored(buffer) {
+  const entries = /* @__PURE__ */ new Map();
+  let offset = 0;
+  while (offset + 30 <= buffer.length && buffer.readUInt32LE(offset) === 67324752) {
+    const method = buffer.readUInt16LE(offset + 8);
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const nameLength = buffer.readUInt16LE(offset + 26);
+    const extraLength = buffer.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const name = buffer.subarray(nameStart, nameStart + nameLength).toString("utf8");
+    const dataStart = nameStart + nameLength + extraLength;
+    const dataEnd = dataStart + compressedSize;
+    if (dataEnd > buffer.length) break;
+    const compressed = buffer.subarray(dataStart, dataEnd);
+    let content = Buffer.alloc(0);
+    try {
+      if (method === 0) content = Buffer.from(compressed);
+      else if (method === 8) content = zlib.inflateRawSync(compressed);
+    } catch {
+      content = Buffer.alloc(0);
+    }
+    entries.set(name, content);
+    offset = dataEnd;
+  }
+  return entries;
+}
+function extractDocxText(buffer) {
+  const xml = unzipStored(buffer).get("word/document.xml");
+  if (!xml) return "";
+  const source2 = xml.toString("utf8");
+  const paragraphs = source2.split(/<\/w:p>/);
+  const text = paragraphs.map((paragraph) => {
+    const pieces = [...paragraph.matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/g)].map(
+      (item) => decodeXml(item[1])
+    );
+    return pieces.join("");
+  }).filter((paragraph) => paragraph.trim().length > 0).join("\n");
+  return cap(text);
+}
+function extensionOf(filename) {
+  const match = /\.([A-Za-z0-9]+)$/.exec(filename.trim());
+  return match ? `.${match[1].toLowerCase()}` : "";
+}
+function extractResourceText(buffer, mime, filename) {
+  const normalized = mime.split(";")[0].trim().toLowerCase();
+  const extension = extensionOf(filename);
+  if (TEXT_MIMES.has(normalized) || extension === ".txt" || extension === ".md" || extension === ".markdown" || extension === ".csv") {
+    return cap(buffer.toString("utf8"));
+  }
+  if (normalized === "application/pdf" || extension === ".pdf") {
+    return extractPdfText(buffer);
+  }
+  if (normalized === DOCX_MIME || extension === ".docx") {
+    return extractDocxText(buffer);
+  }
+  return "";
+}
+const MAX_RESOURCE_FILE_BYTES = 25 * 1024 * 1024;
+const BASE64_INLINE_LIMIT = 12e4;
+const FILE_URL_TTL_MS = 10 * 60 * 1e3;
+const IMAGE_CAPTION_MIMES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+const EXT_MIME = {
+  ".txt": "text/plain",
+  ".md": "text/markdown",
+  ".markdown": "text/markdown",
+  ".csv": "text/csv",
+  ".pdf": "application/pdf",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/mp4"
+};
+const DOCUMENT_MIMES = /* @__PURE__ */ new Set([
+  "text/plain",
+  "text/markdown",
+  "text/x-markdown",
+  "text/csv",
+  "text/html",
+  "application/pdf",
+  "application/msword",
+  "application/rtf",
+  "text/rtf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation"
+]);
+const DENIED_MIMES = /* @__PURE__ */ new Set([
+  "image/svg+xml",
+  "application/vnd.microsoft.portable-executable",
+  "application/x-msdownload",
+  "application/x-msdos-program",
+  "application/x-executable",
+  "application/x-dosexec",
+  "application/x-sh",
+  "text/x-shellscript",
+  "application/x-mach-binary"
+]);
+function hashBuffer(buffer) {
+  return require$$1.createHash("sha256").update(buffer).digest("hex");
+}
+function safeFilename(name) {
+  const base = name.split(/[/\\]/).pop() || "file";
+  const cleaned = base.replace(/[^\w.\-]+/g, "_").replace(/^\.+/, "");
+  return (cleaned || "file").slice(0, 180);
+}
+function extensionMime(filename) {
+  const match = /(\.[A-Za-z0-9]+)$/.exec(filename.trim());
+  if (!match) return void 0;
+  return EXT_MIME[match[1].toLowerCase()];
+}
+function normalizeMime(mime, filename) {
+  const declared = (mime || "").split(";")[0].trim().toLowerCase();
+  if (!declared || declared === "application/octet-stream") {
+    return extensionMime(filename) || declared || "application/octet-stream";
+  }
+  return declared;
+}
+function isAllowedResourceMime(mime) {
+  if (!mime || DENIED_MIMES.has(mime)) return false;
+  if (mime.startsWith("image/")) return mime !== "image/svg+xml";
+  if (mime.startsWith("video/") || mime.startsWith("audio/")) return true;
+  return DOCUMENT_MIMES.has(mime);
+}
+function normalizeResourceUrl(input) {
+  const trimmed = input.trim();
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return trimmed.replace(/\/+$/, "");
+    url.hash = "";
+    const pathName = url.pathname.replace(/\/+$/, "");
+    return `${url.protocol.toLowerCase()}//${url.host.toLowerCase()}${pathName}${url.search}`;
+  } catch {
+    return trimmed.replace(/\/+$/, "");
+  }
+}
+function assertResourceBytes(buffer) {
+  if (buffer.length === 0) throw new Error("File is empty");
+  if (buffer.length > MAX_RESOURCE_FILE_BYTES) throw new Error("File exceeds 25 MB");
+}
+function decodeFileBase64(input) {
+  const cleaned = input.replace(/^data:[^;]+;base64,/i, "").replace(/\s+/g, "");
+  if (!cleaned) throw new Error("fileBase64 is empty");
+  const maxChars = Math.ceil(MAX_RESOURCE_FILE_BYTES * 4 / 3) + 8;
+  if (cleaned.length > maxChars) throw new Error("File exceeds 25 MB");
+  const buffer = Buffer.from(cleaned, "base64");
+  assertResourceBytes(buffer);
+  return buffer;
+}
+function isPrivateIp(ip) {
+  const mapped = ip.startsWith("::ffff:") ? ip.slice(7) : ip;
+  if (mapped === "::1") return true;
+  const lower = mapped.toLowerCase();
+  if (lower.startsWith("fe80:") || lower.startsWith("fc") || lower.startsWith("fd")) return true;
+  if (!net.isIP(mapped) || mapped.includes(":")) return mapped.includes(":");
+  const parts = mapped.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return true;
+  const [a, b] = parts;
+  if (a === 10 || a === 127 || a === 0) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  return false;
+}
+const BLOCKED_HOSTS = /* @__PURE__ */ new Set(["localhost", "metadata.google.internal"]);
+async function assertPublicHttpUrl(target, resolveHost) {
+  let url;
+  try {
+    url = new URL(target);
+  } catch {
+    throw new Error("fileUrl must be an http(s) URL");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Only http(s) file URLs are allowed");
+  }
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (BLOCKED_HOSTS.has(host) || host.endsWith(".localhost") || host.endsWith(".local")) {
+    throw new Error("Refusing to fetch a private or local URL");
+  }
+  const addresses = net.isIP(host) ? [host] : resolveHost ? await resolveHost(host) : (await promises.lookup(host, { all: true })).map((entry) => entry.address);
+  if (addresses.length === 0 || addresses.some((address) => isPrivateIp(address))) {
+    throw new Error("Refusing to fetch a private or local URL");
+  }
+}
+async function fetchRemoteFile(fileUrl, deps = {}) {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  let current = fileUrl;
+  for (let hop = 0; hop < 3; hop += 1) {
+    await assertPublicHttpUrl(current, deps.resolveHost);
+    const response = await fetchImpl(current, { redirect: "manual" });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("File URL redirect is missing a location");
+      current = new URL(location, current).toString();
+      continue;
+    }
+    if (!response.ok) throw new Error(`Could not fetch file (${response.status})`);
+    const advertised = Number(response.headers.get("content-length") || 0);
+    if (advertised > MAX_RESOURCE_FILE_BYTES) throw new Error("File exceeds 25 MB");
+    const buffer = Buffer.from(await response.arrayBuffer());
+    assertResourceBytes(buffer);
+    const mime = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+    return { buffer, mime };
+  }
+  throw new Error("Too many redirects fetching file URL");
+}
+function fileAccessSecret(strapi2) {
+  const keys2 = strapi2.config?.get?.("server.app.keys");
+  const list = Array.isArray(keys2) ? keys2 : typeof keys2 === "string" ? keys2.split(",") : [];
+  const first = list.map((key) => String(key).trim()).find(Boolean);
+  if (first) return first;
+  const admin = strapi2.config?.get?.("admin.auth.secret");
+  if (typeof admin === "string" && admin.trim()) return admin.trim();
+  const env2 = process.env.APP_KEYS || process.env.ADMIN_JWT_SECRET || "";
+  const fromEnv = env2.split(",").map((key) => key.trim()).find(Boolean);
+  if (fromEnv) return fromEnv;
+  throw new Error("Cannot sign a file URL without APP_KEYS");
+}
+function signFileToken(strapi2, documentId, now = Date.now()) {
+  const exp = now + FILE_URL_TTL_MS;
+  const payload = Buffer.from(JSON.stringify({ d: documentId, e: exp })).toString("base64url");
+  const sig = require$$1.createHmac("sha256", fileAccessSecret(strapi2)).update(payload).digest("base64url");
+  return { token: `${payload}~${sig}`, expiresAt: new Date(exp).toISOString() };
+}
+function verifyFileToken(strapi2, token, now = Date.now()) {
+  const splitAt = token.lastIndexOf("~");
+  if (splitAt <= 0) throw new Error("Invalid or expired file link");
+  const payload = token.slice(0, splitAt);
+  const sig = token.slice(splitAt + 1);
+  const expected = require$$1.createHmac("sha256", fileAccessSecret(strapi2)).update(payload).digest("base64url");
+  const actualBuf = Buffer.from(sig);
+  const expectedBuf = Buffer.from(expected);
+  if (actualBuf.length !== expectedBuf.length || !require$$1.timingSafeEqual(actualBuf, expectedBuf)) {
+    throw new Error("Invalid or expired file link");
+  }
+  let body;
+  try {
+    body = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    throw new Error("Invalid or expired file link");
+  }
+  if (typeof body.e !== "number" || body.e < now || typeof body.d !== "string" || !body.d) {
+    throw new Error("Invalid or expired file link");
+  }
+  return body.d;
+}
+function publicFileView(file) {
+  if (!file || typeof file !== "object") return void 0;
+  const row = file;
+  const view = {};
+  if (typeof row.id === "number") view.id = row.id;
+  if (row.name) view.name = row.name;
+  if (row.mime) view.mime = row.mime;
+  if (row.ext) view.ext = row.ext;
+  if (typeof row.size === "number") view.size = row.size;
+  if (row.alternativeText) view.alternativeText = row.alternativeText;
+  return Object.keys(view).length > 0 ? view : void 0;
+}
+function serverPublicBase(strapi2) {
+  const configured = strapi2.config?.get?.("server.url") || process.env.PUBLIC_URL || "";
+  return String(configured).replace(/\/$/, "");
+}
+function signedFilePath(token) {
+  return `/api/paul-brain/resource-file/${token}`;
+}
+function localUploadPath(strapi2, file) {
+  if (!file.url || file.provider && file.provider !== "local") return void 0;
+  const relative = String(file.url).replace(/^https?:\/\/[^/]+/i, "").replace(/^\//, "");
+  if (!relative || relative.includes("..")) return void 0;
+  const roots = [strapi2.dirs?.static?.public, require$$0__default$3.default.join(process.cwd(), "public")].filter(
+    (root2) => Boolean(root2)
+  );
+  for (const root2 of roots) {
+    const full = require$$0__default$3.default.join(root2, relative);
+    if (require$$0$3.existsSync(full)) return full;
+  }
+  return void 0;
+}
+async function loadFileBytes(strapi2, file, deps = {}) {
+  if (Buffer.isBuffer(file.buffer)) return file.buffer;
+  const local = localUploadPath(strapi2, file);
+  if (local) return require$$0$3.readFileSync(local);
+  if (!file.url) throw new Error("File content is not available");
+  const absolute = /^https?:\/\//i.test(file.url) ? file.url : `${serverPublicBase(strapi2)}${file.url.startsWith("/") ? "" : "/"}${file.url}`;
+  if (!absolute.startsWith("http")) throw new Error("File content is not available");
+  const fetched = await fetchRemoteFile(absolute, deps);
+  return fetched.buffer;
+}
+async function captionResource(options2) {
+  const mime = options2.mime.toLowerCase();
+  if (!IMAGE_CAPTION_MIMES.has(mime)) return void 0;
+  if (options2.buffer.length > 5 * 1024 * 1024) return void 0;
+  const env2 = options2.env ?? process.env;
+  const apiKey = env2.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) return void 0;
+  const model = options2.model || env2.TANSTACK_AI_MODEL || "claude-sonnet-5";
+  const fetchImpl = options2.fetchImpl ?? fetch;
+  try {
+    const response = await fetchImpl("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 200,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: mime,
+                  data: options2.buffer.toString("base64")
+                }
+              },
+              {
+                type: "text",
+                text: "Write one short caption for this image, under 200 characters. No quotes or preamble."
+              }
+            ]
+          }
+        ]
+      })
+    });
+    if (!response.ok) return void 0;
+    const json2 = await response.json();
+    const text = json2.content?.find((block) => block.type === "text")?.text?.replace(/\s+/g, " ").trim();
+    if (!text) return void 0;
+    return text.slice(0, 500);
+  } catch {
+    return void 0;
+  }
+}
+const register$D = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_entity",
     title: "Get Brain Entity",
@@ -20558,6 +21041,12 @@ const register$B = (strapi2) => {
         } catch (err) {
           strapi22.log.warn("Failed to sanitize entity:", err);
         }
+        if (args.type === "resource" && sanitized && typeof sanitized === "object") {
+          const current = sanitized.file;
+          if (current && typeof current === "object") {
+            sanitized = { ...sanitized, file: publicFileView(current) };
+          }
+        }
       }
       const output = {
         entity: sanitized
@@ -20576,9 +21065,9 @@ const register$B = (strapi2) => {
 };
 const getEntity = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$B
+  register: register$D
 }, Symbol.toStringTag, { value: "Module" }));
-const register$A = (strapi2) => {
+const register$C = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_recent",
     title: "List Recent Brain Items",
@@ -20608,7 +21097,7 @@ const register$A = (strapi2) => {
       const limit = args.limit || 25;
       const allItems = [];
       for (const type of types) {
-        const uid = getUid(type);
+        const uid = getUid$1(type);
         const filters2 = {};
         if (args.kind && type === "note") {
           filters2.kind = { $eq: args.kind };
@@ -20662,9 +21151,9 @@ const register$A = (strapi2) => {
 };
 const listRecent = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$A
+  register: register$C
 }, Symbol.toStringTag, { value: "Module" }));
-const register$z = (strapi2) => {
+const register$B = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "remember",
     title: "Remember in Brain",
@@ -20710,7 +21199,7 @@ const register$z = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid("note");
+      const uid = getUid$1("note");
       const slug = brainService.slugify(args.title);
       if (!args.onDuplicate) {
         const candidates = await brainService.findDuplicateNotes(args.title);
@@ -20813,7 +21302,7 @@ const register$z = (strapi2) => {
   });
 };
 async function applyLinks(strapi2, noteDocId, args, brainService) {
-  const uid = getUid("note");
+  const uid = getUid$1("note");
   if (args.link_people) {
     const peopleIds = await Promise.all(
       args.link_people.map(async (name) => {
@@ -20822,7 +21311,7 @@ async function applyLinks(strapi2, noteDocId, args, brainService) {
         if (existingPerson.exists) {
           return existingPerson.documentId;
         }
-        const newPerson = await strapi2.documents(getUid("person")).create({
+        const newPerson = await strapi2.documents(getUid$1("person")).create({
           data: { name, slug: personSlug }
         });
         return newPerson.documentId;
@@ -20841,7 +21330,7 @@ async function applyLinks(strapi2, noteDocId, args, brainService) {
         if (existingProject.exists) {
           return existingProject.documentId;
         }
-        const newProject = await strapi2.documents(getUid("project")).create({
+        const newProject = await strapi2.documents(getUid$1("project")).create({
           data: { name, slug: projectSlug }
         });
         return newProject.documentId;
@@ -20860,7 +21349,7 @@ async function applyLinks(strapi2, noteDocId, args, brainService) {
         if (existingSource.exists) {
           return existingSource.documentId;
         }
-        const newSource = await strapi2.documents(getUid("source")).create({
+        const newSource = await strapi2.documents(getUid$1("source")).create({
           data: { title, slug: sourceSlug }
         });
         return newSource.documentId;
@@ -20895,7 +21384,7 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
           if (existingPerson.exists) {
             return existingPerson.documentId;
           }
-          const newPerson = await strapi2.documents(getUid("person")).create({
+          const newPerson = await strapi2.documents(getUid$1("person")).create({
             data: { name, slug: personSlug }
           });
           return newPerson.documentId;
@@ -20911,7 +21400,7 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
           if (existingProject.exists) {
             return existingProject.documentId;
           }
-          const newProject = await strapi2.documents(getUid("project")).create({
+          const newProject = await strapi2.documents(getUid$1("project")).create({
             data: { name, slug: projectSlug }
           });
           return newProject.documentId;
@@ -20927,7 +21416,7 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
           if (existingSource.exists) {
             return existingSource.documentId;
           }
-          const newSource = await strapi2.documents(getUid("source")).create({
+          const newSource = await strapi2.documents(getUid$1("source")).create({
             data: { title, slug: sourceSlug }
           });
           return newSource.documentId;
@@ -20940,9 +21429,9 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
 }
 const remember = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$z
+  register: register$B
 }, Symbol.toStringTag, { value: "Module" }));
-const register$y = (strapi2) => {
+const register$A = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_note",
     title: "Update Brain Note",
@@ -20969,7 +21458,7 @@ const register$y = (strapi2) => {
       policies: [{ action: getActionId("note.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("note");
+      const uid = getUid$1("note");
       const notes = await strapi22.documents(uid).findMany({
         filters: {
           $or: [
@@ -21033,9 +21522,9 @@ ${args.appendBody}` : args.appendBody;
 };
 const updateNote = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$y
+  register: register$A
 }, Symbol.toStringTag, { value: "Module" }));
-const register$x = (strapi2) => {
+const register$z = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "link",
     title: "Link Brain Entities",
@@ -21137,9 +21626,9 @@ const register$x = (strapi2) => {
 };
 const link = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$x
+  register: register$z
 }, Symbol.toStringTag, { value: "Module" }));
-const register$w = (strapi2) => {
+const register$y = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_decision",
     title: "Log Brain Decision",
@@ -21165,7 +21654,7 @@ const register$w = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid("decision");
+      const uid = getUid$1("decision");
       const slug = brainService.slugify(args.title);
       const data = {
         title: args.title,
@@ -21225,9 +21714,9 @@ const register$w = (strapi2) => {
 };
 const logDecision = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$w
+  register: register$y
 }, Symbol.toStringTag, { value: "Module" }));
-const register$v = (strapi2) => {
+const register$x = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "forget",
     title: "Forget from Brain",
@@ -21248,7 +21737,7 @@ const register$v = (strapi2) => {
       if (!args.confirm) {
         throw new Error("Deletion requires confirm: true");
       }
-      const uid = getUid(args.type);
+      const uid = getUid$1(args.type);
       const entities = await strapi22.documents(uid).findMany({
         filters: {
           $or: [
@@ -21281,9 +21770,9 @@ const register$v = (strapi2) => {
 };
 const forget = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$v
+  register: register$x
 }, Symbol.toStringTag, { value: "Module" }));
-const register$u = (strapi2) => {
+const register$w = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_retro",
     title: "Log Brain Retro",
@@ -21308,7 +21797,7 @@ const register$u = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid("retro");
+      const uid = getUid$1("retro");
       const slug = brainService.slugify(args.title);
       const data = {
         title: args.title,
@@ -21347,9 +21836,9 @@ const register$u = (strapi2) => {
 };
 const logRetro = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$u
+  register: register$w
 }, Symbol.toStringTag, { value: "Module" }));
-const register$t = (strapi2) => {
+const register$v = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_retros",
     title: "List Brain Retros",
@@ -21374,7 +21863,7 @@ const register$t = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("retro");
+      const uid = getUid$1("retro");
       const limit = args.limit || 25;
       const filters2 = {};
       if (args.status) {
@@ -21412,9 +21901,9 @@ const register$t = (strapi2) => {
 };
 const listRetros = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$t
+  register: register$v
 }, Symbol.toStringTag, { value: "Module" }));
-const register$s = (strapi2) => {
+const register$u = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_gap",
     title: "Log Brain Gap",
@@ -21440,7 +21929,7 @@ const register$s = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid("gap");
+      const uid = getUid$1("gap");
       const slug = brainService.slugify(args.title);
       const today = getTodayPST();
       const existing = await strapi22.documents(uid).findMany({
@@ -21512,9 +22001,9 @@ const register$s = (strapi2) => {
 };
 const logGap = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$s
+  register: register$u
 }, Symbol.toStringTag, { value: "Module" }));
-const register$r = (strapi2) => {
+const register$t = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_gaps",
     title: "List Brain Gaps",
@@ -21540,7 +22029,7 @@ const register$r = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("gap");
+      const uid = getUid$1("gap");
       const limit = args.limit || 25;
       const filters2 = {};
       if (args.status) {
@@ -21579,9 +22068,9 @@ const register$r = (strapi2) => {
 };
 const listGaps = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$r
+  register: register$t
 }, Symbol.toStringTag, { value: "Module" }));
-const register$q = (strapi2) => {
+const register$s = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "record_capability",
     title: "Record Brain Capability",
@@ -21603,7 +22092,7 @@ const register$q = (strapi2) => {
       policies: [{ action: getActionId("meta.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("capability");
+      const uid = getUid$1("capability");
       const existing = await strapi22.documents(uid).findMany({
         filters: {
           system: { $eq: args.system },
@@ -21653,9 +22142,9 @@ const register$q = (strapi2) => {
 };
 const recordCapability = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$q
+  register: register$s
 }, Symbol.toStringTag, { value: "Module" }));
-const register$p = (strapi2) => {
+const register$r = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_capabilities",
     title: "List Brain Capabilities",
@@ -21680,7 +22169,7 @@ const register$p = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("capability");
+      const uid = getUid$1("capability");
       const limit = args.limit || 25;
       const filters2 = {};
       if (args.system) {
@@ -21717,9 +22206,9 @@ const register$p = (strapi2) => {
 };
 const listCapabilities = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$p
+  register: register$r
 }, Symbol.toStringTag, { value: "Module" }));
-const register$o = (strapi2) => {
+const register$q = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_rule",
     title: "Add Brain Rule",
@@ -21739,7 +22228,7 @@ const register$o = (strapi2) => {
       policies: [{ action: getActionId("rule.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("rule");
+      const uid = getUid$1("rule");
       const data = {
         name: args.name,
         match: args.match,
@@ -21766,9 +22255,9 @@ const register$o = (strapi2) => {
 };
 const addRule = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$o
+  register: register$q
 }, Symbol.toStringTag, { value: "Module" }));
-const register$n = (strapi2) => {
+const register$p = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_rules",
     title: "List Brain Rules",
@@ -21792,7 +22281,7 @@ const register$n = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("rule");
+      const uid = getUid$1("rule");
       const limit = args.limit || 50;
       const filters2 = {};
       if (args.enabled !== void 0) {
@@ -21837,9 +22326,9 @@ const register$n = (strapi2) => {
 };
 const listRules = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$n
+  register: register$p
 }, Symbol.toStringTag, { value: "Module" }));
-const register$m = (strapi2) => {
+const register$o = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_todo",
     title: "Add Todo",
@@ -21893,7 +22382,7 @@ const register$m = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid("todo");
+      const uid = getUid$1("todo");
       if (!args.onDuplicate) {
         const candidates = await brainService.findDuplicateTodos(args.title, args.dueDate, args.projectId);
         if (candidates.length > 0) {
@@ -22040,7 +22529,7 @@ async function createNewTodo(strapi2, uid, args) {
     };
   }
   if (args.projectId) {
-    const projectUid = getUid("project");
+    const projectUid = getUid$1("project");
     const projects = await strapi2.documents(projectUid).findMany({
       filters: {
         $or: [
@@ -22058,9 +22547,9 @@ async function createNewTodo(strapi2, uid, args) {
 }
 const addTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$m
+  register: register$o
 }, Symbol.toStringTag, { value: "Module" }));
-const register$l = (strapi2) => {
+const register$n = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_todo",
     title: "Update Todo",
@@ -22095,7 +22584,7 @@ const register$l = (strapi2) => {
       policies: [{ action: getActionId("todo.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("todo");
+      const uid = getUid$1("todo");
       const todos = await strapi22.documents(uid).findMany({
         filters: { documentId: { $eq: args.identifier } },
         limit: 1
@@ -22166,9 +22655,9 @@ ${args.appendContext}` : args.appendContext;
 };
 const updateTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$l
+  register: register$n
 }, Symbol.toStringTag, { value: "Module" }));
-const register$k = (strapi2) => {
+const register$m = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_todos",
     title: "List Todos",
@@ -22204,7 +22693,7 @@ const register$k = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("todo");
+      const uid = getUid$1("todo");
       const limit = args.limit || 50;
       const filters2 = {};
       if (args.status && args.status.length > 0) {
@@ -22214,7 +22703,7 @@ const register$k = (strapi2) => {
         filters2.priority = { $in: args.priority };
       }
       if (args.project) {
-        const projectUid = getUid("project");
+        const projectUid = getUid$1("project");
         const projects = await strapi22.documents(projectUid).findMany({
           filters: {
             $or: [
@@ -22299,9 +22788,9 @@ const register$k = (strapi2) => {
 };
 const listTodos = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$k
+  register: register$m
 }, Symbol.toStringTag, { value: "Module" }));
-const register$j = (strapi2) => {
+const register$l = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_todo",
     title: "Get Todo",
@@ -22343,7 +22832,7 @@ const register$j = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("todo");
+      const uid = getUid$1("todo");
       const todos = await strapi22.documents(uid).findMany({
         filters: { documentId: { $eq: args.identifier } },
         populate: ["relatedNotes", "project"],
@@ -22398,9 +22887,9 @@ const register$j = (strapi2) => {
 };
 const getTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$j
+  register: register$l
 }, Symbol.toStringTag, { value: "Module" }));
-const register$i = (strapi2) => {
+const register$k = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "complete_todo",
     title: "Complete Todo",
@@ -22419,7 +22908,7 @@ const register$i = (strapi2) => {
       policies: [{ action: getActionId("todo.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("todo");
+      const uid = getUid$1("todo");
       const todos = await strapi22.documents(uid).findMany({
         filters: { documentId: { $eq: args.identifier } },
         limit: 1
@@ -22467,9 +22956,9 @@ const register$i = (strapi2) => {
 };
 const completeTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$i
+  register: register$k
 }, Symbol.toStringTag, { value: "Module" }));
-const register$h = (strapi2) => {
+const register$j = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_goal",
     title: "Add Goal",
@@ -22496,7 +22985,7 @@ const register$h = (strapi2) => {
       policies: [{ action: getActionId("goal.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("goal");
+      const uid = getUid$1("goal");
       const existingGoals = await strapi22.documents(uid).findMany({
         filters: {
           title: { $eq: args.title },
@@ -22563,9 +23052,9 @@ const register$h = (strapi2) => {
 };
 const addGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$h
+  register: register$j
 }, Symbol.toStringTag, { value: "Module" }));
-const register$g = (strapi2) => {
+const register$i = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_goals",
     title: "List Goals",
@@ -22595,7 +23084,7 @@ const register$g = (strapi2) => {
       policies: [{ action: getActionId("goal.read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("goal");
+      const uid = getUid$1("goal");
       const limit = args.limit || 50;
       const filters2 = {};
       if (args.status && args.status.length > 0) {
@@ -22653,7 +23142,7 @@ const register$g = (strapi2) => {
 };
 const listGoals = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$g
+  register: register$i
 }, Symbol.toStringTag, { value: "Module" }));
 function calculateStreaks(checkins, cadence) {
   if (checkins.length === 0) {
@@ -22727,7 +23216,7 @@ function calculateStreaks(checkins, cadence) {
   }
   return { currentStreak, bestStreak };
 }
-const register$f = (strapi2) => {
+const register$h = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_checkin",
     title: "Log Goal Check-in",
@@ -22751,8 +23240,8 @@ const register$f = (strapi2) => {
       policies: [{ action: getActionId("goal.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const goalUid = getUid("goal");
-      const checkinUid = getUid("goal-checkin");
+      const goalUid = getUid$1("goal");
+      const checkinUid = getUid$1("goal-checkin");
       const goals = await strapi22.documents(goalUid).findMany({
         filters: {
           $or: [
@@ -22833,9 +23322,9 @@ const register$f = (strapi2) => {
 const logCheckin = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   calculateStreaks,
-  register: register$f
+  register: register$h
 }, Symbol.toStringTag, { value: "Module" }));
-const register$e = (strapi2) => {
+const register$g = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_goal_progress",
     title: "Get Goal Progress",
@@ -22863,8 +23352,8 @@ const register$e = (strapi2) => {
       policies: [{ action: getActionId("goal.read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const goalUid = getUid("goal");
-      const checkinUid = getUid("goal-checkin");
+      const goalUid = getUid$1("goal");
+      const checkinUid = getUid$1("goal-checkin");
       const goals = await strapi22.documents(goalUid).findMany({
         filters: {
           $or: [
@@ -22932,9 +23421,9 @@ const register$e = (strapi2) => {
 };
 const getGoalProgress = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$e
+  register: register$g
 }, Symbol.toStringTag, { value: "Module" }));
-const register$d = (strapi2) => {
+const register$f = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_goal",
     title: "Update Goal",
@@ -22960,7 +23449,7 @@ const register$d = (strapi2) => {
       policies: [{ action: getActionId("goal.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid("goal");
+      const uid = getUid$1("goal");
       const goals = await strapi22.documents(uid).findMany({
         filters: {
           $or: [
@@ -23008,7 +23497,7 @@ const register$d = (strapi2) => {
 };
 const updateGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$d
+  register: register$f
 }, Symbol.toStringTag, { value: "Module" }));
 function normalizeTitle(title) {
   return title.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
@@ -23023,7 +23512,7 @@ function isSimilar(title1, title2) {
   const similarity = 2 * commonWords.length / (words1.length + words2.length);
   return similarity > 0.7;
 }
-const register$c = (strapi2) => {
+const register$e = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "health_check",
     title: "Health Check",
@@ -23071,7 +23560,7 @@ const register$c = (strapi2) => {
         "sanity"
       ];
       if (checksToRun.includes("duplicates")) {
-        const todoUid = getUid("todo");
+        const todoUid = getUid$1("todo");
         const todos = await strapi22.documents(todoUid).findMany({
           filters: {
             state: { $notIn: ["done", "dropped", "superseded"] }
@@ -23098,7 +23587,7 @@ const register$c = (strapi2) => {
             }
           }
         }
-        const noteUid = getUid("note");
+        const noteUid = getUid$1("note");
         const notes = await strapi22.documents(noteUid).findMany({
           limit: 500
         });
@@ -23120,7 +23609,7 @@ const register$c = (strapi2) => {
         }
       }
       if (checksToRun.includes("missing_fields")) {
-        const todoUid = getUid("todo");
+        const todoUid = getUid$1("todo");
         const todos = await strapi22.documents(todoUid).findMany({
           limit: 500
         });
@@ -23168,7 +23657,7 @@ const register$c = (strapi2) => {
         }
       }
       if (checksToRun.includes("stale_notes")) {
-        const noteUid = getUid("note");
+        const noteUid = getUid$1("note");
         const notes = await strapi22.documents(noteUid).findMany({
           filters: {
             durability: { $eq: "temporary" }
@@ -23193,7 +23682,7 @@ const register$c = (strapi2) => {
         }
       }
       if (checksToRun.includes("orphans")) {
-        const noteUid = getUid("note");
+        const noteUid = getUid$1("note");
         const notes = await strapi22.documents(noteUid).findMany({
           populate: ["people", "projects", "sources", "decisions", "relatedTodos"],
           limit: 500
@@ -23217,7 +23706,7 @@ const register$c = (strapi2) => {
         }
       }
       if (checksToRun.includes("broken_relations")) {
-        const noteUid = getUid("note");
+        const noteUid = getUid$1("note");
         const notes = await strapi22.documents(noteUid).findMany({
           populate: ["people", "projects", "sources", "decisions", "relatedTodos"],
           limit: 500
@@ -23246,7 +23735,7 @@ const register$c = (strapi2) => {
         }
       }
       if (checksToRun.includes("old_capabilities")) {
-        const capabilityUid = getUid("capability");
+        const capabilityUid = getUid$1("capability");
         const capabilities = await strapi22.documents(capabilityUid).findMany({
           limit: 500
         });
@@ -23268,7 +23757,7 @@ const register$c = (strapi2) => {
         }
       }
       if (checksToRun.includes("open_retros")) {
-        const retroUid = getUid("retro");
+        const retroUid = getUid$1("retro");
         const retros = await strapi22.documents(retroUid).findMany({
           filters: {
             state: { $eq: "open" }
@@ -23295,7 +23784,7 @@ const register$c = (strapi2) => {
       if (checksToRun.includes("sanity")) {
         const types = ["note", "todo", "person", "project", "retro", "gap", "capability", "rule", "resource"];
         for (const type of types) {
-          const uid = getUid(type);
+          const uid = getUid$1(type);
           const results = await strapi22.documents(uid).findMany({ limit: 1 });
           if (results.length === 0) {
             const rawQuery = await strapi22.db.query(uid).count();
@@ -23335,9 +23824,9 @@ const register$c = (strapi2) => {
 };
 const healthCheck = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$c
+  register: register$e
 }, Symbol.toStringTag, { value: "Module" }));
-const register$b = (strapi2) => {
+const register$d = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_retro",
     title: "Update Retro",
@@ -23362,7 +23851,7 @@ const register$b = (strapi2) => {
       policies: [{ action: getActionId("retro.update") }]
     },
     createHandler: (strapi22) => async ({ args }) => {
-      const uid = getUid("retro");
+      const uid = getUid$1("retro");
       const updates = {};
       if (args.title !== void 0) updates.title = args.title;
       if (args.task !== void 0) updates.task = args.task;
@@ -23396,9 +23885,9 @@ const register$b = (strapi2) => {
 };
 const updateRetro = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$b
+  register: register$d
 }, Symbol.toStringTag, { value: "Module" }));
-const register$a = (strapi2) => {
+const register$c = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_gap",
     title: "Update Gap",
@@ -23422,7 +23911,7 @@ const register$a = (strapi2) => {
       policies: [{ action: getActionId("gap.update") }]
     },
     createHandler: (strapi22) => async ({ args }) => {
-      const uid = getUid("gap");
+      const uid = getUid$1("gap");
       const updates = {};
       if (args.title !== void 0) updates.title = args.title;
       if (args.request !== void 0) updates.request = args.request;
@@ -23455,9 +23944,9 @@ const register$a = (strapi2) => {
 };
 const updateGap = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$a
+  register: register$c
 }, Symbol.toStringTag, { value: "Module" }));
-const register$9 = (strapi2) => {
+const register$b = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_briefing",
     title: "Get Briefing",
@@ -23524,12 +24013,12 @@ const register$9 = (strapi2) => {
     createHandler: (strapi22) => async ({ args }) => {
       const lessonLimit = args.lessonLimit || 10;
       const todoLimit = args.todoLimit || 10;
-      const noteUid = getUid("note");
-      const retroUid = getUid("retro");
-      const gapUid = getUid("gap");
-      const todoUid = getUid("todo");
-      const capabilityUid = getUid("capability");
-      const ruleUid = getUid("rule");
+      const noteUid = getUid$1("note");
+      const retroUid = getUid$1("retro");
+      const gapUid = getUid$1("gap");
+      const todoUid = getUid$1("todo");
+      const capabilityUid = getUid$1("capability");
+      const ruleUid = getUid$1("rule");
       const pinnedLessons = await strapi22.documents(noteUid).findMany({
         filters: {
           kind: { $eq: "lesson" },
@@ -23665,9 +24154,9 @@ const register$9 = (strapi2) => {
 };
 const getBriefing = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$9
+  register: register$b
 }, Symbol.toStringTag, { value: "Module" }));
-const register$8 = (strapi2) => {
+const register$a = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "kb_stats",
     title: "Knowledge Base Statistics",
@@ -23747,7 +24236,7 @@ const register$8 = (strapi2) => {
       ];
       for (const type of contentTypes2) {
         try {
-          const uid = getUid(type);
+          const uid = getUid$1(type);
           const items = await strapi22.documents(uid).findMany({
             limit: -1
           });
@@ -23762,7 +24251,7 @@ const register$8 = (strapi2) => {
       let notesWithVideoId = 0;
       let notesWithoutLinks = 0;
       try {
-        const notes = await strapi22.documents(getUid("note")).findMany({
+        const notes = await strapi22.documents(getUid$1("note")).findMany({
           limit: -1,
           populate: ["people", "projects", "sources", "decisions"]
         });
@@ -23790,7 +24279,7 @@ const register$8 = (strapi2) => {
       let videoSourcesWithNotes = 0;
       let totalVideoSources = 0;
       try {
-        const sources = await strapi22.documents(getUid("source")).findMany({
+        const sources = await strapi22.documents(getUid$1("source")).findMany({
           limit: -1,
           populate: ["notes"]
         });
@@ -23810,7 +24299,7 @@ const register$8 = (strapi2) => {
       }
       let peopleWithoutNotes = 0;
       try {
-        const people = await strapi22.documents(getUid("person")).findMany({
+        const people = await strapi22.documents(getUid$1("person")).findMany({
           limit: -1,
           populate: ["notes"]
         });
@@ -23822,7 +24311,7 @@ const register$8 = (strapi2) => {
       }
       let projectsWithoutNotes = 0;
       try {
-        const projects = await strapi22.documents(getUid("project")).findMany({
+        const projects = await strapi22.documents(getUid$1("project")).findMany({
           limit: -1,
           populate: ["notes"]
         });
@@ -23834,7 +24323,7 @@ const register$8 = (strapi2) => {
       }
       let sourcesWithoutNotes = 0;
       try {
-        const sources = await strapi22.documents(getUid("source")).findMany({
+        const sources = await strapi22.documents(getUid$1("source")).findMany({
           limit: -1,
           populate: ["notes"]
         });
@@ -23877,7 +24366,7 @@ const register$8 = (strapi2) => {
             page++;
           }
           transcriptsTotal = allTranscripts.length;
-          const notes = await strapi22.documents(getUid("note")).findMany({
+          const notes = await strapi22.documents(getUid$1("note")).findMany({
             limit: -1,
             filters: {
               videoId: { $notNull: true }
@@ -23933,9 +24422,9 @@ const register$8 = (strapi2) => {
 };
 const kbStats = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$8
+  register: register$a
 }, Symbol.toStringTag, { value: "Module" }));
-const register$7 = (strapi2) => {
+const register$9 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "upsert_source",
     title: "Upsert Source",
@@ -23960,7 +24449,7 @@ const register$7 = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid("source");
+      const uid = getUid$1("source");
       const slug = brainService.slugify(args.title);
       let existing = await brainService.findBySlugOrAlias("source", slug);
       if (!existing.exists && args.videoId) {
@@ -24035,9 +24524,9 @@ const register$7 = (strapi2) => {
 };
 const upsertSource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$7
+  register: register$9
 }, Symbol.toStringTag, { value: "Module" }));
-const register$6 = (strapi2) => {
+const register$8 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_source",
     title: "Update Source",
@@ -24062,7 +24551,7 @@ const register$6 = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid("source");
+      const uid = getUid$1("source");
       const sourceDocId = await brainService.resolveEntityBySlug("source", args.source);
       if (!sourceDocId) {
         throw new Error(`Source not found: ${args.source}`);
@@ -24101,9 +24590,9 @@ const register$6 = (strapi2) => {
 };
 const updateSource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$6
+  register: register$8
 }, Symbol.toStringTag, { value: "Module" }));
-const register$5 = (strapi2) => {
+const register$7 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "upsert_person",
     title: "Upsert Person",
@@ -24128,7 +24617,7 @@ const register$5 = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid("person");
+      const uid = getUid$1("person");
       const slug = brainService.slugify(args.name);
       const existing = await brainService.findBySlugOrAlias("person", slug);
       let result;
@@ -24185,12 +24674,21 @@ const register$5 = (strapi2) => {
 };
 const upsertPerson = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$5
+  register: register$7
 }, Symbol.toStringTag, { value: "Module" }));
 const RESOURCE_STATUSES = ["draft", "final", "archived"];
 const RESOURCE_FORMATS = ["md", "page", "link", "pdf", "image", "other"];
 const AUTHOR_ATTRIBUTE = "author";
-const RESOURCE_UID = getUid("resource");
+const RESOURCE_TEXT_FIELDS = [
+  "title",
+  "summary",
+  "body",
+  "extractedText",
+  "altText",
+  "caption",
+  "snapshotMarkdown"
+];
+const RESOURCE_UID = getUid$1("resource");
 const POPULATE = ["notes", "projects", "people", "sources", "file", "supersededBy"];
 const RELATION_TYPES = {
   notes: "note",
@@ -24230,6 +24728,32 @@ function assertExternalUrl(format, externalUrl) {
   if (!externalUrl || !/^https?:\/\//i.test(externalUrl)) {
     throw new Error(`${format} resources require an http(s) externalUrl`);
   }
+}
+function assertSnapshotAt(snapshotAt) {
+  if (snapshotAt === void 0) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotAt)) {
+    throw new Error("snapshotAt must be YYYY-MM-DD");
+  }
+}
+function applySnapshot(data, args) {
+  assertSnapshotAt(args.snapshotAt);
+  if (args.snapshotMarkdown !== void 0) {
+    data.snapshotMarkdown = args.snapshotMarkdown;
+    data.snapshotAt = args.snapshotAt ?? getTodayPST();
+  } else if (args.snapshotAt !== void 0) {
+    data.snapshotAt = args.snapshotAt;
+  }
+}
+function copySnapshot(data, args, existing) {
+  assertSnapshotAt(args.snapshotAt);
+  if (args.snapshotMarkdown !== void 0) {
+    data.snapshotMarkdown = args.snapshotMarkdown;
+    data.snapshotAt = args.snapshotAt ?? getTodayPST();
+    return;
+  }
+  if (existing.snapshotMarkdown != null) data.snapshotMarkdown = existing.snapshotMarkdown;
+  if (args.snapshotAt !== void 0) data.snapshotAt = args.snapshotAt;
+  else if (existing.snapshotAt != null) data.snapshotAt = existing.snapshotAt;
 }
 function relationIds(value) {
   if (!Array.isArray(value)) return [];
@@ -24303,16 +24827,7 @@ function relationSummaries(value) {
   }).filter(Boolean);
 }
 function fileSummary(file) {
-  if (!file || typeof file !== "object") return void 0;
-  const row = file;
-  return stripNullish({
-    id: row.id,
-    url: row.url,
-    name: row.name,
-    mime: row.mime,
-    ext: row.ext,
-    alternativeText: row.alternativeText
-  });
+  return publicFileView(file);
 }
 function supersededSummary(value) {
   if (!value || typeof value !== "object" || !value.documentId) return void 0;
@@ -24348,6 +24863,10 @@ function toDetail(row) {
     summary: row.summary,
     extractedText: row.extractedText,
     altText: row.altText,
+    caption: row.caption,
+    snapshotMarkdown: row.snapshotMarkdown,
+    snapshotAt: row.snapshotAt,
+    contentHash: row.contentHash,
     externalUrl: row.externalUrl,
     createdBy: row[AUTHOR_ATTRIBUTE],
     tags: Array.isArray(row.tags) ? row.tags : [],
@@ -24394,6 +24913,36 @@ function createResourceService(strapi2) {
     });
     return rows[0] ?? null;
   }
+  async function findByContentHash(contentHash) {
+    const rows = await findMany(RESOURCE_UID, {
+      filters: { contentHash: { $eq: contentHash } },
+      sort: ["updatedAt:desc"],
+      limit: 1
+    });
+    return rows[0] ?? null;
+  }
+  async function findByExternalUrl(url) {
+    const normalized = normalizeResourceUrl(url);
+    const keys2 = [...new Set([url.trim(), normalized].filter(Boolean))];
+    if (keys2.length === 0) return null;
+    const rows = await findMany(RESOURCE_UID, {
+      filters: { $or: keys2.map((value) => ({ externalUrl: { $eq: value } })) },
+      sort: ["updatedAt:desc"],
+      limit: 1
+    });
+    return rows[0] ?? null;
+  }
+  function dedupedResult(row, reason) {
+    return {
+      created: false,
+      deduped: true,
+      documentId: row.documentId,
+      slug: row.slug,
+      status: row.state || "final",
+      format: row.format,
+      message: reason === "url" ? "Returned existing resource with the same url" : "Returned existing resource with the same file content hash"
+    };
+  }
   async function allocateSlug(title) {
     const root2 = slugify(title);
     if (!root2) {
@@ -24409,7 +24958,7 @@ function createResourceService(strapi2) {
   async function resolveIds(type, identifiers) {
     const ids = [];
     for (const identifier of identifiers) {
-      const found = await findByIdentifier(getUid(type), identifier);
+      const found = await findByIdentifier(getUid$1(type), identifier);
       if (!found) throw new Error(`${type} not found: ${identifier}`);
       ids.push(found.documentId);
     }
@@ -24429,17 +24978,31 @@ function createResourceService(strapi2) {
       if (ids && ids.length > 0) data[relation] = connect(ids);
     }
   }
+  function storedUrl(url) {
+    if (url === void 0) return void 0;
+    const normalized = normalizeResourceUrl(url);
+    return normalized || void 0;
+  }
   return {
     async save(args) {
       if (!args.title?.trim()) throw new Error("title is required");
       assertFormat(args.format);
       assertSummary(args.summary);
+      assertSnapshotAt(args.snapshotAt);
       if (args.status) assertStatus(args.status);
       const slug = slugify(args.slug || args.title);
       if (!slug) throw new Error("Title must include letters or numbers so a slug can be generated");
       const existing = await findBySlug(slug);
-      const externalUrl = args.externalUrl !== void 0 ? args.externalUrl : existing?.externalUrl;
+      const externalUrl = storedUrl(args.externalUrl !== void 0 ? args.externalUrl : existing?.externalUrl);
       assertExternalUrl(args.format, externalUrl);
+      if (args.contentHash) {
+        const hashRow = await findByContentHash(args.contentHash);
+        if (hashRow && hashRow.documentId !== existing?.documentId) return dedupedResult(hashRow, "contentHash");
+      }
+      if (args.externalUrl) {
+        const urlRow = await findByExternalUrl(args.externalUrl);
+        if (urlRow && urlRow.documentId !== existing?.documentId) return dedupedResult(urlRow, "url");
+      }
       const links = await resolvedLinks(args);
       if (existing) {
         const data2 = {
@@ -24450,10 +25013,13 @@ function createResourceService(strapi2) {
         if (args.summary !== void 0) data2.summary = args.summary;
         if (args.extractedText !== void 0) data2.extractedText = args.extractedText;
         if (args.altText !== void 0) data2.altText = args.altText;
-        if (args.externalUrl !== void 0) data2.externalUrl = args.externalUrl;
+        if (args.caption !== void 0) data2.caption = args.caption;
+        if (args.contentHash !== void 0) data2.contentHash = args.contentHash;
+        if (args.externalUrl !== void 0) data2.externalUrl = externalUrl;
         if (args.status !== void 0) data2.state = args.status;
         if (args.tags !== void 0) data2.tags = args.tags;
         if (args.createdBy !== void 0) data2[AUTHOR_ATTRIBUTE] = args.createdBy;
+        applySnapshot(data2, args);
         assignLinks(data2, links);
         const updated = await documents(RESOURCE_UID).update({
           documentId: existing.documentId,
@@ -24461,6 +25027,7 @@ function createResourceService(strapi2) {
         });
         return {
           created: false,
+          deduped: false,
           documentId: updated.documentId,
           slug: updated.slug || slug,
           status: updated.state || args.status || existing.state || "final",
@@ -24479,12 +25046,16 @@ function createResourceService(strapi2) {
       if (args.summary !== void 0) data.summary = args.summary;
       if (args.extractedText !== void 0) data.extractedText = args.extractedText;
       if (args.altText !== void 0) data.altText = args.altText;
-      if (args.externalUrl !== void 0) data.externalUrl = args.externalUrl;
+      if (args.caption !== void 0) data.caption = args.caption;
+      if (args.contentHash !== void 0) data.contentHash = args.contentHash;
+      if (args.externalUrl !== void 0) data.externalUrl = externalUrl;
       if (args.createdBy !== void 0) data[AUTHOR_ATTRIBUTE] = args.createdBy;
+      applySnapshot(data, args);
       assignLinks(data, links);
       const created = await documents(RESOURCE_UID).create({ data });
       return {
         created: true,
+        deduped: false,
         documentId: created.documentId,
         slug: created.slug || slug,
         status: created.state || data.state,
@@ -24503,7 +25074,7 @@ function createResourceService(strapi2) {
       if (args.status) assertStatus(args.status);
       let projectId;
       if (args.project) {
-        const project2 = await findByIdentifier(getUid("project"), args.project);
+        const project2 = await findByIdentifier(getUid$1("project"), args.project);
         if (!project2) return emptyList(page, pageSize);
         projectId = project2.documentId;
       }
@@ -24580,10 +25151,11 @@ function createResourceService(strapi2) {
       const existing = await findByIdentifier(RESOURCE_UID, args.identifier, POPULATE);
       if (!existing) throw new Error(`Resource not found: ${args.identifier}`);
       assertSummary(args.summary);
+      assertSnapshotAt(args.snapshotAt);
       if (args.format) assertFormat(args.format);
       if (args.status) assertStatus(args.status);
       const format = args.format ?? existing.format;
-      const externalUrl = args.externalUrl !== void 0 ? args.externalUrl : existing.externalUrl;
+      const externalUrl = args.externalUrl !== void 0 ? storedUrl(args.externalUrl) : existing.externalUrl;
       if (args.format !== void 0 || args.externalUrl !== void 0 || args.newVersion) {
         assertExternalUrl(format, externalUrl);
       }
@@ -24608,6 +25180,11 @@ function createResourceService(strapi2) {
         else if (existing.extractedText != null) data2.extractedText = existing.extractedText;
         if (args.altText !== void 0) data2.altText = args.altText;
         else if (existing.altText != null) data2.altText = existing.altText;
+        if (args.caption !== void 0) data2.caption = args.caption;
+        else if (existing.caption != null) data2.caption = existing.caption;
+        if (args.contentHash !== void 0) data2.contentHash = args.contentHash;
+        else if (existing.contentHash != null) data2.contentHash = existing.contentHash;
+        copySnapshot(data2, args, existing);
         if (externalUrl !== void 0) data2.externalUrl = externalUrl;
         if (args.createdBy !== void 0) data2[AUTHOR_ATTRIBUTE] = args.createdBy;
         else if (existing[AUTHOR_ATTRIBUTE] != null) data2[AUTHOR_ATTRIBUTE] = existing[AUTHOR_ATTRIBUTE];
@@ -24642,8 +25219,11 @@ function createResourceService(strapi2) {
       if (args.summary !== void 0) data.summary = args.summary;
       if (args.extractedText !== void 0) data.extractedText = args.extractedText;
       if (args.altText !== void 0) data.altText = args.altText;
-      if (args.externalUrl !== void 0) data.externalUrl = args.externalUrl;
+      if (args.caption !== void 0) data.caption = args.caption;
+      if (args.contentHash !== void 0) data.contentHash = args.contentHash;
+      if (args.externalUrl !== void 0) data.externalUrl = externalUrl;
       if (args.status !== void 0) data.state = args.status;
+      applySnapshot(data, args);
       if (args.createdBy !== void 0) data[AUTHOR_ATTRIBUTE] = args.createdBy;
       const tags = applyTags(existing.tags, args);
       if (tags !== void 0) data.tags = tags;
@@ -24689,23 +25269,218 @@ function createResourceService(strapi2) {
         linked: true,
         message: `${verb} ${ids.length} ${args.relation}`
       };
+    },
+    async attach(args) {
+      if (!args.filename?.trim()) throw new Error("filename is required");
+      if (!args.mime?.trim()) throw new Error("mime is required");
+      const hasBase64 = Boolean(args.fileBase64);
+      const hasUrl = Boolean(args.fileUrl);
+      if (hasBase64 === hasUrl) throw new Error("Provide exactly one of fileBase64 or fileUrl");
+      const resource2 = await findByIdentifier(RESOURCE_UID, args.identifier, POPULATE);
+      if (!resource2) throw new Error(`Resource not found: ${args.identifier}`);
+      const filename = safeFilename(args.filename);
+      const fetchImpl = strapi2.fetch;
+      const resolveHost = strapi2.resolveHost;
+      let buffer;
+      let mime = normalizeMime(args.mime, filename);
+      if (hasBase64) {
+        buffer = decodeFileBase64(args.fileBase64);
+      } else {
+        const fetched = await fetchRemoteFile(args.fileUrl, { fetchImpl, resolveHost });
+        buffer = fetched.buffer;
+        mime = normalizeMime(args.mime || fetched.mime, filename);
+      }
+      if (!isAllowedResourceMime(mime)) throw new Error(`File type "${mime}" is not allowed`);
+      const contentHash = hashBuffer(buffer);
+      const hashRow = await findByContentHash(contentHash);
+      if (hashRow && hashRow.documentId !== resource2.documentId) {
+        return {
+          attached: false,
+          deduped: true,
+          documentId: hashRow.documentId,
+          slug: hashRow.slug,
+          contentHash,
+          filename,
+          mime,
+          size: buffer.length,
+          extractedTextStored: false,
+          captioned: false,
+          message: "Returned existing resource with the same file content hash"
+        };
+      }
+      if (hashRow && hashRow.documentId === resource2.documentId) {
+        const current = await resolveUploadFile(resource2.file);
+        return {
+          attached: true,
+          deduped: true,
+          documentId: resource2.documentId,
+          slug: resource2.slug,
+          contentHash,
+          filename: current?.name || filename,
+          mime: current?.mime || mime,
+          size: buffer.length,
+          extractedTextStored: Boolean(resource2.extractedText),
+          captioned: Boolean(resource2.caption),
+          message: "File already attached to this resource"
+        };
+      }
+      let extracted = "";
+      try {
+        extracted = extractResourceText(buffer, mime, filename);
+      } catch (err) {
+        strapi2.log?.warn?.("[paul-brain] text extraction skipped:", err);
+      }
+      let caption;
+      try {
+        const model = strapi2.config?.get?.("plugin::tanstack-ai.chat.model");
+        caption = await captionResource({
+          buffer,
+          mime,
+          fetchImpl,
+          model: typeof model === "string" ? model : void 0
+        });
+      } catch (err) {
+        strapi2.log?.warn?.("[paul-brain] caption skipped:", err);
+      }
+      const uploadService = strapi2.plugin("upload").service("upload");
+      if (!uploadService?.upload) throw new Error("Upload plugin is not available");
+      const dir = await promises$1.mkdtemp(require$$0__default$3.default.join(require$$0$2.tmpdir(), "paul-brain-"));
+      const filepath = require$$0__default$3.default.join(dir, filename);
+      let stored;
+      try {
+        await promises$1.writeFile(filepath, buffer);
+        const uploaded = await uploadService.upload({
+          data: { fileInfo: { name: filename, alternativeText: caption } },
+          files: {
+            filepath,
+            path: filepath,
+            originalFilename: filename,
+            name: filename,
+            mimetype: mime,
+            type: mime,
+            size: buffer.length
+          }
+        });
+        const file = Array.isArray(uploaded) ? uploaded[0] : uploaded;
+        if (!file || typeof file.id !== "number") throw new Error("Upload did not return a file id");
+        stored = file;
+      } finally {
+        await promises$1.rm(dir, { recursive: true, force: true });
+      }
+      const previousId = mediaId(resource2.file);
+      const data = { file: stored.id, contentHash };
+      if (extracted) data.extractedText = extracted;
+      if (caption) {
+        data.caption = caption;
+        if (!resource2.altText) data.altText = caption;
+      }
+      if (resource2.format === "other") {
+        if (mime.startsWith("image/")) data.format = "image";
+        else if (mime === "application/pdf") data.format = "pdf";
+      }
+      await documents(RESOURCE_UID).update({ documentId: resource2.documentId, data });
+      if (previousId != null && previousId !== stored.id && uploadService.remove) {
+        try {
+          await uploadService.remove({ id: previousId });
+        } catch (err) {
+          strapi2.log?.warn?.("[paul-brain] could not remove the previous file:", err);
+        }
+      }
+      return {
+        attached: true,
+        deduped: false,
+        documentId: resource2.documentId,
+        slug: resource2.slug,
+        contentHash,
+        filename,
+        mime,
+        size: buffer.length,
+        extractedTextStored: Boolean(extracted),
+        captioned: Boolean(caption),
+        message: "Attached file"
+      };
+    },
+    async fileContent(identifier) {
+      const resource2 = await findByIdentifier(RESOURCE_UID, identifier, POPULATE);
+      if (!resource2) throw new Error(`Resource not found: ${identifier}`);
+      const file = await resolveUploadFile(resource2.file);
+      if (!file) throw new Error("Resource has no file");
+      const fetchImpl = strapi2.fetch;
+      const resolveHost = strapi2.resolveHost;
+      const buffer = await loadFileBytes(strapi2, file, { fetchImpl, resolveHost });
+      return {
+        documentId: resource2.documentId,
+        filename: file.name || "file",
+        mime: file.mime || "application/octet-stream",
+        buffer
+      };
+    },
+    async readFile(identifier) {
+      const file = await this.fileContent(identifier);
+      const payload = {
+        documentId: file.documentId,
+        filename: file.filename,
+        mime: file.mime,
+        size: file.buffer.length
+      };
+      if (file.buffer.length <= BASE64_INLINE_LIMIT) {
+        return {
+          ...payload,
+          encoding: "base64",
+          content: file.buffer.toString("base64"),
+          message: "File bytes are inline. The public upload URL is not included."
+        };
+      }
+      const signed = signFileToken(strapi2, file.documentId);
+      const base = serverPublicBase(strapi2);
+      return {
+        ...payload,
+        encoding: "signed-url",
+        accessUrl: `${base}${signedFilePath(signed.token)}`,
+        expiresAt: signed.expiresAt,
+        message: "File is above the inline limit. Fetch accessUrl before expiresAt. This is a short-lived signed link, not the public upload URL."
+      };
     }
   };
+  async function resolveUploadFile(file) {
+    if (file && typeof file === "object") {
+      const row = file;
+      if (row.mime || row.name || row.url || Buffer.isBuffer(row.buffer)) return row;
+    }
+    const id = mediaId(file);
+    if (id == null) return null;
+    const query = strapi2.db?.query?.(
+      "plugin::upload.file"
+    );
+    if (query?.findOne) {
+      const row = await query.findOne({ where: { id } });
+      if (row) return row;
+    }
+    const upload = strapi2.plugin("upload").service("upload");
+    if (typeof upload?.findOne === "function") {
+      const row = await upload.findOne(id);
+      if (row) return row;
+    }
+    return null;
+  }
 }
-const register$4 = (strapi2) => {
+const register$6 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "save_resource",
     title: "Save Resource",
-    description: "Create a finished deliverable, or update the row with the same slug. Formats: md, page, link, pdf, image, other. Page and link require an http(s) externalUrl; put a markdown snapshot in body for a Page. Pass notes, projects, people, and sources as documentIds or slugs to attach. status defaults to final. createdBy is the bot or agent name. There is no file upload in this version. See get_brain_guide.",
+    description: "Create a finished deliverable, or update the row with the same slug. Formats: md, page, link, pdf, image, other. Page and link require an http(s) externalUrl. Put a Page snapshot in snapshotMarkdown (snapshotAt defaults to today in America/Los_Angeles). status defaults to final. createdBy is the bot or agent name. If externalUrl or contentHash already belongs to a resource, that resource is returned with deduped: true and is not modified. Attach files with attach_resource_file. See get_brain_guide.",
     resolveInputSchema: () => object({
       title: string().describe("Resource title (slug is generated from this unless slug is set)"),
       slug: string().optional().describe("Explicit slug. Upserts the row with this slug"),
       format: _enum(RESOURCE_FORMATS).describe("md, page, link, pdf, image, or other"),
-      body: string().optional().describe("Markdown body. Required in practice for md, and a snapshot for page"),
+      body: string().optional().describe("Markdown body"),
       summary: string().max(280).optional().describe("Short summary (280 characters max)"),
-      extractedText: string().optional().describe("Extracted file text. Leave empty; extraction is not implemented yet"),
+      extractedText: string().optional().describe("Extracted file text. attach_resource_file fills this for text, markdown, PDF, and DOCX"),
       altText: string().optional().describe("Description of an image or diagram"),
-      externalUrl: string().optional().describe("Page or link URL (http or https). Required for page and link"),
+      snapshotMarkdown: string().optional().describe("Markdown snapshot of a Page or canvas. Searched by recall"),
+      snapshotAt: string().optional().describe("When the snapshot was taken (YYYY-MM-DD, Pacific). Defaults to today when snapshotMarkdown is set"),
+      contentHash: string().optional().describe("SHA-256 of a file. If a resource already has this hash, that resource is returned"),
+      externalUrl: string().optional().describe("Page or link URL (http or https). Required for page and link. Same URL returns the existing resource"),
       status: _enum(RESOURCE_STATUSES).optional().describe("draft, final (default), or archived"),
       tags: array(string()).optional().describe("Tags, same shape as notes"),
       createdBy: string().optional().describe("Bot or agent name that produced this"),
@@ -24716,6 +25491,7 @@ const register$4 = (strapi2) => {
     }),
     resolveOutputSchema: () => object({
       created: boolean(),
+      deduped: boolean(),
       documentId: string(),
       slug: string(),
       status: string(),
@@ -24738,7 +25514,7 @@ const register$4 = (strapi2) => {
 };
 const saveResource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$4
+  register: register$6
 }, Symbol.toStringTag, { value: "Module" }));
 const relationSchema = object({
   documentId: string(),
@@ -24746,11 +25522,11 @@ const relationSchema = object({
   name: string().nullish(),
   slug: string().nullish()
 });
-const register$3 = (strapi2) => {
+const register$5 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_resource",
     title: "Get Resource",
-    description: "Fetch one resource by documentId or slug, including notes, projects, people, sources, file metadata, and supersededBy. See get_brain_guide.",
+    description: "Fetch one resource by documentId or slug, including notes, projects, people, sources, private file metadata, and supersededBy. File output never includes the public upload URL; use get_resource_file for contents. See get_brain_guide.",
     resolveInputSchema: () => object({
       identifier: string().describe("documentId or slug")
     }),
@@ -24765,6 +25541,10 @@ const register$3 = (strapi2) => {
         summary: string().nullish(),
         extractedText: string().nullish(),
         altText: string().nullish(),
+        caption: string().nullish(),
+        snapshotMarkdown: string().nullish(),
+        snapshotAt: string().nullish(),
+        contentHash: string().nullish(),
         externalUrl: string().nullish(),
         createdBy: string().nullish(),
         tags: array(string()),
@@ -24776,10 +25556,10 @@ const register$3 = (strapi2) => {
         sources: array(relationSchema),
         file: object({
           id: number().nullish(),
-          url: string().nullish(),
           name: string().nullish(),
           mime: string().nullish(),
           ext: string().nullish(),
+          size: number().nullish(),
           alternativeText: string().nullish()
         }).nullish(),
         supersededBy: relationSchema.nullish()
@@ -24806,9 +25586,9 @@ const register$3 = (strapi2) => {
 };
 const getResource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$3
+  register: register$5
 }, Symbol.toStringTag, { value: "Module" }));
-const register$2 = (strapi2) => {
+const register$4 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_resources",
     title: "List Resources",
@@ -24860,9 +25640,9 @@ const register$2 = (strapi2) => {
 };
 const listResources = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$2
+  register: register$4
 }, Symbol.toStringTag, { value: "Module" }));
-const register$1 = (strapi2) => {
+const register$3 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_resource",
     title: "Update Resource",
@@ -24876,6 +25656,8 @@ const register$1 = (strapi2) => {
       summary: string().max(280).optional().describe("New summary (280 characters max)"),
       extractedText: string().optional().describe("Replace extracted text"),
       altText: string().optional().describe("Replace alt text"),
+      snapshotMarkdown: string().optional().describe("Markdown snapshot of a Page or canvas"),
+      snapshotAt: string().optional().describe("Snapshot date (YYYY-MM-DD, Pacific). Defaults to today when snapshotMarkdown is set"),
       externalUrl: string().optional().describe("New Page or link URL"),
       status: _enum(RESOURCE_STATUSES).optional().describe("draft, final, or archived"),
       tags: array(string()).optional().describe("Replace tags"),
@@ -24912,9 +25694,9 @@ const register$1 = (strapi2) => {
 };
 const updateResource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$1
+  register: register$3
 }, Symbol.toStringTag, { value: "Module" }));
-const register = (strapi2) => {
+const register$2 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "link_resource",
     title: "Link Resource",
@@ -24945,6 +25727,86 @@ const register = (strapi2) => {
 };
 const linkResource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  register: register$2
+}, Symbol.toStringTag, { value: "Module" }));
+const register$1 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "attach_resource_file",
+    title: "Attach Resource File",
+    description: "Attach one private file to an existing resource. Pass fileBase64 or fileUrl (http or https), plus filename and mime. Documents, images, video, and audio are allowed, up to 25 MB. SVG and executables are rejected. Text, markdown, PDF, and DOCX text is stored in extractedText when it can be read. Images are captioned with the Anthropic API when ANTHROPIC_API_KEY is set; video and audio captions are skipped. If the same file hash already exists, the existing resource is returned with deduped: true and no second copy is stored. The public upload URL is never returned. See get_brain_guide.",
+    resolveInputSchema: () => object({
+      identifier: string().describe("documentId or slug of the resource that should own the file"),
+      filename: string().describe("File name, such as brief.pdf"),
+      mime: string().describe("MIME type, such as application/pdf, image/png, video/mp4, or audio/mpeg"),
+      fileBase64: string().optional().describe("File contents as base64. Use this or fileUrl, not both"),
+      fileUrl: string().optional().describe("http(s) URL the server will fetch. Private and local addresses are refused")
+    }),
+    resolveOutputSchema: () => object({
+      attached: boolean(),
+      deduped: boolean(),
+      documentId: string(),
+      slug: string().nullish(),
+      contentHash: string(),
+      filename: string(),
+      mime: string(),
+      size: number(),
+      extractedTextStored: boolean(),
+      captioned: boolean(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("resource.write") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const resources = createResourceService(strapi22);
+      const result = await resources.attach(args);
+      const output = stripNullish(result);
+      return {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output
+      };
+    }
+  });
+};
+const attachResourceFile = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$1
+}, Symbol.toStringTag, { value: "Module" }));
+const register = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "get_resource_file",
+    title: "Get Resource File",
+    description: "Read a resource file without its public upload URL. Files up to 120 KB are returned as base64. Larger files return a short-lived signed accessUrl (about 10 minutes) served by this plugin. Admins can also GET /paul-brain/resources/:documentId/file with resource.read. See get_brain_guide.",
+    resolveInputSchema: () => object({
+      identifier: string().describe("documentId or slug")
+    }),
+    resolveOutputSchema: () => object({
+      documentId: string(),
+      filename: string(),
+      mime: string(),
+      size: number(),
+      encoding: _enum(["base64", "signed-url"]),
+      content: string().optional(),
+      accessUrl: string().optional(),
+      expiresAt: string().optional(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("resource.read") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const resources = createResourceService(strapi22);
+      const result = await resources.readFile(args.identifier);
+      const output = stripNullish(result);
+      return {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output
+      };
+    }
+  });
+};
+const getResourceFile = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
   register
 }, Symbol.toStringTag, { value: "Module" }));
 const tools = [
@@ -24963,6 +25825,8 @@ const tools = [
   listResources,
   updateResource,
   linkResource,
+  attachResourceFile,
+  getResourceFile,
   link,
   logDecision,
   forget,
@@ -25970,6 +26834,18 @@ const attributes = {
   altText: {
     type: "text"
   },
+  caption: {
+    type: "text"
+  },
+  snapshotMarkdown: {
+    type: "text"
+  },
+  snapshotAt: {
+    type: "date"
+  },
+  contentHash: {
+    type: "string"
+  },
   externalUrl: {
     type: "text"
   },
@@ -25979,6 +26855,8 @@ const attributes = {
     required: false,
     allowedTypes: [
       "images",
+      "videos",
+      "audios",
       "files"
     ]
   },
@@ -26068,14 +26946,14 @@ const TEXT_SEARCH_FIELDS = {
   todo: ["title", "goal", "acceptanceCriteria", "context", "waitingOn", "closingNote", "capturedBy"],
   goal: ["title", "description", "target"],
   "goal-checkin": ["note", "loggedBy"],
-  resource: ["title", "summary", "body", "extractedText", "altText"]
+  resource: [...RESOURCE_TEXT_FIELDS]
 };
 function searchKeywords(query) {
   return query.toLowerCase().split(/\s+/).filter((keyword) => keyword.length > 2);
 }
 function searchableText(type, entity) {
   if (type === "resource") {
-    return ["summary", "body", "extractedText", "altText"].map((field) => entity[field]).filter((part) => typeof part === "string" && part.length > 0).join("\n");
+    return RESOURCE_TEXT_FIELDS.filter((field) => field !== "title").map((field) => entity[field]).filter((part) => typeof part === "string" && part.length > 0).join("\n");
   }
   const body = entity.body || entity.summary || entity.context || entity.excerpt || "";
   return typeof body === "string" ? body : JSON.stringify(body);
@@ -26356,10 +27234,86 @@ ${data.body}`;
 const services = {
   brain
 };
+const READ_ACTION = "plugin::paul-brain.resource.read";
+const routes = {
+  admin: {
+    type: "admin",
+    routes: [
+      {
+        method: "GET",
+        path: "/resources/:documentId/file",
+        handler: "resourceFile.download",
+        config: {
+          policies: [
+            "admin::isAuthenticatedAdmin",
+            { name: "admin::hasPermissions", config: { actions: [READ_ACTION] } }
+          ]
+        }
+      }
+    ]
+  },
+  "content-api": {
+    type: "content-api",
+    routes: [
+      {
+        method: "GET",
+        path: "/resource-file/:token",
+        handler: "resourceFile.signed",
+        config: {
+          auth: false
+        }
+      }
+    ]
+  }
+};
+function safeDownloadName(name) {
+  return name.replace(/["\r\n]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_") || "file";
+}
+async function sendFile(ctx, strapi2, documentId) {
+  const resources = createResourceService(strapi2);
+  const file = await resources.fileContent(documentId);
+  ctx.set("Content-Type", file.mime);
+  ctx.set("Content-Disposition", `attachment; filename="${safeDownloadName(file.filename)}"`);
+  ctx.set("Cache-Control", "private, no-store");
+  ctx.set("X-Content-Type-Options", "nosniff");
+  ctx.body = file.buffer;
+}
+const controller = ({ strapi: strapi2 }) => ({
+  async download(ctx) {
+    try {
+      const documentId = String(ctx.params?.documentId || "");
+      if (!documentId) {
+        ctx.status = 400;
+        ctx.body = { error: "documentId is required" };
+        return;
+      }
+      await sendFile(ctx, strapi2, documentId);
+    } catch (error2) {
+      const missing = /not found|no file/i.test(error2?.message || "");
+      ctx.status = missing ? 404 : 400;
+      ctx.body = { error: missing ? "File not found" : error2?.message || "Could not read file" };
+    }
+  },
+  async signed(ctx) {
+    try {
+      const documentId = verifyFileToken(strapi2, String(ctx.params?.token || ""));
+      await sendFile(ctx, strapi2, documentId);
+    } catch (error2) {
+      const missing = /not found|no file/i.test(error2?.message || "");
+      ctx.status = missing ? 404 : 401;
+      ctx.body = { error: missing ? "File not found" : "Invalid or expired file link" };
+    }
+  }
+});
+const controllers = {
+  resourceFile: controller
+};
 const index = {
-  register: register$E,
+  register: register$G,
   bootstrap,
   contentTypes,
-  services
+  services,
+  routes,
+  controllers
 };
 module.exports = index;

@@ -3,7 +3,9 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import { contentTypes } from '@strapi/utils';
 import { getActionId, PERMISSIONS } from '../mcp/permissions';
+import { getTodayPST } from '../mcp/utils';
 import { AUTHOR_ATTRIBUTE, createResourceService } from '../services/resource';
+import { hashBuffer } from '../services/resource-file';
 
 type Row = Record<string, any>;
 
@@ -148,7 +150,17 @@ describe('resource content type', () => {
     });
     expect(schema.attributes.author).toMatchObject({ type: 'string' });
     expect(schema.attributes.format.enum).toEqual(['md', 'page', 'link', 'pdf', 'image', 'other']);
-    expect(schema.attributes.file).toMatchObject({ type: 'media', multiple: false, required: false });
+    expect(schema.attributes.file).toMatchObject({
+      type: 'media',
+      multiple: false,
+      required: false,
+      allowedTypes: ['images', 'videos', 'audios', 'files'],
+    });
+    expect(schema.attributes.extractedText).toMatchObject({ type: 'text' });
+    expect(schema.attributes.caption).toMatchObject({ type: 'text' });
+    expect(schema.attributes.snapshotMarkdown).toMatchObject({ type: 'text' });
+    expect(schema.attributes.snapshotAt).toMatchObject({ type: 'date' });
+    expect(schema.attributes.contentHash).toMatchObject({ type: 'string' });
     expect(schema.attributes.tags).toMatchObject({ type: 'json', default: [] });
     expect(schema.attributes.supersededBy).toMatchObject({
       relation: 'oneToOne',
@@ -198,10 +210,10 @@ describe('resource content type', () => {
     expect(getActionId('resource.write')).toBe('plugin::paul-brain.resource.write');
 
     const toolsDir = join(__dirname, '../mcp/tools');
-    for (const file of ['get-resource.ts', 'list-resources.ts']) {
+    for (const file of ['get-resource.ts', 'list-resources.ts', 'get-resource-file.ts']) {
       expect(readFileSync(join(toolsDir, file), 'utf8')).toContain("getActionId('resource.read')");
     }
-    for (const file of ['save-resource.ts', 'update-resource.ts', 'link-resource.ts']) {
+    for (const file of ['save-resource.ts', 'update-resource.ts', 'link-resource.ts', 'attach-resource-file.ts']) {
       expect(readFileSync(join(toolsDir, file), 'utf8')).toContain("getActionId('resource.write')");
     }
   });
@@ -380,6 +392,12 @@ describe('resource service', () => {
     const patchedRow = await service.get(saved.documentId);
     expect(patchedRow.resource?.body).toBe('version one\n\n---\n\nmore');
     expect(patchedRow.resource?.tags).toEqual(['a', 'b']);
+    expect(patchedRow.resource?.file).toEqual({
+      id: 9,
+      name: 'guide.pdf',
+      mime: 'application/pdf',
+    });
+    expect(JSON.stringify(patchedRow)).not.toContain('/uploads/');
 
     const versioned = await service.update({
       identifier: 'guide',
@@ -430,5 +448,179 @@ describe('resource service', () => {
     expect(versioned.slug).toBe('other-guide');
     const previous = await service.get(saved.slug);
     expect(previous.resource?.title).toBe('Guide');
+  });
+
+  it('stores a Page snapshot and dedupes a later save with the same url', async () => {
+    const strapi = mockStrapi();
+    const service = createResourceService(strapi as any);
+
+    const created = await service.save({
+      title: 'Launch canvas',
+      format: 'page',
+      externalUrl: 'https://cursor.com/canvas/Example/',
+      snapshotMarkdown: '# first snapshot',
+      createdBy: 'research-bot',
+    });
+    expect(created).toMatchObject({ created: true, deduped: false, status: 'final' });
+
+    const stored = strapi.tables.get('plugin::paul-brain.resource')![0];
+    expect(stored.externalUrl).toBe('https://cursor.com/canvas/Example');
+    expect(stored.snapshotMarkdown).toBe('# first snapshot');
+    expect(stored.snapshotAt).toBe(getTodayPST());
+    expect(stored.state).toBe('final');
+
+    const duplicate = await service.save({
+      title: 'Launch canvas copy',
+      format: 'page',
+      externalUrl: 'https://cursor.com/canvas/Example',
+      snapshotMarkdown: '# should not replace',
+    });
+    expect(duplicate).toMatchObject({
+      created: false,
+      deduped: true,
+      documentId: created.documentId,
+    });
+    expect(strapi.tables.get('plugin::paul-brain.resource')).toHaveLength(1);
+    expect(stored.snapshotMarkdown).toBe('# first snapshot');
+
+    const revised = await service.save({
+      title: 'Launch canvas',
+      format: 'page',
+      externalUrl: 'https://cursor.com/canvas/Example',
+      snapshotMarkdown: '# revised snapshot',
+      snapshotAt: '2026-11-01',
+    });
+    expect(revised.deduped).toBe(false);
+    expect(revised.created).toBe(false);
+    expect(stored.snapshotMarkdown).toBe('# revised snapshot');
+    expect(stored.snapshotAt).toBe('2026-11-01');
+
+    const patched = await service.update({
+      identifier: created.slug,
+      snapshotMarkdown: '# from update',
+    });
+    expect(patched.newVersion).toBe(false);
+    expect(stored.snapshotMarkdown).toBe('# from update');
+    expect(stored.snapshotAt).toBe(getTodayPST());
+  });
+
+  it('returns the existing resource when contentHash matches', async () => {
+    const strapi = mockStrapi();
+    const service = createResourceService(strapi as any);
+    const hash = 'a'.repeat(64);
+
+    const created = await service.save({
+      title: 'Original pdf',
+      format: 'pdf',
+      contentHash: hash,
+    });
+    const duplicate = await service.save({
+      title: 'Second pdf',
+      format: 'pdf',
+      contentHash: hash,
+    });
+
+    expect(duplicate.deduped).toBe(true);
+    expect(duplicate.documentId).toBe(created.documentId);
+    expect(strapi.tables.get('plugin::paul-brain.resource')).toHaveLength(1);
+  });
+
+  it('rejects a snapshot date that is not YYYY-MM-DD', async () => {
+    const strapi = mockStrapi();
+    const service = createResourceService(strapi as any);
+    await expect(
+      service.save({
+        title: 'Canvas',
+        format: 'page',
+        externalUrl: 'https://cursor.com/canvas/date',
+        snapshotMarkdown: '# snap',
+        snapshotAt: '2026-11-15T08:00:00.000Z',
+      })
+    ).rejects.toThrow(/snapshotAt/);
+  });
+
+  it('attaches a text file, extracts it, and will not return the public upload url', async () => {
+    const strapi = mockStrapi();
+    const files = new Map<number, any>();
+    (strapi as any).plugin = () => ({
+      service: () => ({
+        async upload({ files: file }: { files: { filepath: string; originalFilename: string; mimetype: string } }) {
+          const buffer = readFileSync(file.filepath);
+          const id = files.size + 1;
+          const stored = {
+            id,
+            name: file.originalFilename,
+            mime: file.mimetype,
+            ext: '.txt',
+            size: buffer.length,
+            provider: 'local',
+            url: '/uploads/secret-guide.txt',
+            buffer,
+          };
+          files.set(id, stored);
+          return [stored];
+        },
+        async findOne(id: number) {
+          return files.get(id) ?? null;
+        },
+      }),
+    });
+    const service = createResourceService(strapi as any);
+    const saved = await service.save({ title: 'Notes', format: 'other', body: 'placeholder' });
+    const bytes = Buffer.from('zephyr lives in the attached note');
+    const previousKey = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+
+    try {
+      const attached = await service.attach({
+        identifier: saved.slug,
+        filename: 'notes.txt',
+        mime: 'text/plain',
+        fileBase64: bytes.toString('base64'),
+      });
+      expect(attached).toMatchObject({
+        attached: true,
+        deduped: false,
+        contentHash: hashBuffer(bytes),
+        extractedTextStored: true,
+        captioned: false,
+        mime: 'text/plain',
+      });
+      expect(JSON.stringify(attached)).not.toContain('/uploads/');
+
+      const stored = strapi.tables.get('plugin::paul-brain.resource')![0];
+      expect(stored.extractedText).toBe('zephyr lives in the attached note');
+      expect(stored.contentHash).toBe(hashBuffer(bytes));
+      expect(stored.format).toBe('other');
+
+      const again = await service.attach({
+        identifier: saved.documentId,
+        filename: 'notes.txt',
+        mime: 'text/plain',
+        fileBase64: bytes.toString('base64'),
+      });
+      expect(again.deduped).toBe(true);
+      expect(again.documentId).toBe(saved.documentId);
+      expect(files.size).toBe(1);
+
+      const other = await service.save({ title: 'Other notes', format: 'md', body: 'x' });
+      const deduped = await service.attach({
+        identifier: other.documentId,
+        filename: 'notes.txt',
+        mime: 'text/plain',
+        fileBase64: bytes.toString('base64'),
+      });
+      expect(deduped).toMatchObject({ deduped: true, attached: false, documentId: saved.documentId });
+
+      (strapi as any).config = { get: (key: string) => (key === 'server.app.keys' ? ['test-key'] : 'https://brain.example') };
+      const inline = await service.readFile(saved.documentId);
+      expect(inline.encoding).toBe('base64');
+      expect(Buffer.from(inline.content, 'base64').toString('utf8')).toBe('zephyr lives in the attached note');
+      expect(JSON.stringify(inline)).not.toContain('/uploads/');
+      expect(JSON.stringify(inline)).not.toContain('secret-guide');
+    } finally {
+      if (previousKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previousKey;
+    }
   });
 });

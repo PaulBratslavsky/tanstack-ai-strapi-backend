@@ -1,7 +1,7 @@
 import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
-import { getUid } from '../types';
+import { publicFileView } from '../../services/resource-file';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -44,6 +44,12 @@ export const register = (strapi: Core.Strapi) => {
           sanitized = await strapi.contentAPI.sanitize.output(entity, uid, context.userAbility);
         } catch (err) {
           strapi.log.warn('Failed to sanitize entity:', err);
+        }
+        if (args.type === 'resource' && sanitized && typeof sanitized === 'object') {
+          const current = (sanitized as { file?: unknown }).file;
+          if (current && typeof current === 'object') {
+            sanitized = { ...(sanitized as Record<string, unknown>), file: publicFileView(current) };
+          }
         }
       }
 

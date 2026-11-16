@@ -8,6 +8,7 @@ const allowedMediaTypes = [
   'application/msword',
   'application/vnd.openxmlformats-officedocument.*',
   'text/plain',
+  'text/markdown',
   'text/csv',
 ];
 
@@ -98,6 +99,8 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
   },
   upload: {
     config: {
+      // Resource files are capped at 25 MB. The upload plugin enforces this for every upload.
+      sizeLimit: 25 * 1024 * 1024,
       security: {
         allowedTypes: allowedMediaTypes,
         deniedTypes,

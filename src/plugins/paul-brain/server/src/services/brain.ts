@@ -1,4 +1,5 @@
 import type { Core } from '@strapi/strapi';
+import { RESOURCE_TEXT_FIELDS } from './resource';
 
 const PLUGIN_NAME = 'paul-brain';
 
@@ -60,7 +61,7 @@ const TEXT_SEARCH_FIELDS: Record<string, string[]> = {
   todo: ['title', 'goal', 'acceptanceCriteria', 'context', 'waitingOn', 'closingNote', 'capturedBy'],
   goal: ['title', 'description', 'target'],
   'goal-checkin': ['note', 'loggedBy'],
-  resource: ['title', 'summary', 'body', 'extractedText', 'altText'],
+  resource: [...RESOURCE_TEXT_FIELDS],
 };
 
 function searchKeywords(query: string): string[] {
@@ -69,7 +70,7 @@ function searchKeywords(query: string): string[] {
 
 function searchableText(type: string, entity: any): string {
   if (type === 'resource') {
-    return ['summary', 'body', 'extractedText', 'altText']
+    return RESOURCE_TEXT_FIELDS.filter((field) => field !== 'title')
       .map((field) => entity[field])
       .filter((part) => typeof part === 'string' && part.length > 0)
       .join('\n');
