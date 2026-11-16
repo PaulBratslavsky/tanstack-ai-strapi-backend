@@ -60,10 +60,22 @@ const TEXT_SEARCH_FIELDS: Record<string, string[]> = {
   todo: ['title', 'goal', 'acceptanceCriteria', 'context', 'waitingOn', 'closingNote', 'capturedBy'],
   goal: ['title', 'description', 'target'],
   'goal-checkin': ['note', 'loggedBy'],
+  resource: ['title', 'summary', 'body', 'extractedText', 'altText'],
 };
 
 function searchKeywords(query: string): string[] {
   return query.toLowerCase().split(/\s+/).filter((keyword) => keyword.length > 2);
+}
+
+function searchableText(type: string, entity: any): string {
+  if (type === 'resource') {
+    return ['summary', 'body', 'extractedText', 'altText']
+      .map((field) => entity[field])
+      .filter((part) => typeof part === 'string' && part.length > 0)
+      .join('\n');
+  }
+  const body = entity.body || entity.summary || entity.context || entity.excerpt || '';
+  return typeof body === 'string' ? body : JSON.stringify(body);
 }
 
 function rowsFromFindMany(page: unknown): any[] {
@@ -158,7 +170,7 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
   },
 
   async search(options: SearchOptions): Promise<SearchResult[]> {
-    const { query, types = ['note', 'person', 'project', 'decision', 'source'], kind, tag, videoId, sourceId, since, limit = 25 } = options;
+    const { query, types = ['note', 'person', 'project', 'decision', 'source', 'resource'], kind, tag, videoId, sourceId, since, limit = 25 } = options;
     
     const results: SearchResult[] = [];
     const queryLower = query.toLowerCase();
@@ -240,7 +252,7 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
 
         for (const entity of entities) {
           // Apply tag filter in JS for DB-agnostic compatibility
-          if (tag && type === 'note') {
+          if (tag && (type === 'note' || type === 'resource')) {
             const entityTags = Array.isArray(entity.tags) ? entity.tags : [];
             const hasMatchingTag = entityTags.some((t: string) => 
               t.toLowerCase() === tag.toLowerCase()
@@ -255,8 +267,7 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
 
           const title = entity.title || entity.name || '';
           const titleLower = title.toLowerCase();
-          const body = entity.body || entity.summary || entity.context || entity.excerpt || '';
-          const bodyText = typeof body === 'string' ? body : JSON.stringify(body);
+          const bodyText = searchableText(type, entity);
           const bodyLower = bodyText.toLowerCase();
           
           const aliases = Array.isArray(entity.aliases) ? entity.aliases : [];

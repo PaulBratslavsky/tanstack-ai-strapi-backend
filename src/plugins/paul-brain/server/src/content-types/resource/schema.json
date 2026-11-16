@@ -1,0 +1,92 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_resources",
+  "info": {
+    "singularName": "resource",
+    "pluralName": "resources",
+    "displayName": "Resource",
+    "description": "Finished deliverables: guides, reports, pages, and links"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title"
+    },
+    "format": {
+      "type": "enumeration",
+      "enum": ["md", "page", "link", "pdf", "image", "other"],
+      "required": true
+    },
+    "body": {
+      "type": "richtext"
+    },
+    "summary": {
+      "type": "text",
+      "maxLength": 280
+    },
+    "extractedText": {
+      "type": "text"
+    },
+    "altText": {
+      "type": "text"
+    },
+    "externalUrl": {
+      "type": "text"
+    },
+    "file": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": ["images", "files"]
+    },
+    "state": {
+      "type": "enumeration",
+      "enum": ["draft", "final", "archived"],
+      "default": "final"
+    },
+    "tags": {
+      "type": "json",
+      "default": []
+    },
+    "author": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.note",
+      "inversedBy": "resources"
+    },
+    "projects": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.project",
+      "inversedBy": "resources"
+    },
+    "people": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.person",
+      "inversedBy": "resources"
+    },
+    "sources": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.source",
+      "inversedBy": "resources"
+    },
+    "supersededBy": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::paul-brain.resource"
+    }
+  }
+}

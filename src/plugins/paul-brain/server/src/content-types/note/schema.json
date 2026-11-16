@@ -102,6 +102,12 @@
       "type": "relation",
       "relation": "oneToOne",
       "target": "plugin::paul-brain.note"
+    },
+    "resources": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.resource",
+      "mappedBy": "notes"
     }
   }
 }

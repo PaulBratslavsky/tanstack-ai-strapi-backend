@@ -33,6 +33,11 @@ import * as kbStats from './kb-stats';
 import * as upsertSource from './upsert-source';
 import * as updateSource from './update-source';
 import * as upsertPerson from './upsert-person';
+import * as saveResource from './save-resource';
+import * as getResource from './get-resource';
+import * as listResources from './list-resources';
+import * as updateResource from './update-resource';
+import * as linkResource from './link-resource';
 
 export const tools = [
   getBrainGuide,
@@ -45,6 +50,11 @@ export const tools = [
   upsertPerson,
   upsertSource,
   updateSource,
+  saveResource,
+  getResource,
+  listResources,
+  updateResource,
+  linkResource,
   link,
   logDecision,
   forget,

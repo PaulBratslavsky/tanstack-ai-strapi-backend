@@ -22,7 +22,7 @@ const require$$0__default$6 = /* @__PURE__ */ _interopDefault(require$$0$7);
 const require$$0__default$5 = /* @__PURE__ */ _interopDefault(require$$0$6);
 const require$$2__default$1 = /* @__PURE__ */ _interopDefault(require$$2$1);
 const PLUGIN_NAME$1 = "paul-brain";
-const CONTENT_TYPES = ["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin"];
+const CONTENT_TYPES = ["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin", "resource"];
 const getUid = (type) => `plugin::${PLUGIN_NAME$1}.${type}`;
 const PERMISSIONS = [
   // Memory subcategory
@@ -60,6 +60,20 @@ const PERMISSIONS = [
     subCategory: "memory",
     uid: "note.write",
     displayName: "Write notes and links"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "memory",
+    uid: "resource.read",
+    displayName: "Read resources"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "memory",
+    uid: "resource.write",
+    displayName: "Write resources"
   },
   {
     section: "plugins",
@@ -143,7 +157,7 @@ const PERMISSIONS = [
   }
 ];
 const getActionId = (uid) => `plugin::${PLUGIN_NAME$1}.${uid}`;
-const register$z = ({ strapi: strapi2 }) => {
+const register$E = ({ strapi: strapi2 }) => {
   const actionProvider = strapi2.service("admin::permission").actionProvider;
   const existingActions = PERMISSIONS.filter(
     (permission) => actionProvider.has(`plugin::paul-brain.${permission.uid}`)
@@ -14020,7 +14034,7 @@ execa$1.exports.node = (scriptPath, args, options2 = {}) => {
     }
   );
 };
-var slugify$2 = { exports: {} };
+var slugify$3 = { exports: {} };
 var escapeStringRegexp$3 = (string2) => {
   if (typeof string2 !== "string") {
     throw new TypeError("Expected a string");
@@ -15082,7 +15096,7 @@ const removeMootSeparators = (string2, separator) => {
   const escapedSeparator = escapeStringRegexp(separator);
   return string2.replace(new RegExp(`${escapedSeparator}{2,}`, "g"), separator).replace(new RegExp(`^${escapedSeparator}|${escapedSeparator}$`, "g"), "");
 };
-const slugify$1 = (string2, options2) => {
+const slugify$2 = (string2, options2) => {
   if (typeof string2 !== "string") {
     throw new TypeError(`Expected a string, got \`${typeof string2}\``);
   }
@@ -15121,7 +15135,7 @@ const slugify$1 = (string2, options2) => {
 const counter = () => {
   const occurrences = /* @__PURE__ */ new Map();
   const countable = (string2, options2) => {
-    string2 = slugify$1(string2, options2);
+    string2 = slugify$2(string2, options2);
     if (!string2) {
       return "";
     }
@@ -15140,8 +15154,8 @@ const counter = () => {
   };
   return countable;
 };
-slugify$2.exports = slugify$1;
-slugify$2.exports.counter = counter;
+slugify$3.exports = slugify$2;
+slugify$3.exports.counter = counter;
 const isCamelCase = (value) => /^[a-z][a-zA-Z0-9]+$/.test(value);
 const isKebabCase = (value) => /^([a-z][a-z0-9]*)(-[a-z0-9]+)*$/.test(value);
 const { toString } = Object.prototype;
@@ -15199,7 +15213,7 @@ addMethod(create$1, "onlyContainsFunctions", function onlyContainsFunctions(mess
   return this.test("only contains functions", message, (value) => _.isUndefined(value) || value && Object.values(value).every(_.isFunction));
 });
 addMethod(create, "uniqueProperty", function uniqueProperty(propertyName, message) {
-  return this.test("unique", message, function unique(list) {
+  return this.test("unique", message, function unique2(list) {
     const errors = [];
     list?.forEach((element, index2) => {
       const sameElements = list.filter((e) => lodashExports.get(e, propertyName) === lodashExports.get(element, propertyName));
@@ -15373,7 +15387,7 @@ function mergeDefs(...defs) {
 function esc(str) {
   return JSON.stringify(str);
 }
-function slugify(input) {
+function slugify$1(input) {
   return input.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 const captureStackTrace = "captureStackTrace" in Error ? Error.captureStackTrace : (..._args) => {
@@ -18219,7 +18233,7 @@ function _toUpperCase() {
 }
 // @__NO_SIDE_EFFECTS__
 function _slugify() {
-  return /* @__PURE__ */ _overwrite((input) => slugify(input));
+  return /* @__PURE__ */ _overwrite((input) => slugify$1(input));
 }
 // @__NO_SIDE_EFFECTS__
 function _array(Class, element, params) {
@@ -19884,7 +19898,7 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 **Note on YouTube Transcripts**: Raw YouTube transcripts now live centrally in a separate Strapi Cloud app (yt-kb plugin at https://deserving-harmony-9f5ca04daf.strapiapp.com). Access them via the \`yt_kb__*\` MCP tools on the \`strapi-prod\` MCP server (e.g., \`yt_kb__get_transcript\`, \`yt_kb__search_transcript\`, \`yt_kb__add_video\`, etc.). Paul-brain stores only notes/sources/people that reference videos by YouTube videoId, enabling joins between notes and transcripts.
 
 **Core Principles for Team Brain**:
-- **Drafts only**: Save work-in-progress, not polished outputs
+- **Notes are drafts, resources are deliverables**: Save work-in-progress as notes, not polished outputs. When you finish a guide, brief, report, plan, or other document Paul may want again, save it with \`save_resource\` before you end the turn. Markdown goes in \`body\` (\`format: "md"\`). A Page gets \`format: "page"\`, the Page URL in \`externalUrl\`, and a markdown snapshot in \`body\`. A bare link is \`format: "link"\` plus \`externalUrl\`. Do not leave the only copy in \`/workspace\` or in a Page
 - **Uniform results are suspect**: If all/none/zero results come back, verify by checking one raw record
 - **Write negatives down**: Record what systems CANNOT do (capabilities table)
 - **Build new skills from gaps and retros**: When we fail or lack something repeatedly, that's the signal to improve
@@ -19956,6 +19970,17 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
    - Fields: goal (relation), date (required), met (boolean, required), note, loggedBy
    - One check-in per goal per date (updates existing instead of creating duplicate)
 
+13. **resource** — Finished deliverables (guides, briefs, reports, plans, Pages, links)
+   - Formats: \`md\`, \`page\`, \`link\`, \`pdf\`, \`image\`, \`other\`. This version is for \`md\`, \`page\`, and \`link\`. \`pdf\` / \`image\` / \`other\` exist on the type, but there is no upload flow and \`extractedText\` stays empty
+   - \`body\`: markdown. For a Page, also store the snapshot here so the text survives if the Page link does not
+   - \`externalUrl\`: required for \`page\` and \`link\` (http or https)
+   - \`summary\` (280 characters), \`altText\`, \`tags\` (JSON, same as notes)
+   - \`status\`: \`draft\`, \`final\` (default), \`archived\`. Stored as \`state\`, same as todos and goals, so it does not collide with Strapi's publication status. Tools accept and return \`status\`
+   - \`createdBy\`: bot or agent name. Stored as \`author\` because Strapi reserves \`createdBy\` for the admin user
+   - \`file\`: optional single media field. Nothing writes it yet
+   - Relations: notes, projects, people, sources. \`supersededBy\` points at the newer row, the same way notes and todos version themselves
+   - \`save_resource\` upserts by slug. A new version is \`update_resource\` with \`newVersion: true\`
+
 ## When to Use Which Tool
 
 ### get_briefing
@@ -19969,7 +19994,7 @@ Get a compact session briefing to start every session.
 
 ### kb_stats
 Get knowledge base statistics to understand what's in the brain.
-- Returns counts per content type (note, person, project, etc.)
+- Returns counts per content type (note, person, project, resource, and the rest)
 - Notes broken down by kind and tag
 - Video notes vs transcripts: shows which YouTube transcripts (from central yt-kb service) lack notes
 - Orphan counts: notes without links, people/projects/sources without notes
@@ -19980,6 +20005,7 @@ Get knowledge base statistics to understand what's in the brain.
 ### health_check
 Run diagnostic checks on brain data.
 - Checks for duplicates, missing fields, stale data, orphans, broken relations
+- Sanity check includes the resource collection along with the other brain types
 - Returns findings with severity (BLOCK/WARN) and suggested fixes
 - Run periodically or when data quality is suspect
 
@@ -19994,11 +20020,11 @@ Create a new note with duplicate detection.
 - Use \`createMissing: true\` to auto-create linked entities by name
 
 ### recall
-Search across all brain types with ranked results (searches note body/content and tags).
+Search across brain types with ranked results, including resources (title, summary, body, extractedText, and altText) as well as note body and tags.
 - Use specific queries: "strapi mcp tools" not just "strapi"
-- Filter by type: \`["note", "person"]\`
+- Filter by type: \`["note", "person"]\`. Resources are included by default. Use \`types: ["resource"]\` to search only deliverables. Resource matches look at title, summary, body, extractedText, and altText
 - Filter by kind: \`"video"\`, \`"lesson"\`, \`"fact"\`, etc.
-- Filter by tag: \`"strapi"\` (single tag)
+- Filter by tag: \`"strapi"\` (notes and resources)
 - Filter by videoId: find notes for a specific YouTube video
 - Filter by sourceId: find notes linked to a specific source
 - Results are ranked: title match > alias/tag match > body match
@@ -20009,12 +20035,12 @@ Search across all brain types with ranked results (searches note body/content an
 - Each type is paged newest-first (\`updatedAt\` desc) up to 1000 rows. Text matches older than that window are still included via a database filter on scalar fields (title, body, and the type's other text fields). Tag and alias matches are scored in memory on the scanned rows
 
 ### get_entity
-Fetch one entity by type + documentId or slug.
+Fetch one entity by type + documentId or slug, including \`resource\`. A raw resource row uses \`state\` and \`author\`; \`get_resource\` returns those as \`status\` and \`createdBy\`.
 - Relations are populated
 - Use after recall to get full details
 
 ### list_recent
-Get newest N items across types.
+Get newest N items across types, including resources.
 - Good for "what did we save today?"
 - Filter by \`kind\` for notes (\`fact\`, \`preference\`, etc.)
 - Filter by \`source_bot\` to see what a specific bot created
@@ -20044,6 +20070,36 @@ Update an existing source by documentId or slug.
 - Use when you know the source exists
 - For YouTube videos, ensure videoId is set to join with central yt-kb transcripts
 
+### save_resource
+Create a finished deliverable, or update the row that already has that slug.
+- \`format: "md"\` with the full markdown in \`body\` for a guide, brief, report, or plan
+- \`format: "page"\` with \`externalUrl\` set to the Page and a markdown snapshot in \`body\`
+- \`format: "link"\` with \`externalUrl\` when the deliverable is only a URL
+- \`status\` defaults to \`final\`. Use \`draft\` only while it is still being written
+- Always set \`createdBy\` to your bot name, plus \`summary\` and \`tags\`
+- Pass \`notes\`, \`projects\`, \`people\`, \`sources\` as documentIds or slugs to attach them
+- Call \`recall\` with \`types: ["resource"]\` first. Saving the same slug updates that row
+- Do not paste the only copy into \`/workspace\` or leave it only on a Page
+
+### get_resource
+Fetch one resource by documentId or slug, with notes, projects, people, sources, file metadata, and \`supersededBy\`.
+
+### list_resources
+Browse resources newest first.
+- Filters: \`format\`, \`status\`, \`tag\`, \`project\` (documentId or slug), \`since\`
+- \`since\` is a Pacific calendar date (\`YYYY-MM-DD\`, from midnight America/Los_Angeles) or a full ISO timestamp
+- \`page\` starts at 1. \`limit\` defaults to 25 (max 100)
+- Tag matches scan the newest 1000 rows. \`truncated: true\` means that window filled up
+
+### update_resource
+Patch a resource. Use \`appendBody\` to add markdown without replacing \`body\`.
+- \`newVersion: true\` creates a new row (its own slug) and sets \`supersededBy\` on the previous row to that new row. Relations, tags, and the media id are copied onto the new row. The previous row's text is left as it was
+
+### link_resource
+Attach or detach notes, projects, people, or sources.
+- \`operation: "connect"\` attaches. \`operation: "disconnect"\` detaches
+- Targets are documentIds or slugs
+
 ### link
 Connect or disconnect a note with people/projects/sources/decisions.
 - Pass documentIds or slugs
@@ -20058,7 +20114,7 @@ Create a decision record (context/decision/rationale).
 - Optionally mark a prior decision as superseded
 
 ### forget
-Delete an entity (requires \`confirm: true\`).
+Delete an entity, including a resource (requires \`confirm: true\`).
 - This is a separate permission (not granted by default)
 - Returns what was deleted for audit
 
@@ -20201,6 +20257,7 @@ Update goal fields.
 18. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
 19. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
 20. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
+21. **Save deliverables as resources**: A finished guide, brief, report, plan, or Page is a resource, not only a file in \`/workspace\` or a Page. \`recall\` resources first, then \`save_resource\` with \`createdBy\`, \`summary\`, \`tags\`, and links to the project, notes, and sources it came from. Reply with the resource documentId next to any Page link
 
 ## Common Workflows
 
@@ -20252,6 +20309,13 @@ Update goal fields.
 2. \`update_todo\` to change status, add context, or append log entries
 3. \`complete_todo\` when done with optional closing note
 
+### Saving a finished document
+1. \`recall\` with \`types: ["resource"]\` and a few words from the title
+2. \`save_resource\` with \`format: "md"\` and the markdown in \`body\`, or \`format: "page"\` with \`externalUrl\` and a markdown snapshot
+3. Set \`status: "final"\`, \`createdBy\`, \`summary\`, and \`tags\`
+4. Pass the related project, note, person, and source ids
+5. A later revision uses \`update_resource\` with \`newVersion: true\`
+
 ### Tracking goals
 1. \`add_goal\` to create a new goal with category and target
 2. \`log_checkin\` daily (or weekly) to record progress
@@ -20267,6 +20331,8 @@ Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.health.read\` — health_check
 - \`plugin::paul-brain.brief.read\` — get_briefing
 - \`plugin::paul-brain.note.write\` — remember, update_note, link
+- \`plugin::paul-brain.resource.read\` — get_resource, list_resources
+- \`plugin::paul-brain.resource.write\` — save_resource, update_resource, link_resource
 - \`plugin::paul-brain.entity.write\` — upsert_person, upsert_source, update_source
 - \`plugin::paul-brain.decision.write\` — log_decision
 - \`plugin::paul-brain.meta.write\` — log_retro, log_gap, record_capability
@@ -20280,8 +20346,8 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.8.0";
-const register$y = (strapi2) => {
+const PLUGIN_VERSION = "1.9.0";
+const register$D = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
     title: "Get Brain Usage Guide",
@@ -20315,7 +20381,7 @@ Plugin version: ${PLUGIN_VERSION}`
 };
 const getBrainGuide = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$y
+  register: register$D
 }, Symbol.toStringTag, { value: "Module" }));
 function stripNullish(obj) {
   if (obj === null || obj === void 0) {
@@ -20357,16 +20423,51 @@ function diffDays(laterDateStr, earlierDateStr) {
   const earlier = /* @__PURE__ */ new Date(earlierDateStr + "T00:00:00Z");
   return Math.round((later.getTime() - earlier.getTime()) / 864e5);
 }
-const register$x = (strapi2) => {
+function pacificWallClock(instant) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(instant);
+  const value = (type) => parts.find((part) => part.type === type)?.value ?? "";
+  let hour = Number(value("hour"));
+  if (hour === 24) hour = 0;
+  return {
+    date: `${value("year")}-${value("month")}-${value("day")}`,
+    minutes: hour * 60 + Number(value("minute"))
+  };
+}
+function pacificMidnightIso(yyyyMmDd) {
+  const [year, month, day] = yyyyMmDd.split("-").map(Number);
+  let utc = new Date(Date.UTC(year, month - 1, day, 8, 0, 0));
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const wall = pacificWallClock(utc);
+    const dayDelta = wall.date < yyyyMmDd ? 1 : wall.date > yyyyMmDd ? -1 : 0;
+    const deltaMinutes = dayDelta * 1440 - wall.minutes;
+    if (deltaMinutes === 0) return utc.toISOString();
+    utc = new Date(utc.getTime() + deltaMinutes * 60 * 1e3);
+  }
+  return utc.toISOString();
+}
+function sinceToUpdatedAt(since) {
+  const trimmed = since.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return pacificMidnightIso(trimmed);
+  return trimmed;
+}
+const register$C = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "recall",
     title: "Recall from Brain",
-    description: "Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Tag and alias matches are scored in memory. See get_brain_guide for usage.",
+    description: "Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Resources are included and match title, summary, body, extractedText, and altText. Tag and alias matches are scored in memory. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       query: string().describe("Search query (keywords)"),
-      types: array(_enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin"])).optional().describe("Limit search to these types (default: all)"),
+      types: array(_enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin", "resource"])).optional().describe("Limit search to these types (default: notes, people, projects, decisions, sources, and resources)"),
       kind: _enum(["fact", "preference", "idea", "todo", "log", "reference", "lesson", "video", "taught"]).optional().describe("Filter notes by kind"),
-      tag: string().optional().describe("Filter by tag (notes only)"),
+      tag: string().optional().describe("Filter by tag (notes and resources)"),
       videoId: string().optional().describe("Filter by videoId (notes only)"),
       sourceId: string().optional().describe("Filter by linked source documentId (notes only)"),
       since: string().optional().describe("Only return items updated after this ISO date"),
@@ -20420,15 +20521,15 @@ const register$x = (strapi2) => {
 };
 const recall = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$x
+  register: register$C
 }, Symbol.toStringTag, { value: "Module" }));
-const register$w = (strapi2) => {
+const register$B = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_entity",
     title: "Get Brain Entity",
     description: "Fetch one entity by type and documentId or slug, with relations populated. Use after recall to get full details. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
-      type: _enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin"]).describe("Entity type"),
+      type: _enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin", "resource"]).describe("Entity type"),
       identifier: string().describe("documentId or slug")
     }),
     resolveOutputSchema: () => object({
@@ -20475,15 +20576,15 @@ const register$w = (strapi2) => {
 };
 const getEntity = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$w
+  register: register$B
 }, Symbol.toStringTag, { value: "Module" }));
-const register$v = (strapi2) => {
+const register$A = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_recent",
     title: "List Recent Brain Items",
     description: 'Get newest N items by updatedAt across or within types. Good for "what did we save today?". Optional filters: types, kind (notes only), source_bot. See get_brain_guide for usage.',
     resolveInputSchema: () => object({
-      types: array(_enum(["note", "person", "project", "decision", "source"])).optional().describe("Limit to these types (default: all)"),
+      types: array(_enum(["note", "person", "project", "decision", "source", "resource"])).optional().describe("Limit to these types (default: all)"),
       kind: _enum(["fact", "preference", "idea", "todo", "log", "reference", "lesson", "video", "taught"]).optional().describe("Filter notes by kind"),
       source_bot: string().optional().describe("Filter by source_bot (notes only)"),
       limit: number().min(1).max(50).optional().describe("Max results (default: 25)")
@@ -20561,9 +20662,9 @@ const register$v = (strapi2) => {
 };
 const listRecent = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$v
+  register: register$A
 }, Symbol.toStringTag, { value: "Module" }));
-const register$u = (strapi2) => {
+const register$z = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "remember",
     title: "Remember in Brain",
@@ -20839,9 +20940,9 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
 }
 const remember = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$u
+  register: register$z
 }, Symbol.toStringTag, { value: "Module" }));
-const register$t = (strapi2) => {
+const register$y = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_note",
     title: "Update Brain Note",
@@ -20932,9 +21033,9 @@ ${args.appendBody}` : args.appendBody;
 };
 const updateNote = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$t
+  register: register$y
 }, Symbol.toStringTag, { value: "Module" }));
-const register$s = (strapi2) => {
+const register$x = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "link",
     title: "Link Brain Entities",
@@ -21036,9 +21137,9 @@ const register$s = (strapi2) => {
 };
 const link = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$s
+  register: register$x
 }, Symbol.toStringTag, { value: "Module" }));
-const register$r = (strapi2) => {
+const register$w = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_decision",
     title: "Log Brain Decision",
@@ -21124,15 +21225,15 @@ const register$r = (strapi2) => {
 };
 const logDecision = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$r
+  register: register$w
 }, Symbol.toStringTag, { value: "Module" }));
-const register$q = (strapi2) => {
+const register$v = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "forget",
     title: "Forget from Brain",
     description: "Delete an entity (requires confirm: true). Returns what was deleted. Separate permission (not granted by default). See get_brain_guide for usage.",
     resolveInputSchema: () => object({
-      type: _enum(["note", "person", "project", "decision", "source"]).describe("Entity type"),
+      type: _enum(["note", "person", "project", "decision", "source", "resource"]).describe("Entity type"),
       identifier: string().describe("documentId or slug"),
       confirm: boolean().describe("Must be true to confirm deletion")
     }),
@@ -21180,9 +21281,9 @@ const register$q = (strapi2) => {
 };
 const forget = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$q
+  register: register$v
 }, Symbol.toStringTag, { value: "Module" }));
-const register$p = (strapi2) => {
+const register$u = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_retro",
     title: "Log Brain Retro",
@@ -21246,9 +21347,9 @@ const register$p = (strapi2) => {
 };
 const logRetro = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$p
+  register: register$u
 }, Symbol.toStringTag, { value: "Module" }));
-const register$o = (strapi2) => {
+const register$t = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_retros",
     title: "List Brain Retros",
@@ -21311,9 +21412,9 @@ const register$o = (strapi2) => {
 };
 const listRetros = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$o
+  register: register$t
 }, Symbol.toStringTag, { value: "Module" }));
-const register$n = (strapi2) => {
+const register$s = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_gap",
     title: "Log Brain Gap",
@@ -21411,9 +21512,9 @@ const register$n = (strapi2) => {
 };
 const logGap = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$n
+  register: register$s
 }, Symbol.toStringTag, { value: "Module" }));
-const register$m = (strapi2) => {
+const register$r = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_gaps",
     title: "List Brain Gaps",
@@ -21478,9 +21579,9 @@ const register$m = (strapi2) => {
 };
 const listGaps = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$m
+  register: register$r
 }, Symbol.toStringTag, { value: "Module" }));
-const register$l = (strapi2) => {
+const register$q = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "record_capability",
     title: "Record Brain Capability",
@@ -21552,9 +21653,9 @@ const register$l = (strapi2) => {
 };
 const recordCapability = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$l
+  register: register$q
 }, Symbol.toStringTag, { value: "Module" }));
-const register$k = (strapi2) => {
+const register$p = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_capabilities",
     title: "List Brain Capabilities",
@@ -21616,9 +21717,9 @@ const register$k = (strapi2) => {
 };
 const listCapabilities = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$k
+  register: register$p
 }, Symbol.toStringTag, { value: "Module" }));
-const register$j = (strapi2) => {
+const register$o = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_rule",
     title: "Add Brain Rule",
@@ -21665,9 +21766,9 @@ const register$j = (strapi2) => {
 };
 const addRule = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$j
+  register: register$o
 }, Symbol.toStringTag, { value: "Module" }));
-const register$i = (strapi2) => {
+const register$n = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_rules",
     title: "List Brain Rules",
@@ -21736,9 +21837,9 @@ const register$i = (strapi2) => {
 };
 const listRules = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$i
+  register: register$n
 }, Symbol.toStringTag, { value: "Module" }));
-const register$h = (strapi2) => {
+const register$m = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_todo",
     title: "Add Todo",
@@ -21957,9 +22058,9 @@ async function createNewTodo(strapi2, uid, args) {
 }
 const addTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$h
+  register: register$m
 }, Symbol.toStringTag, { value: "Module" }));
-const register$g = (strapi2) => {
+const register$l = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_todo",
     title: "Update Todo",
@@ -22065,9 +22166,9 @@ ${args.appendContext}` : args.appendContext;
 };
 const updateTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$g
+  register: register$l
 }, Symbol.toStringTag, { value: "Module" }));
-const register$f = (strapi2) => {
+const register$k = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_todos",
     title: "List Todos",
@@ -22198,9 +22299,9 @@ const register$f = (strapi2) => {
 };
 const listTodos = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$f
+  register: register$k
 }, Symbol.toStringTag, { value: "Module" }));
-const register$e = (strapi2) => {
+const register$j = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_todo",
     title: "Get Todo",
@@ -22297,9 +22398,9 @@ const register$e = (strapi2) => {
 };
 const getTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$e
+  register: register$j
 }, Symbol.toStringTag, { value: "Module" }));
-const register$d = (strapi2) => {
+const register$i = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "complete_todo",
     title: "Complete Todo",
@@ -22366,9 +22467,9 @@ const register$d = (strapi2) => {
 };
 const completeTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$d
+  register: register$i
 }, Symbol.toStringTag, { value: "Module" }));
-const register$c = (strapi2) => {
+const register$h = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_goal",
     title: "Add Goal",
@@ -22462,9 +22563,9 @@ const register$c = (strapi2) => {
 };
 const addGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$c
+  register: register$h
 }, Symbol.toStringTag, { value: "Module" }));
-const register$b = (strapi2) => {
+const register$g = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_goals",
     title: "List Goals",
@@ -22552,7 +22653,7 @@ const register$b = (strapi2) => {
 };
 const listGoals = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$b
+  register: register$g
 }, Symbol.toStringTag, { value: "Module" }));
 function calculateStreaks(checkins, cadence) {
   if (checkins.length === 0) {
@@ -22626,7 +22727,7 @@ function calculateStreaks(checkins, cadence) {
   }
   return { currentStreak, bestStreak };
 }
-const register$a = (strapi2) => {
+const register$f = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_checkin",
     title: "Log Goal Check-in",
@@ -22732,9 +22833,9 @@ const register$a = (strapi2) => {
 const logCheckin = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   calculateStreaks,
-  register: register$a
+  register: register$f
 }, Symbol.toStringTag, { value: "Module" }));
-const register$9 = (strapi2) => {
+const register$e = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_goal_progress",
     title: "Get Goal Progress",
@@ -22831,9 +22932,9 @@ const register$9 = (strapi2) => {
 };
 const getGoalProgress = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$9
+  register: register$e
 }, Symbol.toStringTag, { value: "Module" }));
-const register$8 = (strapi2) => {
+const register$d = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_goal",
     title: "Update Goal",
@@ -22907,7 +23008,7 @@ const register$8 = (strapi2) => {
 };
 const updateGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$8
+  register: register$d
 }, Symbol.toStringTag, { value: "Module" }));
 function normalizeTitle(title) {
   return title.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
@@ -22922,7 +23023,7 @@ function isSimilar(title1, title2) {
   const similarity = 2 * commonWords.length / (words1.length + words2.length);
   return similarity > 0.7;
 }
-const register$7 = (strapi2) => {
+const register$c = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "health_check",
     title: "Health Check",
@@ -23192,7 +23293,7 @@ const register$7 = (strapi2) => {
         }
       }
       if (checksToRun.includes("sanity")) {
-        const types = ["note", "todo", "person", "project", "retro", "gap", "capability", "rule"];
+        const types = ["note", "todo", "person", "project", "retro", "gap", "capability", "rule", "resource"];
         for (const type of types) {
           const uid = getUid(type);
           const results = await strapi22.documents(uid).findMany({ limit: 1 });
@@ -23234,9 +23335,9 @@ const register$7 = (strapi2) => {
 };
 const healthCheck = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$7
+  register: register$c
 }, Symbol.toStringTag, { value: "Module" }));
-const register$6 = (strapi2) => {
+const register$b = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_retro",
     title: "Update Retro",
@@ -23295,9 +23396,9 @@ const register$6 = (strapi2) => {
 };
 const updateRetro = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$6
+  register: register$b
 }, Symbol.toStringTag, { value: "Module" }));
-const register$5 = (strapi2) => {
+const register$a = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_gap",
     title: "Update Gap",
@@ -23354,9 +23455,9 @@ const register$5 = (strapi2) => {
 };
 const updateGap = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$5
+  register: register$a
 }, Symbol.toStringTag, { value: "Module" }));
-const register$4 = (strapi2) => {
+const register$9 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_briefing",
     title: "Get Briefing",
@@ -23564,9 +23665,9 @@ const register$4 = (strapi2) => {
 };
 const getBriefing = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$4
+  register: register$9
 }, Symbol.toStringTag, { value: "Module" }));
-const register$3 = (strapi2) => {
+const register$8 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "kb_stats",
     title: "Knowledge Base Statistics",
@@ -23585,7 +23686,8 @@ const register$3 = (strapi2) => {
         rule: number(),
         todo: number(),
         goal: number(),
-        goalCheckin: number()
+        goalCheckin: number(),
+        resource: number()
       }),
       notesByKind: record(number()),
       notesByTag: record(number()),
@@ -23625,7 +23727,8 @@ const register$3 = (strapi2) => {
         rule: 0,
         todo: 0,
         goal: 0,
-        goalCheckin: 0
+        goalCheckin: 0,
+        resource: 0
       };
       const contentTypes2 = [
         "note",
@@ -23639,7 +23742,8 @@ const register$3 = (strapi2) => {
         "rule",
         "todo",
         "goal",
-        "goal-checkin"
+        "goal-checkin",
+        "resource"
       ];
       for (const type of contentTypes2) {
         try {
@@ -23829,9 +23933,9 @@ const register$3 = (strapi2) => {
 };
 const kbStats = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$3
+  register: register$8
 }, Symbol.toStringTag, { value: "Module" }));
-const register$2 = (strapi2) => {
+const register$7 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "upsert_source",
     title: "Upsert Source",
@@ -23931,9 +24035,9 @@ const register$2 = (strapi2) => {
 };
 const upsertSource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$2
+  register: register$7
 }, Symbol.toStringTag, { value: "Module" }));
-const register$1 = (strapi2) => {
+const register$6 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_source",
     title: "Update Source",
@@ -23997,9 +24101,9 @@ const register$1 = (strapi2) => {
 };
 const updateSource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$1
+  register: register$6
 }, Symbol.toStringTag, { value: "Module" }));
-const register = (strapi2) => {
+const register$5 = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "upsert_person",
     title: "Upsert Person",
@@ -24081,6 +24185,766 @@ const register = (strapi2) => {
 };
 const upsertPerson = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  register: register$5
+}, Symbol.toStringTag, { value: "Module" }));
+const RESOURCE_STATUSES = ["draft", "final", "archived"];
+const RESOURCE_FORMATS = ["md", "page", "link", "pdf", "image", "other"];
+const AUTHOR_ATTRIBUTE = "author";
+const RESOURCE_UID = getUid("resource");
+const POPULATE = ["notes", "projects", "people", "sources", "file", "supersededBy"];
+const RELATION_TYPES = {
+  notes: "note",
+  projects: "project",
+  people: "person",
+  sources: "source"
+};
+const LIST_PAGE_SIZE = 100;
+const LIST_SCAN_CAP = 1e3;
+function slugify(text) {
+  return text.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function asRows(page) {
+  if (Array.isArray(page)) return page;
+  if (page && typeof page === "object" && Array.isArray(page.results)) {
+    return page.results;
+  }
+  return [];
+}
+function assertFormat(format) {
+  if (!RESOURCE_FORMATS.includes(format)) {
+    throw new Error(`Invalid format "${format}". Expected one of: ${RESOURCE_FORMATS.join(", ")}`);
+  }
+}
+function assertStatus(status2) {
+  if (!RESOURCE_STATUSES.includes(status2)) {
+    throw new Error(`Invalid status "${status2}". Expected one of: ${RESOURCE_STATUSES.join(", ")}`);
+  }
+}
+function assertSummary(summary) {
+  if (summary != null && summary.length > 280) {
+    throw new Error("summary must be 280 characters or fewer");
+  }
+}
+function assertExternalUrl(format, externalUrl) {
+  if (format !== "page" && format !== "link") return;
+  if (!externalUrl || !/^https?:\/\//i.test(externalUrl)) {
+    throw new Error(`${format} resources require an http(s) externalUrl`);
+  }
+}
+function relationIds(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    if (typeof item === "string") return item;
+    if (item && typeof item === "object" && "documentId" in item && item.documentId) {
+      return String(item.documentId);
+    }
+    return "";
+  }).filter(Boolean);
+}
+function unique(ids) {
+  return [...new Set(ids)];
+}
+function connect(ids) {
+  return { connect: ids.map((documentId) => ({ documentId })) };
+}
+function disconnect(ids) {
+  return { disconnect: ids.map((documentId) => ({ documentId })) };
+}
+function mediaId(file) {
+  if (typeof file === "number") return file;
+  if (file && typeof file === "object" && typeof file.id === "number") {
+    return file.id;
+  }
+  return void 0;
+}
+function asIso(value) {
+  if (value == null || value === "") return void 0;
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+function hasTag(row, tag) {
+  const tags = Array.isArray(row.tags) ? row.tags : [];
+  const needle = tag.toLowerCase();
+  return tags.some((item) => String(item).toLowerCase() === needle);
+}
+function applyTags(existing, args) {
+  if (args.tags === void 0 && args.addTags === void 0 && args.removeTags === void 0) {
+    return void 0;
+  }
+  let tags = args.tags !== void 0 ? [...args.tags] : Array.isArray(existing) ? [...existing] : [];
+  if (args.addTags) tags = [.../* @__PURE__ */ new Set([...tags, ...args.addTags])];
+  if (args.removeTags) {
+    const drop = new Set(args.removeTags);
+    tags = tags.filter((tag) => !drop.has(tag));
+  }
+  return tags;
+}
+function applyBody(existing, args) {
+  if (args.body !== void 0) return args.body;
+  if (args.appendBody === void 0) return void 0;
+  const current = typeof existing === "string" ? existing : "";
+  return current ? `${current}
+
+---
+
+${args.appendBody}` : args.appendBody;
+}
+function relationSummaries(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || !item.documentId) return null;
+    const row = item;
+    return stripNullish({
+      documentId: String(row.documentId),
+      title: row.title,
+      name: row.name,
+      slug: row.slug
+    });
+  }).filter(Boolean);
+}
+function fileSummary(file) {
+  if (!file || typeof file !== "object") return void 0;
+  const row = file;
+  return stripNullish({
+    id: row.id,
+    url: row.url,
+    name: row.name,
+    mime: row.mime,
+    ext: row.ext,
+    alternativeText: row.alternativeText
+  });
+}
+function supersededSummary(value) {
+  if (!value || typeof value !== "object" || !value.documentId) return void 0;
+  const row = value;
+  return stripNullish({
+    documentId: String(row.documentId),
+    title: row.title,
+    slug: row.slug
+  });
+}
+function toListItem(row) {
+  return stripNullish({
+    documentId: row.documentId,
+    title: row.title,
+    slug: row.slug,
+    format: row.format,
+    status: row.state || "final",
+    summary: row.summary,
+    externalUrl: row.externalUrl,
+    createdBy: row[AUTHOR_ATTRIBUTE],
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    updatedAt: asIso(row.updatedAt)
+  });
+}
+function toDetail(row) {
+  return stripNullish({
+    documentId: row.documentId,
+    title: row.title,
+    slug: row.slug,
+    format: row.format,
+    status: row.state || "final",
+    body: row.body,
+    summary: row.summary,
+    extractedText: row.extractedText,
+    altText: row.altText,
+    externalUrl: row.externalUrl,
+    createdBy: row[AUTHOR_ATTRIBUTE],
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    updatedAt: asIso(row.updatedAt),
+    createdAt: asIso(row.createdAt),
+    notes: relationSummaries(row.notes),
+    projects: relationSummaries(row.projects),
+    people: relationSummaries(row.people),
+    sources: relationSummaries(row.sources),
+    file: fileSummary(row.file),
+    supersededBy: supersededSummary(row.supersededBy)
+  });
+}
+function emptyList(page, pageSize) {
+  return {
+    resources: [],
+    page,
+    pageSize,
+    count: 0,
+    total: 0,
+    hasMore: false,
+    truncated: false
+  };
+}
+function createResourceService(strapi2) {
+  const documents = (uid) => strapi2.documents(uid);
+  async function findMany(uid, params) {
+    return asRows(await documents(uid).findMany(params));
+  }
+  async function findByIdentifier(uid, identifier, populate2) {
+    const rows = await findMany(uid, {
+      filters: {
+        $or: [{ documentId: { $eq: identifier } }, { slug: { $eq: identifier } }]
+      },
+      populate: populate2,
+      limit: 1
+    });
+    return rows[0] ?? null;
+  }
+  async function findBySlug(slug) {
+    const rows = await findMany(RESOURCE_UID, {
+      filters: { slug: { $eq: slug } },
+      limit: 1
+    });
+    return rows[0] ?? null;
+  }
+  async function allocateSlug(title) {
+    const root2 = slugify(title);
+    if (!root2) {
+      throw new Error("Title must include letters or numbers so a slug can be generated");
+    }
+    for (let attempt = 1; attempt <= 50; attempt += 1) {
+      const candidate = attempt === 1 ? root2 : `${root2}-${attempt}`;
+      const existing = await findBySlug(candidate);
+      if (!existing) return candidate;
+    }
+    throw new Error(`Could not allocate a unique slug from "${root2}"`);
+  }
+  async function resolveIds(type, identifiers) {
+    const ids = [];
+    for (const identifier of identifiers) {
+      const found = await findByIdentifier(getUid(type), identifier);
+      if (!found) throw new Error(`${type} not found: ${identifier}`);
+      ids.push(found.documentId);
+    }
+    return ids;
+  }
+  async function resolvedLinks(args) {
+    return {
+      notes: args.notes ? await resolveIds("note", args.notes) : void 0,
+      projects: args.projects ? await resolveIds("project", args.projects) : void 0,
+      people: args.people ? await resolveIds("person", args.people) : void 0,
+      sources: args.sources ? await resolveIds("source", args.sources) : void 0
+    };
+  }
+  function assignLinks(data, links) {
+    for (const relation of Object.keys(RELATION_TYPES)) {
+      const ids = links[relation];
+      if (ids && ids.length > 0) data[relation] = connect(ids);
+    }
+  }
+  return {
+    async save(args) {
+      if (!args.title?.trim()) throw new Error("title is required");
+      assertFormat(args.format);
+      assertSummary(args.summary);
+      if (args.status) assertStatus(args.status);
+      const slug = slugify(args.slug || args.title);
+      if (!slug) throw new Error("Title must include letters or numbers so a slug can be generated");
+      const existing = await findBySlug(slug);
+      const externalUrl = args.externalUrl !== void 0 ? args.externalUrl : existing?.externalUrl;
+      assertExternalUrl(args.format, externalUrl);
+      const links = await resolvedLinks(args);
+      if (existing) {
+        const data2 = {
+          title: args.title,
+          format: args.format
+        };
+        if (args.body !== void 0) data2.body = args.body;
+        if (args.summary !== void 0) data2.summary = args.summary;
+        if (args.extractedText !== void 0) data2.extractedText = args.extractedText;
+        if (args.altText !== void 0) data2.altText = args.altText;
+        if (args.externalUrl !== void 0) data2.externalUrl = args.externalUrl;
+        if (args.status !== void 0) data2.state = args.status;
+        if (args.tags !== void 0) data2.tags = args.tags;
+        if (args.createdBy !== void 0) data2[AUTHOR_ATTRIBUTE] = args.createdBy;
+        assignLinks(data2, links);
+        const updated = await documents(RESOURCE_UID).update({
+          documentId: existing.documentId,
+          data: data2
+        });
+        return {
+          created: false,
+          documentId: updated.documentId,
+          slug: updated.slug || slug,
+          status: updated.state || args.status || existing.state || "final",
+          format: updated.format || args.format,
+          message: "Updated existing resource"
+        };
+      }
+      const data = {
+        title: args.title,
+        slug,
+        format: args.format,
+        state: args.status ?? "final",
+        tags: args.tags ?? []
+      };
+      if (args.body !== void 0) data.body = args.body;
+      if (args.summary !== void 0) data.summary = args.summary;
+      if (args.extractedText !== void 0) data.extractedText = args.extractedText;
+      if (args.altText !== void 0) data.altText = args.altText;
+      if (args.externalUrl !== void 0) data.externalUrl = args.externalUrl;
+      if (args.createdBy !== void 0) data[AUTHOR_ATTRIBUTE] = args.createdBy;
+      assignLinks(data, links);
+      const created = await documents(RESOURCE_UID).create({ data });
+      return {
+        created: true,
+        documentId: created.documentId,
+        slug: created.slug || slug,
+        status: created.state || data.state,
+        format: created.format || args.format,
+        message: "Created resource"
+      };
+    },
+    async get(identifier) {
+      const row = await findByIdentifier(RESOURCE_UID, identifier, POPULATE);
+      return { resource: row ? toDetail(row) : null };
+    },
+    async list(args = {}) {
+      const page = Math.max(1, args.page ?? 1);
+      const pageSize = Math.min(100, Math.max(1, args.limit ?? 25));
+      if (args.format) assertFormat(args.format);
+      if (args.status) assertStatus(args.status);
+      let projectId;
+      if (args.project) {
+        const project2 = await findByIdentifier(getUid("project"), args.project);
+        if (!project2) return emptyList(page, pageSize);
+        projectId = project2.documentId;
+      }
+      const filters2 = {};
+      if (args.format) filters2.format = { $eq: args.format };
+      if (args.status) filters2.state = { $eq: args.status };
+      if (args.since) filters2.updatedAt = { $gte: sinceToUpdatedAt(args.since) };
+      if (projectId) filters2.projects = { documentId: { $eq: projectId } };
+      if (args.tag) {
+        const matches = [];
+        let scanned = 0;
+        let truncated = false;
+        for (let start2 = 0; scanned < LIST_SCAN_CAP; start2 += LIST_PAGE_SIZE) {
+          const batchLimit = Math.min(LIST_PAGE_SIZE, LIST_SCAN_CAP - scanned);
+          const batch = await findMany(RESOURCE_UID, {
+            filters: filters2,
+            sort: ["updatedAt:desc"],
+            start: start2,
+            limit: batchLimit
+          });
+          if (batch.length === 0) break;
+          scanned += batch.length;
+          for (const row of batch) {
+            if (hasTag(row, args.tag)) matches.push(row);
+          }
+          if (batch.length < batchLimit) break;
+          if (scanned >= LIST_SCAN_CAP) {
+            truncated = true;
+            break;
+          }
+        }
+        const startIdx = (page - 1) * pageSize;
+        const pageRows2 = matches.slice(startIdx, startIdx + pageSize);
+        return {
+          resources: pageRows2.map(toListItem),
+          page,
+          pageSize,
+          count: pageRows2.length,
+          total: matches.length,
+          hasMore: startIdx + pageSize < matches.length || truncated,
+          truncated
+        };
+      }
+      let total;
+      const api = documents(RESOURCE_UID);
+      if (typeof api.count === "function") {
+        try {
+          const counted = await api.count({ filters: filters2 });
+          if (typeof counted === "number") total = counted;
+        } catch (err) {
+          strapi2.log?.warn?.("[paul-brain] resource count failed:", err);
+        }
+      }
+      const start = (page - 1) * pageSize;
+      const fetched = await findMany(RESOURCE_UID, {
+        filters: filters2,
+        sort: ["updatedAt:desc"],
+        start,
+        limit: total == null ? pageSize + 1 : pageSize
+      });
+      const hasMore = total == null ? fetched.length > pageSize : start + Math.min(fetched.length, pageSize) < total;
+      const pageRows = fetched.slice(0, pageSize);
+      return {
+        resources: pageRows.map(toListItem),
+        page,
+        pageSize,
+        count: pageRows.length,
+        total,
+        hasMore,
+        truncated: false
+      };
+    },
+    async update(args) {
+      const existing = await findByIdentifier(RESOURCE_UID, args.identifier, POPULATE);
+      if (!existing) throw new Error(`Resource not found: ${args.identifier}`);
+      assertSummary(args.summary);
+      if (args.format) assertFormat(args.format);
+      if (args.status) assertStatus(args.status);
+      const format = args.format ?? existing.format;
+      const externalUrl = args.externalUrl !== void 0 ? args.externalUrl : existing.externalUrl;
+      if (args.format !== void 0 || args.externalUrl !== void 0 || args.newVersion) {
+        assertExternalUrl(format, externalUrl);
+      }
+      const links = await resolvedLinks(args);
+      if (args.newVersion) {
+        const title = args.title ?? existing.title;
+        const slug = await allocateSlug(title);
+        const tags2 = applyTags(existing.tags, args) ?? (Array.isArray(existing.tags) ? [...existing.tags] : []);
+        const body2 = applyBody(existing.body, args);
+        const data2 = {
+          title,
+          slug,
+          format,
+          state: args.status ?? existing.state ?? "final",
+          tags: tags2
+        };
+        if (body2 !== void 0) data2.body = body2;
+        else if (existing.body != null) data2.body = existing.body;
+        if (args.summary !== void 0) data2.summary = args.summary;
+        else if (existing.summary != null) data2.summary = existing.summary;
+        if (args.extractedText !== void 0) data2.extractedText = args.extractedText;
+        else if (existing.extractedText != null) data2.extractedText = existing.extractedText;
+        if (args.altText !== void 0) data2.altText = args.altText;
+        else if (existing.altText != null) data2.altText = existing.altText;
+        if (externalUrl !== void 0) data2.externalUrl = externalUrl;
+        if (args.createdBy !== void 0) data2[AUTHOR_ATTRIBUTE] = args.createdBy;
+        else if (existing[AUTHOR_ATTRIBUTE] != null) data2[AUTHOR_ATTRIBUTE] = existing[AUTHOR_ATTRIBUTE];
+        for (const relation of Object.keys(RELATION_TYPES)) {
+          const ids = unique([...relationIds(existing[relation]), ...links[relation] ?? []]);
+          if (ids.length > 0) data2[relation] = connect(ids);
+        }
+        const fileId = mediaId(existing.file);
+        if (fileId != null) data2.file = fileId;
+        const created = await documents(RESOURCE_UID).create({ data: data2 });
+        const supersededBy = {
+          supersededBy: { connect: [{ documentId: created.documentId }] }
+        };
+        await documents(RESOURCE_UID).update({
+          documentId: existing.documentId,
+          data: supersededBy
+        });
+        return {
+          updated: true,
+          newVersion: true,
+          documentId: created.documentId,
+          slug: created.slug || slug,
+          status: created.state || data2.state,
+          superseded: existing.documentId
+        };
+      }
+      const data = {};
+      if (args.title !== void 0) data.title = args.title;
+      if (args.format !== void 0) data.format = args.format;
+      const body = applyBody(existing.body, args);
+      if (body !== void 0) data.body = body;
+      if (args.summary !== void 0) data.summary = args.summary;
+      if (args.extractedText !== void 0) data.extractedText = args.extractedText;
+      if (args.altText !== void 0) data.altText = args.altText;
+      if (args.externalUrl !== void 0) data.externalUrl = args.externalUrl;
+      if (args.status !== void 0) data.state = args.status;
+      if (args.createdBy !== void 0) data[AUTHOR_ATTRIBUTE] = args.createdBy;
+      const tags = applyTags(existing.tags, args);
+      if (tags !== void 0) data.tags = tags;
+      assignLinks(data, links);
+      if (Object.keys(data).length === 0) {
+        return {
+          updated: true,
+          newVersion: false,
+          documentId: existing.documentId,
+          slug: existing.slug,
+          status: existing.state || "final"
+        };
+      }
+      const updated = await documents(RESOURCE_UID).update({
+        documentId: existing.documentId,
+        data
+      });
+      return {
+        updated: true,
+        newVersion: false,
+        documentId: updated.documentId,
+        slug: updated.slug || existing.slug,
+        status: updated.state || args.status || existing.state || "final"
+      };
+    },
+    async link(args) {
+      const resource2 = await findByIdentifier(RESOURCE_UID, args.resource);
+      if (!resource2) throw new Error(`Resource not found: ${args.resource}`);
+      const targetType = RELATION_TYPES[args.relation];
+      if (!targetType) throw new Error(`Unknown relation: ${args.relation}`);
+      if (args.operation !== "connect" && args.operation !== "disconnect") {
+        throw new Error("operation must be connect or disconnect");
+      }
+      const ids = await resolveIds(targetType, args.targets);
+      await documents(RESOURCE_UID).update({
+        documentId: resource2.documentId,
+        data: {
+          [args.relation]: args.operation === "connect" ? connect(ids) : disconnect(ids)
+        }
+      });
+      const verb = args.operation === "connect" ? "Connected" : "Disconnected";
+      return {
+        linked: true,
+        message: `${verb} ${ids.length} ${args.relation}`
+      };
+    }
+  };
+}
+const register$4 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "save_resource",
+    title: "Save Resource",
+    description: "Create a finished deliverable, or update the row with the same slug. Formats: md, page, link, pdf, image, other. Page and link require an http(s) externalUrl; put a markdown snapshot in body for a Page. Pass notes, projects, people, and sources as documentIds or slugs to attach. status defaults to final. createdBy is the bot or agent name. There is no file upload in this version. See get_brain_guide.",
+    resolveInputSchema: () => object({
+      title: string().describe("Resource title (slug is generated from this unless slug is set)"),
+      slug: string().optional().describe("Explicit slug. Upserts the row with this slug"),
+      format: _enum(RESOURCE_FORMATS).describe("md, page, link, pdf, image, or other"),
+      body: string().optional().describe("Markdown body. Required in practice for md, and a snapshot for page"),
+      summary: string().max(280).optional().describe("Short summary (280 characters max)"),
+      extractedText: string().optional().describe("Extracted file text. Leave empty; extraction is not implemented yet"),
+      altText: string().optional().describe("Description of an image or diagram"),
+      externalUrl: string().optional().describe("Page or link URL (http or https). Required for page and link"),
+      status: _enum(RESOURCE_STATUSES).optional().describe("draft, final (default), or archived"),
+      tags: array(string()).optional().describe("Tags, same shape as notes"),
+      createdBy: string().optional().describe("Bot or agent name that produced this"),
+      notes: array(string()).optional().describe("Note documentIds or slugs to attach"),
+      projects: array(string()).optional().describe("Project documentIds or slugs to attach"),
+      people: array(string()).optional().describe("Person documentIds or slugs to attach"),
+      sources: array(string()).optional().describe("Source documentIds or slugs to attach")
+    }),
+    resolveOutputSchema: () => object({
+      created: boolean(),
+      documentId: string(),
+      slug: string(),
+      status: string(),
+      format: string(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("resource.write") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const resources = createResourceService(strapi22);
+      const result = await resources.save(args);
+      const output = stripNullish(result);
+      return {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output
+      };
+    }
+  });
+};
+const saveResource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$4
+}, Symbol.toStringTag, { value: "Module" }));
+const relationSchema = object({
+  documentId: string(),
+  title: string().nullish(),
+  name: string().nullish(),
+  slug: string().nullish()
+});
+const register$3 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "get_resource",
+    title: "Get Resource",
+    description: "Fetch one resource by documentId or slug, including notes, projects, people, sources, file metadata, and supersededBy. See get_brain_guide.",
+    resolveInputSchema: () => object({
+      identifier: string().describe("documentId or slug")
+    }),
+    resolveOutputSchema: () => object({
+      resource: object({
+        documentId: string(),
+        title: string(),
+        slug: string().nullish(),
+        format: string(),
+        status: string(),
+        body: string().nullish(),
+        summary: string().nullish(),
+        extractedText: string().nullish(),
+        altText: string().nullish(),
+        externalUrl: string().nullish(),
+        createdBy: string().nullish(),
+        tags: array(string()),
+        updatedAt: string().nullish(),
+        createdAt: string().nullish(),
+        notes: array(relationSchema),
+        projects: array(relationSchema),
+        people: array(relationSchema),
+        sources: array(relationSchema),
+        file: object({
+          id: number().nullish(),
+          url: string().nullish(),
+          name: string().nullish(),
+          mime: string().nullish(),
+          ext: string().nullish(),
+          alternativeText: string().nullish()
+        }).nullish(),
+        supersededBy: relationSchema.nullish()
+      }).nullable()
+    }),
+    auth: {
+      policies: [{ action: getActionId("resource.read") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const resources = createResourceService(strapi22);
+      const result = await resources.get(args.identifier);
+      const output = result.resource ? stripNullish(result) : { resource: null };
+      return {
+        content: [
+          {
+            type: "text",
+            text: result.resource ? JSON.stringify(output.resource, null, 2) : "Resource not found"
+          }
+        ],
+        structuredContent: output
+      };
+    }
+  });
+};
+const getResource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$3
+}, Symbol.toStringTag, { value: "Module" }));
+const register$2 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "list_resources",
+    title: "List Resources",
+    description: "List resources newest first (updatedAt desc). Filters: format, status, tag, project (documentId or slug), since (YYYY-MM-DD Pacific midnight, or an ISO timestamp). Paginated with page (default 1) and limit (default 25, max 100). Tag matches scan the newest 1000 rows. See get_brain_guide.",
+    resolveInputSchema: () => object({
+      format: _enum(RESOURCE_FORMATS).optional().describe("Filter by format"),
+      status: _enum(RESOURCE_STATUSES).optional().describe("Filter by status: draft, final, archived"),
+      tag: string().optional().describe("Filter by a single tag (case-insensitive)"),
+      project: string().optional().describe("Project documentId or slug"),
+      since: string().optional().describe("Only resources updated on or after this Pacific date (YYYY-MM-DD) or ISO timestamp"),
+      page: number().int().min(1).optional().describe("1-based page (default 1)"),
+      limit: number().int().min(1).max(100).optional().describe("Page size (default 25, max 100)")
+    }),
+    resolveOutputSchema: () => object({
+      resources: array(
+        object({
+          documentId: string(),
+          title: string(),
+          slug: string().nullish(),
+          format: string(),
+          status: string(),
+          summary: string().nullish(),
+          externalUrl: string().nullish(),
+          createdBy: string().nullish(),
+          tags: array(string()),
+          updatedAt: string().nullish()
+        })
+      ),
+      page: number(),
+      pageSize: number(),
+      count: number(),
+      total: number().optional(),
+      hasMore: boolean(),
+      truncated: boolean().optional()
+    }),
+    auth: {
+      policies: [{ action: getActionId("resource.read") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const resources = createResourceService(strapi22);
+      const result = await resources.list(args);
+      const output = stripNullish(result);
+      return {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output
+      };
+    }
+  });
+};
+const listResources = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$2
+}, Symbol.toStringTag, { value: "Module" }));
+const register$1 = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "update_resource",
+    title: "Update Resource",
+    description: "Patch a resource by documentId or slug. Use appendBody to add markdown without replacing body. newVersion: true creates a new row (new slug) and sets supersededBy on the previous row to that new row. The previous row is otherwise left as it was. See get_brain_guide.",
+    resolveInputSchema: () => object({
+      identifier: string().describe("documentId or slug of the resource to update"),
+      title: string().optional().describe("New title"),
+      format: _enum(RESOURCE_FORMATS).optional().describe("New format"),
+      body: string().optional().describe("Replace body"),
+      appendBody: string().optional().describe("Append markdown to body"),
+      summary: string().max(280).optional().describe("New summary (280 characters max)"),
+      extractedText: string().optional().describe("Replace extracted text"),
+      altText: string().optional().describe("Replace alt text"),
+      externalUrl: string().optional().describe("New Page or link URL"),
+      status: _enum(RESOURCE_STATUSES).optional().describe("draft, final, or archived"),
+      tags: array(string()).optional().describe("Replace tags"),
+      addTags: array(string()).optional().describe("Tags to add"),
+      removeTags: array(string()).optional().describe("Tags to remove"),
+      createdBy: string().optional().describe("Bot or agent name"),
+      notes: array(string()).optional().describe("Note documentIds or slugs to attach"),
+      projects: array(string()).optional().describe("Project documentIds or slugs to attach"),
+      people: array(string()).optional().describe("Person documentIds or slugs to attach"),
+      sources: array(string()).optional().describe("Source documentIds or slugs to attach"),
+      newVersion: boolean().optional().describe("Create a new row and point the previous row's supersededBy at it")
+    }),
+    resolveOutputSchema: () => object({
+      updated: boolean(),
+      newVersion: boolean(),
+      documentId: string(),
+      slug: string(),
+      status: string(),
+      superseded: string().optional()
+    }),
+    auth: {
+      policies: [{ action: getActionId("resource.write") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const resources = createResourceService(strapi22);
+      const result = await resources.update(args);
+      const output = stripNullish(result);
+      return {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output
+      };
+    }
+  });
+};
+const updateResource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$1
+}, Symbol.toStringTag, { value: "Module" }));
+const register = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "link_resource",
+    title: "Link Resource",
+    description: "Attach or detach notes, projects, people, or sources on a resource. Pass documentIds or slugs. operation connect attaches; disconnect detaches. See get_brain_guide.",
+    resolveInputSchema: () => object({
+      resource: string().describe("Resource documentId or slug"),
+      relation: _enum(["notes", "projects", "people", "sources"]).describe("Relation to change"),
+      targets: array(string()).describe("Target documentIds or slugs"),
+      operation: _enum(["connect", "disconnect"]).describe("connect to attach, disconnect to detach")
+    }),
+    resolveOutputSchema: () => object({
+      linked: boolean(),
+      message: string()
+    }),
+    auth: {
+      policies: [{ action: getActionId("resource.write") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const resources = createResourceService(strapi22);
+      const result = await resources.link(args);
+      const output = stripNullish(result);
+      return {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output
+      };
+    }
+  });
+};
+const linkResource = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
   register
 }, Symbol.toStringTag, { value: "Module" }));
 const tools = [
@@ -24094,6 +24958,11 @@ const tools = [
   upsertPerson,
   upsertSource,
   updateSource,
+  saveResource,
+  getResource,
+  listResources,
+  updateResource,
+  linkResource,
   link,
   logDecision,
   forget,
@@ -24140,19 +25009,19 @@ const bootstrap = async ({ strapi: strapi2 }) => {
   registerMcpTools(strapi2);
   strapi2.log.info("[paul-brain] Bootstrap complete");
 };
-const kind$b = "collectionType";
-const collectionName$b = "paul_brain_notes";
-const info$b = {
+const kind$c = "collectionType";
+const collectionName$c = "paul_brain_notes";
+const info$c = {
   singularName: "note",
   pluralName: "notes",
   displayName: "Note",
   description: "Brain notes: facts, preferences, ideas, todos, logs, and references"
 };
-const options$b = {
+const options$c = {
   draftAndPublish: false
 };
-const pluginOptions$b = {};
-const attributes$b = {
+const pluginOptions$c = {};
+const attributes$c = {
   title: {
     type: "string",
     required: true
@@ -24260,30 +25129,36 @@ const attributes$b = {
     type: "relation",
     relation: "oneToOne",
     target: "plugin::paul-brain.note"
+  },
+  resources: {
+    type: "relation",
+    relation: "manyToMany",
+    target: "plugin::paul-brain.resource",
+    mappedBy: "notes"
   }
 };
-const schema$b = {
-  kind: kind$b,
-  collectionName: collectionName$b,
-  info: info$b,
-  options: options$b,
-  pluginOptions: pluginOptions$b,
-  attributes: attributes$b
+const schema$c = {
+  kind: kind$c,
+  collectionName: collectionName$c,
+  info: info$c,
+  options: options$c,
+  pluginOptions: pluginOptions$c,
+  attributes: attributes$c
 };
-const note = { schema: schema$b };
-const kind$a = "collectionType";
-const collectionName$a = "paul_brain_people";
-const info$a = {
+const note = { schema: schema$c };
+const kind$b = "collectionType";
+const collectionName$b = "paul_brain_people";
+const info$b = {
   singularName: "person",
   pluralName: "people",
   displayName: "Person",
   description: "People in Paul's network"
 };
-const options$a = {
+const options$b = {
   draftAndPublish: false
 };
-const pluginOptions$a = {};
-const attributes$a = {
+const pluginOptions$b = {};
+const attributes$b = {
   name: {
     type: "string",
     required: true
@@ -24332,30 +25207,36 @@ const attributes$a = {
     relation: "manyToMany",
     target: "plugin::paul-brain.decision",
     inversedBy: "people"
+  },
+  resources: {
+    type: "relation",
+    relation: "manyToMany",
+    target: "plugin::paul-brain.resource",
+    mappedBy: "people"
   }
 };
-const schema$a = {
-  kind: kind$a,
-  collectionName: collectionName$a,
-  info: info$a,
-  options: options$a,
-  pluginOptions: pluginOptions$a,
-  attributes: attributes$a
+const schema$b = {
+  kind: kind$b,
+  collectionName: collectionName$b,
+  info: info$b,
+  options: options$b,
+  pluginOptions: pluginOptions$b,
+  attributes: attributes$b
 };
-const person = { schema: schema$a };
-const kind$9 = "collectionType";
-const collectionName$9 = "paul_brain_projects";
-const info$9 = {
+const person = { schema: schema$b };
+const kind$a = "collectionType";
+const collectionName$a = "paul_brain_projects";
+const info$a = {
   singularName: "project",
   pluralName: "projects",
   displayName: "Project",
   description: "Paul's projects and initiatives"
 };
-const options$9 = {
+const options$a = {
   draftAndPublish: false
 };
-const pluginOptions$9 = {};
-const attributes$9 = {
+const pluginOptions$a = {};
+const attributes$a = {
   name: {
     type: "string",
     required: true
@@ -24425,30 +25306,36 @@ const attributes$9 = {
     relation: "oneToMany",
     target: "plugin::paul-brain.todo",
     mappedBy: "project"
+  },
+  resources: {
+    type: "relation",
+    relation: "manyToMany",
+    target: "plugin::paul-brain.resource",
+    mappedBy: "projects"
   }
 };
-const schema$9 = {
-  kind: kind$9,
-  collectionName: collectionName$9,
-  info: info$9,
-  options: options$9,
-  pluginOptions: pluginOptions$9,
-  attributes: attributes$9
+const schema$a = {
+  kind: kind$a,
+  collectionName: collectionName$a,
+  info: info$a,
+  options: options$a,
+  pluginOptions: pluginOptions$a,
+  attributes: attributes$a
 };
-const project = { schema: schema$9 };
-const kind$8 = "collectionType";
-const collectionName$8 = "paul_brain_decisions";
-const info$8 = {
+const project = { schema: schema$a };
+const kind$9 = "collectionType";
+const collectionName$9 = "paul_brain_decisions";
+const info$9 = {
   singularName: "decision",
   pluralName: "decisions",
   displayName: "Decision",
   description: "Architecture decisions and key choices"
 };
-const options$8 = {
+const options$9 = {
   draftAndPublish: false
 };
-const pluginOptions$8 = {};
-const attributes$8 = {
+const pluginOptions$9 = {};
+const attributes$9 = {
   title: {
     type: "string",
     required: true
@@ -24506,28 +25393,28 @@ const attributes$8 = {
     mappedBy: "decisions"
   }
 };
-const schema$8 = {
-  kind: kind$8,
-  collectionName: collectionName$8,
-  info: info$8,
-  options: options$8,
-  pluginOptions: pluginOptions$8,
-  attributes: attributes$8
+const schema$9 = {
+  kind: kind$9,
+  collectionName: collectionName$9,
+  info: info$9,
+  options: options$9,
+  pluginOptions: pluginOptions$9,
+  attributes: attributes$9
 };
-const decision = { schema: schema$8 };
-const kind$7 = "collectionType";
-const collectionName$7 = "paul_brain_sources";
-const info$7 = {
+const decision = { schema: schema$9 };
+const kind$8 = "collectionType";
+const collectionName$8 = "paul_brain_sources";
+const info$8 = {
   singularName: "source",
   pluralName: "sources",
   displayName: "Source",
   description: "External sources: videos, articles, transcripts, chats"
 };
-const options$7 = {
+const options$8 = {
   draftAndPublish: false
 };
-const pluginOptions$7 = {};
-const attributes$7 = {
+const pluginOptions$8 = {};
+const attributes$8 = {
   title: {
     type: "string",
     required: true
@@ -24573,30 +25460,36 @@ const attributes$7 = {
     relation: "manyToMany",
     target: "plugin::paul-brain.note",
     mappedBy: "sources"
+  },
+  resources: {
+    type: "relation",
+    relation: "manyToMany",
+    target: "plugin::paul-brain.resource",
+    mappedBy: "sources"
   }
 };
-const schema$7 = {
-  kind: kind$7,
-  collectionName: collectionName$7,
-  info: info$7,
-  options: options$7,
-  pluginOptions: pluginOptions$7,
-  attributes: attributes$7
+const schema$8 = {
+  kind: kind$8,
+  collectionName: collectionName$8,
+  info: info$8,
+  options: options$8,
+  pluginOptions: pluginOptions$8,
+  attributes: attributes$8
 };
-const source = { schema: schema$7 };
-const kind$6 = "collectionType";
-const collectionName$6 = "paul_brain_retros";
-const info$6 = {
+const source = { schema: schema$8 };
+const kind$7 = "collectionType";
+const collectionName$7 = "paul_brain_retros";
+const info$7 = {
   singularName: "retro",
   pluralName: "retros",
   displayName: "Retro",
   description: "Failure on real work + fix"
 };
-const options$6 = {
+const options$7 = {
   draftAndPublish: false
 };
-const pluginOptions$6 = {};
-const attributes$6 = {
+const pluginOptions$7 = {};
+const attributes$7 = {
   title: {
     type: "string",
     required: true
@@ -24637,28 +25530,28 @@ const attributes$6 = {
     inversedBy: "retros"
   }
 };
-const schema$6 = {
-  kind: kind$6,
-  collectionName: collectionName$6,
-  info: info$6,
-  options: options$6,
-  pluginOptions: pluginOptions$6,
-  attributes: attributes$6
+const schema$7 = {
+  kind: kind$7,
+  collectionName: collectionName$7,
+  info: info$7,
+  options: options$7,
+  pluginOptions: pluginOptions$7,
+  attributes: attributes$7
 };
-const retro = { schema: schema$6 };
-const kind$5 = "collectionType";
-const collectionName$5 = "paul_brain_gaps";
-const info$5 = {
+const retro = { schema: schema$7 };
+const kind$6 = "collectionType";
+const collectionName$6 = "paul_brain_gaps";
+const info$6 = {
   singularName: "gap",
   pluralName: "gaps",
   displayName: "Gap",
   description: "Request nothing handled well"
 };
-const options$5 = {
+const options$6 = {
   draftAndPublish: false
 };
-const pluginOptions$5 = {};
-const attributes$5 = {
+const pluginOptions$6 = {};
+const attributes$6 = {
   title: {
     type: "string",
     required: true
@@ -24697,28 +25590,28 @@ const attributes$5 = {
     "default": []
   }
 };
-const schema$5 = {
-  kind: kind$5,
-  collectionName: collectionName$5,
-  info: info$5,
-  options: options$5,
-  pluginOptions: pluginOptions$5,
-  attributes: attributes$5
+const schema$6 = {
+  kind: kind$6,
+  collectionName: collectionName$6,
+  info: info$6,
+  options: options$6,
+  pluginOptions: pluginOptions$6,
+  attributes: attributes$6
 };
-const gap = { schema: schema$5 };
-const kind$4 = "collectionType";
-const collectionName$4 = "paul_brain_capabilities";
-const info$4 = {
+const gap = { schema: schema$6 };
+const kind$5 = "collectionType";
+const collectionName$5 = "paul_brain_capabilities";
+const info$5 = {
   singularName: "capability",
   pluralName: "capabilities",
   displayName: "Capability",
   description: "What a system can and CANNOT do, probed and dated"
 };
-const options$4 = {
+const options$5 = {
   draftAndPublish: false
 };
-const pluginOptions$4 = {};
-const attributes$4 = {
+const pluginOptions$5 = {};
+const attributes$5 = {
   system: {
     type: "string",
     required: true
@@ -24741,28 +25634,28 @@ const attributes$4 = {
     type: "text"
   }
 };
-const schema$4 = {
-  kind: kind$4,
-  collectionName: collectionName$4,
-  info: info$4,
-  options: options$4,
-  pluginOptions: pluginOptions$4,
-  attributes: attributes$4
+const schema$5 = {
+  kind: kind$5,
+  collectionName: collectionName$5,
+  info: info$5,
+  options: options$5,
+  pluginOptions: pluginOptions$5,
+  attributes: attributes$5
 };
-const capability = { schema: schema$4 };
-const kind$3 = "collectionType";
-const collectionName$3 = "paul_brain_rules";
-const info$3 = {
+const capability = { schema: schema$5 };
+const kind$4 = "collectionType";
+const collectionName$4 = "paul_brain_rules";
+const info$4 = {
   singularName: "rule",
   pluralName: "rules",
   displayName: "Rule",
   description: "Deterministic routing/handling rules editable in admin"
 };
-const options$3 = {
+const options$4 = {
   draftAndPublish: false
 };
-const pluginOptions$3 = {};
-const attributes$3 = {
+const pluginOptions$4 = {};
+const attributes$4 = {
   name: {
     type: "string",
     required: true
@@ -24784,28 +25677,28 @@ const attributes$3 = {
     "default": true
   }
 };
-const schema$3 = {
-  kind: kind$3,
-  collectionName: collectionName$3,
-  info: info$3,
-  options: options$3,
-  pluginOptions: pluginOptions$3,
-  attributes: attributes$3
+const schema$4 = {
+  kind: kind$4,
+  collectionName: collectionName$4,
+  info: info$4,
+  options: options$4,
+  pluginOptions: pluginOptions$4,
+  attributes: attributes$4
 };
-const rule = { schema: schema$3 };
-const kind$2 = "collectionType";
-const collectionName$2 = "paul_brain_todos";
-const info$2 = {
+const rule = { schema: schema$4 };
+const kind$3 = "collectionType";
+const collectionName$3 = "paul_brain_todos";
+const info$3 = {
   singularName: "todo",
   pluralName: "todos",
   displayName: "Todo",
   description: "Task management for Paul's work"
 };
-const options$2 = {
+const options$3 = {
   draftAndPublish: false
 };
-const pluginOptions$2 = {};
-const attributes$2 = {
+const pluginOptions$3 = {};
+const attributes$3 = {
   title: {
     type: "string",
     required: true
@@ -24897,28 +25790,28 @@ const attributes$2 = {
     target: "plugin::paul-brain.todo"
   }
 };
-const schema$2 = {
-  kind: kind$2,
-  collectionName: collectionName$2,
-  info: info$2,
-  options: options$2,
-  pluginOptions: pluginOptions$2,
-  attributes: attributes$2
+const schema$3 = {
+  kind: kind$3,
+  collectionName: collectionName$3,
+  info: info$3,
+  options: options$3,
+  pluginOptions: pluginOptions$3,
+  attributes: attributes$3
 };
-const todo = { schema: schema$2 };
-const kind$1 = "collectionType";
-const collectionName$1 = "paul_brain_goals";
-const info$1 = {
+const todo = { schema: schema$3 };
+const kind$2 = "collectionType";
+const collectionName$2 = "paul_brain_goals";
+const info$2 = {
   singularName: "goal",
   pluralName: "goals",
   displayName: "Goal",
   description: "Goals with daily check-ins and streak tracking"
 };
-const options$1 = {
+const options$2 = {
   draftAndPublish: false
 };
-const pluginOptions$1 = {};
-const attributes$1 = {
+const pluginOptions$2 = {};
+const attributes$2 = {
   title: {
     type: "string",
     required: true
@@ -24979,28 +25872,28 @@ const attributes$1 = {
     mappedBy: "goal"
   }
 };
-const schema$1 = {
-  kind: kind$1,
-  collectionName: collectionName$1,
-  info: info$1,
-  options: options$1,
-  pluginOptions: pluginOptions$1,
-  attributes: attributes$1
+const schema$2 = {
+  kind: kind$2,
+  collectionName: collectionName$2,
+  info: info$2,
+  options: options$2,
+  pluginOptions: pluginOptions$2,
+  attributes: attributes$2
 };
-const goal = { schema: schema$1 };
-const kind = "collectionType";
-const collectionName = "paul_brain_goal_checkins";
-const info = {
+const goal = { schema: schema$2 };
+const kind$1 = "collectionType";
+const collectionName$1 = "paul_brain_goal_checkins";
+const info$1 = {
   singularName: "goal-checkin",
   pluralName: "goal-checkins",
   displayName: "Goal Checkin",
   description: "Daily or weekly check-ins for goals"
 };
-const options = {
+const options$1 = {
   draftAndPublish: false
 };
-const pluginOptions = {};
-const attributes = {
+const pluginOptions$1 = {};
+const attributes$1 = {
   goal: {
     type: "relation",
     relation: "manyToOne",
@@ -25022,6 +25915,119 @@ const attributes = {
     type: "string"
   }
 };
+const schema$1 = {
+  kind: kind$1,
+  collectionName: collectionName$1,
+  info: info$1,
+  options: options$1,
+  pluginOptions: pluginOptions$1,
+  attributes: attributes$1
+};
+const goalCheckin = { schema: schema$1 };
+const kind = "collectionType";
+const collectionName = "paul_brain_resources";
+const info = {
+  singularName: "resource",
+  pluralName: "resources",
+  displayName: "Resource",
+  description: "Finished deliverables: guides, reports, pages, and links"
+};
+const options = {
+  draftAndPublish: false
+};
+const pluginOptions = {};
+const attributes = {
+  title: {
+    type: "string",
+    required: true
+  },
+  slug: {
+    type: "uid",
+    targetField: "title"
+  },
+  format: {
+    type: "enumeration",
+    "enum": [
+      "md",
+      "page",
+      "link",
+      "pdf",
+      "image",
+      "other"
+    ],
+    required: true
+  },
+  body: {
+    type: "richtext"
+  },
+  summary: {
+    type: "text",
+    maxLength: 280
+  },
+  extractedText: {
+    type: "text"
+  },
+  altText: {
+    type: "text"
+  },
+  externalUrl: {
+    type: "text"
+  },
+  file: {
+    type: "media",
+    multiple: false,
+    required: false,
+    allowedTypes: [
+      "images",
+      "files"
+    ]
+  },
+  state: {
+    type: "enumeration",
+    "enum": [
+      "draft",
+      "final",
+      "archived"
+    ],
+    "default": "final"
+  },
+  tags: {
+    type: "json",
+    "default": []
+  },
+  author: {
+    type: "string"
+  },
+  notes: {
+    type: "relation",
+    relation: "manyToMany",
+    target: "plugin::paul-brain.note",
+    inversedBy: "resources"
+  },
+  projects: {
+    type: "relation",
+    relation: "manyToMany",
+    target: "plugin::paul-brain.project",
+    inversedBy: "resources"
+  },
+  people: {
+    type: "relation",
+    relation: "manyToMany",
+    target: "plugin::paul-brain.person",
+    inversedBy: "resources"
+  },
+  sources: {
+    type: "relation",
+    relation: "manyToMany",
+    target: "plugin::paul-brain.source",
+    inversedBy: "resources"
+  },
+  supersededBy: {
+    type: "relation",
+    relation: "oneToOne",
+    target: "plugin::paul-brain.resource"
+  }
+};
 const schema = {
   kind,
   collectionName,
@@ -25030,7 +26036,7 @@ const schema = {
   pluginOptions,
   attributes
 };
-const goalCheckin = { schema };
+const resource = { schema };
 const contentTypes = {
   note,
   person,
@@ -25043,7 +26049,8 @@ const contentTypes = {
   rule,
   todo,
   goal,
-  "goal-checkin": goalCheckin
+  "goal-checkin": goalCheckin,
+  resource
 };
 const PLUGIN_NAME = "paul-brain";
 const SEARCH_PAGE_SIZE = 100;
@@ -25060,10 +26067,18 @@ const TEXT_SEARCH_FIELDS = {
   rule: ["name", "match", "action"],
   todo: ["title", "goal", "acceptanceCriteria", "context", "waitingOn", "closingNote", "capturedBy"],
   goal: ["title", "description", "target"],
-  "goal-checkin": ["note", "loggedBy"]
+  "goal-checkin": ["note", "loggedBy"],
+  resource: ["title", "summary", "body", "extractedText", "altText"]
 };
 function searchKeywords(query) {
   return query.toLowerCase().split(/\s+/).filter((keyword) => keyword.length > 2);
+}
+function searchableText(type, entity) {
+  if (type === "resource") {
+    return ["summary", "body", "extractedText", "altText"].map((field) => entity[field]).filter((part) => typeof part === "string" && part.length > 0).join("\n");
+  }
+  const body = entity.body || entity.summary || entity.context || entity.excerpt || "";
+  return typeof body === "string" ? body : JSON.stringify(body);
 }
 function rowsFromFindMany(page) {
   if (Array.isArray(page)) return page;
@@ -25135,7 +26150,7 @@ ${data.body}`;
     return strapi2.documents(uid).update({ documentId, data: updates });
   },
   async search(options2) {
-    const { query, types = ["note", "person", "project", "decision", "source"], kind: kind2, tag, videoId, sourceId, since, limit = 25 } = options2;
+    const { query, types = ["note", "person", "project", "decision", "source", "resource"], kind: kind2, tag, videoId, sourceId, since, limit = 25 } = options2;
     const results = [];
     const queryLower = query.toLowerCase();
     for (const type of types) {
@@ -25197,7 +26212,7 @@ ${data.body}`;
           }
         }
         for (const entity of entities) {
-          if (tag && type === "note") {
+          if (tag && (type === "note" || type === "resource")) {
             const entityTags2 = Array.isArray(entity.tags) ? entity.tags : [];
             const hasMatchingTag = entityTags2.some(
               (t) => t.toLowerCase() === tag.toLowerCase()
@@ -25210,8 +26225,7 @@ ${data.body}`;
           let snippet = "";
           const title = entity.title || entity.name || "";
           const titleLower = title.toLowerCase();
-          const body = entity.body || entity.summary || entity.context || entity.excerpt || "";
-          const bodyText = typeof body === "string" ? body : JSON.stringify(body);
+          const bodyText = searchableText(type, entity);
           const bodyLower = bodyText.toLowerCase();
           const aliases2 = Array.isArray(entity.aliases) ? entity.aliases : [];
           const entityTags = Array.isArray(entity.tags) ? entity.tags : [];
@@ -25343,7 +26357,7 @@ const services = {
   brain
 };
 const index = {
-  register: register$z,
+  register: register$E,
   bootstrap,
   contentTypes,
   services

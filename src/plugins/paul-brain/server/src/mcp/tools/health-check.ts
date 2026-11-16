@@ -345,7 +345,7 @@ export const register = (strapi: Core.Strapi) => {
 
       // Sanity check: collections returning 0 rows
       if (checksToRun.includes('sanity')) {
-        const types = ['note', 'todo', 'person', 'project', 'retro', 'gap', 'capability', 'rule'];
+        const types = ['note', 'todo', 'person', 'project', 'retro', 'gap', 'capability', 'rule', 'resource'];
         
         for (const type of types) {
           const uid = getUid(type);

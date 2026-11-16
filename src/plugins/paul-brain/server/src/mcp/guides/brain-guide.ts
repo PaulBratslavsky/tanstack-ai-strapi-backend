@@ -11,7 +11,7 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 **Note on YouTube Transcripts**: Raw YouTube transcripts now live centrally in a separate Strapi Cloud app (yt-kb plugin at https://deserving-harmony-9f5ca04daf.strapiapp.com). Access them via the \`yt_kb__*\` MCP tools on the \`strapi-prod\` MCP server (e.g., \`yt_kb__get_transcript\`, \`yt_kb__search_transcript\`, \`yt_kb__add_video\`, etc.). Paul-brain stores only notes/sources/people that reference videos by YouTube videoId, enabling joins between notes and transcripts.
 
 **Core Principles for Team Brain**:
-- **Drafts only**: Save work-in-progress, not polished outputs
+- **Notes are drafts, resources are deliverables**: Save work-in-progress as notes, not polished outputs. When you finish a guide, brief, report, plan, or other document Paul may want again, save it with \`save_resource\` before you end the turn. Markdown goes in \`body\` (\`format: "md"\`). A Page gets \`format: "page"\`, the Page URL in \`externalUrl\`, and a markdown snapshot in \`body\`. A bare link is \`format: "link"\` plus \`externalUrl\`. Do not leave the only copy in \`/workspace\` or in a Page
 - **Uniform results are suspect**: If all/none/zero results come back, verify by checking one raw record
 - **Write negatives down**: Record what systems CANNOT do (capabilities table)
 - **Build new skills from gaps and retros**: When we fail or lack something repeatedly, that's the signal to improve
@@ -83,6 +83,17 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
    - Fields: goal (relation), date (required), met (boolean, required), note, loggedBy
    - One check-in per goal per date (updates existing instead of creating duplicate)
 
+13. **resource** — Finished deliverables (guides, briefs, reports, plans, Pages, links)
+   - Formats: \`md\`, \`page\`, \`link\`, \`pdf\`, \`image\`, \`other\`. This version is for \`md\`, \`page\`, and \`link\`. \`pdf\` / \`image\` / \`other\` exist on the type, but there is no upload flow and \`extractedText\` stays empty
+   - \`body\`: markdown. For a Page, also store the snapshot here so the text survives if the Page link does not
+   - \`externalUrl\`: required for \`page\` and \`link\` (http or https)
+   - \`summary\` (280 characters), \`altText\`, \`tags\` (JSON, same as notes)
+   - \`status\`: \`draft\`, \`final\` (default), \`archived\`. Stored as \`state\`, same as todos and goals, so it does not collide with Strapi's publication status. Tools accept and return \`status\`
+   - \`createdBy\`: bot or agent name. Stored as \`author\` because Strapi reserves \`createdBy\` for the admin user
+   - \`file\`: optional single media field. Nothing writes it yet
+   - Relations: notes, projects, people, sources. \`supersededBy\` points at the newer row, the same way notes and todos version themselves
+   - \`save_resource\` upserts by slug. A new version is \`update_resource\` with \`newVersion: true\`
+
 ## When to Use Which Tool
 
 ### get_briefing
@@ -96,7 +107,7 @@ Get a compact session briefing to start every session.
 
 ### kb_stats
 Get knowledge base statistics to understand what's in the brain.
-- Returns counts per content type (note, person, project, etc.)
+- Returns counts per content type (note, person, project, resource, and the rest)
 - Notes broken down by kind and tag
 - Video notes vs transcripts: shows which YouTube transcripts (from central yt-kb service) lack notes
 - Orphan counts: notes without links, people/projects/sources without notes
@@ -107,6 +118,7 @@ Get knowledge base statistics to understand what's in the brain.
 ### health_check
 Run diagnostic checks on brain data.
 - Checks for duplicates, missing fields, stale data, orphans, broken relations
+- Sanity check includes the resource collection along with the other brain types
 - Returns findings with severity (BLOCK/WARN) and suggested fixes
 - Run periodically or when data quality is suspect
 
@@ -121,11 +133,11 @@ Create a new note with duplicate detection.
 - Use \`createMissing: true\` to auto-create linked entities by name
 
 ### recall
-Search across all brain types with ranked results (searches note body/content and tags).
+Search across brain types with ranked results, including resources (title, summary, body, extractedText, and altText) as well as note body and tags.
 - Use specific queries: "strapi mcp tools" not just "strapi"
-- Filter by type: \`["note", "person"]\`
+- Filter by type: \`["note", "person"]\`. Resources are included by default. Use \`types: ["resource"]\` to search only deliverables. Resource matches look at title, summary, body, extractedText, and altText
 - Filter by kind: \`"video"\`, \`"lesson"\`, \`"fact"\`, etc.
-- Filter by tag: \`"strapi"\` (single tag)
+- Filter by tag: \`"strapi"\` (notes and resources)
 - Filter by videoId: find notes for a specific YouTube video
 - Filter by sourceId: find notes linked to a specific source
 - Results are ranked: title match > alias/tag match > body match
@@ -136,12 +148,12 @@ Search across all brain types with ranked results (searches note body/content an
 - Each type is paged newest-first (\`updatedAt\` desc) up to 1000 rows. Text matches older than that window are still included via a database filter on scalar fields (title, body, and the type's other text fields). Tag and alias matches are scored in memory on the scanned rows
 
 ### get_entity
-Fetch one entity by type + documentId or slug.
+Fetch one entity by type + documentId or slug, including \`resource\`. A raw resource row uses \`state\` and \`author\`; \`get_resource\` returns those as \`status\` and \`createdBy\`.
 - Relations are populated
 - Use after recall to get full details
 
 ### list_recent
-Get newest N items across types.
+Get newest N items across types, including resources.
 - Good for "what did we save today?"
 - Filter by \`kind\` for notes (\`fact\`, \`preference\`, etc.)
 - Filter by \`source_bot\` to see what a specific bot created
@@ -171,6 +183,36 @@ Update an existing source by documentId or slug.
 - Use when you know the source exists
 - For YouTube videos, ensure videoId is set to join with central yt-kb transcripts
 
+### save_resource
+Create a finished deliverable, or update the row that already has that slug.
+- \`format: "md"\` with the full markdown in \`body\` for a guide, brief, report, or plan
+- \`format: "page"\` with \`externalUrl\` set to the Page and a markdown snapshot in \`body\`
+- \`format: "link"\` with \`externalUrl\` when the deliverable is only a URL
+- \`status\` defaults to \`final\`. Use \`draft\` only while it is still being written
+- Always set \`createdBy\` to your bot name, plus \`summary\` and \`tags\`
+- Pass \`notes\`, \`projects\`, \`people\`, \`sources\` as documentIds or slugs to attach them
+- Call \`recall\` with \`types: ["resource"]\` first. Saving the same slug updates that row
+- Do not paste the only copy into \`/workspace\` or leave it only on a Page
+
+### get_resource
+Fetch one resource by documentId or slug, with notes, projects, people, sources, file metadata, and \`supersededBy\`.
+
+### list_resources
+Browse resources newest first.
+- Filters: \`format\`, \`status\`, \`tag\`, \`project\` (documentId or slug), \`since\`
+- \`since\` is a Pacific calendar date (\`YYYY-MM-DD\`, from midnight America/Los_Angeles) or a full ISO timestamp
+- \`page\` starts at 1. \`limit\` defaults to 25 (max 100)
+- Tag matches scan the newest 1000 rows. \`truncated: true\` means that window filled up
+
+### update_resource
+Patch a resource. Use \`appendBody\` to add markdown without replacing \`body\`.
+- \`newVersion: true\` creates a new row (its own slug) and sets \`supersededBy\` on the previous row to that new row. Relations, tags, and the media id are copied onto the new row. The previous row's text is left as it was
+
+### link_resource
+Attach or detach notes, projects, people, or sources.
+- \`operation: "connect"\` attaches. \`operation: "disconnect"\` detaches
+- Targets are documentIds or slugs
+
 ### link
 Connect or disconnect a note with people/projects/sources/decisions.
 - Pass documentIds or slugs
@@ -185,7 +227,7 @@ Create a decision record (context/decision/rationale).
 - Optionally mark a prior decision as superseded
 
 ### forget
-Delete an entity (requires \`confirm: true\`).
+Delete an entity, including a resource (requires \`confirm: true\`).
 - This is a separate permission (not granted by default)
 - Returns what was deleted for audit
 
@@ -328,6 +370,7 @@ Update goal fields.
 18. **Todo priorities**: Use P0 for urgent today, P1 for this week, P2 for soon (default), P3 for someday
 19. **Goal tracking**: Use \`add_goal\` for habits and targets, \`log_checkin\` daily, streaks auto-calculate
 20. **Goal categories**: Choose from health, fitness, work, learning, personal, other for better organization
+21. **Save deliverables as resources**: A finished guide, brief, report, plan, or Page is a resource, not only a file in \`/workspace\` or a Page. \`recall\` resources first, then \`save_resource\` with \`createdBy\`, \`summary\`, \`tags\`, and links to the project, notes, and sources it came from. Reply with the resource documentId next to any Page link
 
 ## Common Workflows
 
@@ -379,6 +422,13 @@ Update goal fields.
 2. \`update_todo\` to change status, add context, or append log entries
 3. \`complete_todo\` when done with optional closing note
 
+### Saving a finished document
+1. \`recall\` with \`types: ["resource"]\` and a few words from the title
+2. \`save_resource\` with \`format: "md"\` and the markdown in \`body\`, or \`format: "page"\` with \`externalUrl\` and a markdown snapshot
+3. Set \`status: "final"\`, \`createdBy\`, \`summary\`, and \`tags\`
+4. Pass the related project, note, person, and source ids
+5. A later revision uses \`update_resource\` with \`newVersion: true\`
+
 ### Tracking goals
 1. \`add_goal\` to create a new goal with category and target
 2. \`log_checkin\` daily (or weekly) to record progress
@@ -394,6 +444,8 @@ Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.health.read\` — health_check
 - \`plugin::paul-brain.brief.read\` — get_briefing
 - \`plugin::paul-brain.note.write\` — remember, update_note, link
+- \`plugin::paul-brain.resource.read\` — get_resource, list_resources
+- \`plugin::paul-brain.resource.write\` — save_resource, update_resource, link_resource
 - \`plugin::paul-brain.entity.write\` — upsert_person, upsert_source, update_source
 - \`plugin::paul-brain.decision.write\` — log_decision
 - \`plugin::paul-brain.meta.write\` — log_retro, log_gap, record_capability

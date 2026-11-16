@@ -76,6 +76,12 @@
       "relation": "oneToMany",
       "target": "plugin::paul-brain.todo",
       "mappedBy": "project"
+    },
+    "resources": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.resource",
+      "mappedBy": "projects"
     }
   }
 }

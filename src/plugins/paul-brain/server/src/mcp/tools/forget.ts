@@ -10,7 +10,7 @@ export const register = (strapi: Core.Strapi) => {
     description: 'Delete an entity (requires confirm: true). Returns what was deleted. Separate permission (not granted by default). See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
-      type: z.enum(['note', 'person', 'project', 'decision', 'source']).describe('Entity type'),
+      type: z.enum(['note', 'person', 'project', 'decision', 'source', 'resource']).describe('Entity type'),
       identifier: z.string().describe('documentId or slug'),
       confirm: z.boolean().describe('Must be true to confirm deletion'),
     }),
