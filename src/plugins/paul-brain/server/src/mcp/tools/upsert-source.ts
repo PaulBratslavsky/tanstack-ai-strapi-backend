@@ -3,7 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import type { BrainService } from '../../services/brain';
-import { stripNullish } from '../utils';
+import { stripNullish, toDateOnly } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -18,7 +18,7 @@ export const register = (strapi: Core.Strapi) => {
       videoId: z.string().optional().describe('YouTube video ID'),
       external_id: z.string().optional().describe('External ID (e.g., video ID, article ID)'),
       excerpt: z.string().optional().describe('Excerpt or description'),
-      captured_on: z.string().optional().describe('Date captured (ISO format)'),
+      captured_on: z.string().optional().describe('Date captured (YYYY-MM-DD)'),
     }),
     
     resolveOutputSchema: () => z.object({
@@ -76,7 +76,7 @@ export const register = (strapi: Core.Strapi) => {
         if (args.videoId) updates.videoId = args.videoId;
         if (args.external_id) updates.external_id = args.external_id;
         if (args.excerpt) updates.excerpt = args.excerpt;
-        if (args.captured_on) updates.captured_on = args.captured_on;
+        if (args.captured_on) updates.captured_on = toDateOnly(args.captured_on);
 
         result = await strapi.documents(uid).update({
           documentId: existing.documentId!,
@@ -94,7 +94,7 @@ export const register = (strapi: Core.Strapi) => {
             videoId: args.videoId,
             external_id: args.external_id,
             excerpt: args.excerpt,
-            captured_on: args.captured_on,
+            captured_on: args.captured_on ? toDateOnly(args.captured_on) : args.captured_on,
           },
         });
         created = true;

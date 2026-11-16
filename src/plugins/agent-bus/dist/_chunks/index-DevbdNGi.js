@@ -1,4 +1,7 @@
-import crypto from "crypto";
+"use strict";
+const crypto = require("crypto");
+const _interopDefault = (e) => e && e.__esModule ? e : { default: e };
+const crypto__default = /* @__PURE__ */ _interopDefault(crypto);
 const PLUGIN_NAME = "agent-bus";
 const getUid = (contentType) => `plugin::${PLUGIN_NAME}.${contentType}`;
 const PERMISSIONS = [
@@ -180,7 +183,7 @@ const startOutboxWorker = (strapi, config2) => {
           }
           const body = JSON.stringify(payload);
           const signatureInput = `${timestamp}.${body}`;
-          const signature = crypto.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
+          const signature = crypto__default.default.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), agent2.webhookTimeoutMs || 5e3);
           const headers = {
@@ -393,7 +396,7 @@ const bootstrap = async ({ strapi }) => {
   startOutboxWorker(strapi, finalConfig);
   startExpiryWorker(strapi);
   if (strapi.ai?.mcp?.isEnabled()) {
-    const { registerMcpTools } = await import("./mcp-BnKhQFNH.mjs");
+    const { registerMcpTools } = await Promise.resolve().then(() => require("./mcp-C3-KxcO6.js"));
     registerMcpTools(strapi);
   } else {
     strapi.log.info("[agent-bus] MCP is not enabled, skipping MCP tool registration");
@@ -2622,9 +2625,7 @@ const index = {
   controllers,
   config
 };
-export {
-  PLUGIN_NAME as P,
-  getUid as a,
-  getActionId as g,
-  index as i
-};
+exports.PLUGIN_NAME = PLUGIN_NAME;
+exports.getActionId = getActionId;
+exports.getUid = getUid;
+exports.index = index;

@@ -1,4 +1,5 @@
 import * as listAgents from './list-agents';
+import * as registerAgent from './register-agent';
 import * as sendMessage from './send-message';
 import * as checkInbox from './check-inbox';
 import * as claimMessage from './claim-message';
@@ -15,6 +16,7 @@ import * as cancel from './cancel';
 
 export const tools = [
   listAgents,
+  registerAgent,
   sendMessage,
   checkInbox,
   claimMessage,

@@ -31,7 +31,7 @@ The plugin exposes 34 MCP tools organized by function:
 | Tool | Description | Permission |
 |------|-------------|------------|
 | `get_brain_guide` | Returns usage guide, conventions, and best practices | `plugin::paul-brain.guide.read` |
-| `get_briefing` | Get session briefing (lessons, open issues, urgent todos) | `plugin::paul-brain.brief.read` |
+| `get_briefing` | Get session briefing (lessons, open issues, urgent todos, standing rules) | `plugin::paul-brain.brief.read` |
 | `kb_stats` | Get KB statistics including transcript coverage from central yt-kb | `plugin::paul-brain.stats.read` |
 | `health_check` | Run diagnostic checks on brain data | `plugin::paul-brain.health.read` |
 | `recall` | Ranked keyword search across all types | `plugin::paul-brain.read` |

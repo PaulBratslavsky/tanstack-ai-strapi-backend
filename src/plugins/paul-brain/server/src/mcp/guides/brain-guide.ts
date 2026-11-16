@@ -15,7 +15,7 @@ Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul
 - **Uniform results are suspect**: If all/none/zero results come back, verify by checking one raw record
 - **Write negatives down**: Record what systems CANNOT do (capabilities table)
 - **Build new skills from gaps and retros**: When we fail or lack something repeatedly, that's the signal to improve
-- **Start every session with get_briefing**: Load context about lessons, open issues, and urgent work
+- **Start every session with get_briefing**: Load context about lessons, open issues, urgent work, and standing rules
 - **Log retros after real failures**: Don't let lessons slip away
 - **Handle duplicate candidates**: When remember or add_todo returns needsDecision, choose merge/new/supersede
 
@@ -91,7 +91,8 @@ Get a compact session briefing to start every session.
 - Open retros and gaps
 - P0/P1 or overdue todos
 - Recent 'cannot' capabilities (last 90 days)
-- Call this first to load context
+- Enabled standing rules (\`rules\`: name, match, action, priority), highest priority first, up to 20
+- Call this first to load context, including routing rules. \`summary.rulesCount\` is the number returned
 
 ### kb_stats
 Get knowledge base statistics to understand what's in the brain.
@@ -132,6 +133,7 @@ Search across all brain types with ranked results (searches note body/content an
 - Recent items rank higher
 - Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
 - Always search before creating notes to avoid duplicates
+- Each type is paged newest-first (\`updatedAt\` desc) up to 1000 rows. Text matches older than that window are still included via a database filter on scalar fields (title, body, and the type's other text fields). Tag and alias matches are scored in memory on the scanned rows
 
 ### get_entity
 Fetch one entity by type + documentId or slug.
@@ -151,20 +153,20 @@ Patch a note's fields.
 
 ### upsert_person
 Create or update a person (matches by slug/alias, updates or creates).
-- Fields: name, role, org, email, handles (JSON: {github, x, linkedin}), notes_md, last_contact
+- Fields: name, role, org, email, handles (JSON: {github, x, linkedin}), notes_md, last_contact (YYYY-MM-DD)
 - Idempotent: safe to call multiple times with same name
 - Returns created: true/false and documentId
 
 ### upsert_source
 Create or update a source (matches by slug, videoId, or url).
-- Fields: title, type, url, videoId, external_id, excerpt, captured_on
+- Fields: title, type, url, videoId, external_id, excerpt, captured_on (YYYY-MM-DD)
 - Matches by slug (from title), videoId, or url
 - Updates matched source or creates new
 - Use for YouTube videos: pass videoId and url to join with central yt-kb transcripts
 
 ### update_source
 Update an existing source by documentId or slug.
-- Fields: title, type, url, videoId, external_id, excerpt, captured_on
+- Fields: title, type, url, videoId, external_id, excerpt, captured_on (YYYY-MM-DD)
 - All fields optional (only updates provided fields)
 - Use when you know the source exists
 - For YouTube videos, ensure videoId is set to join with central yt-kb transcripts
@@ -302,7 +304,7 @@ Update goal fields.
 
 ## Best Practices
 
-1. **Start with briefing**: Call \`get_briefing\` at session start to load lessons, open issues, and urgent todos
+1. **Start with briefing**: Call \`get_briefing\` at session start to load lessons, open issues, urgent todos, and enabled standing rules
 2. **Check KB stats**: Use \`kb_stats\` to understand what's in the brain and find transcripts without notes
 3. **Search before writing**: Always \`recall\` before creating notes to avoid duplicates
 4. **Handle duplicates**: When \`remember\` or \`add_todo\` returns needsDecision with candidates, review and choose merge/new/supersede

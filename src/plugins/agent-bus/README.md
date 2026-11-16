@@ -1,6 +1,6 @@
 # Agent Bus Plugin
 
-**Version:** 0.1.0
+**Version:** 0.4.0
 
 A Strapi 5 local plugin that provides a scoped, auditable message bus for registered agents. Agents can send typed messages to each other (primarily to Chief of Staff, the orchestrator) with risk classification, approval workflows, and webhook-based wake-up delivery.
 
@@ -181,7 +181,8 @@ npm run verify
 
 All tools are prefixed with `agent_bus__`:
 
-- `agent_bus__list_agents` - List active agents and capabilities
+- `agent_bus__list_agents` - List active agents and capabilities (`plugin::agent-bus.agent.read`)
+- `agent_bus__register_agent` - Create or update an agent by slug or name (`plugin::agent-bus.agent.manage`). Idempotent. Does not set webhook secrets. Only one orchestrator is allowed.
 - `agent_bus__send_message` - Send a message (default to=chief)
 - `agent_bus__check_inbox` - Check own inbox
 - `agent_bus__claim_message` - Claim a message and acquire lease
