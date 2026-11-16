@@ -11,7 +11,7 @@ export const register = (strapi: Core.Strapi) => {
     description: 'Get newest N items by updatedAt across or within types. Good for "what did we save today?". Optional filters: types, kind (notes only), source_bot. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
-      types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source'])).optional().describe('Limit to these types (default: all)'),
+      types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source', 'resource'])).optional().describe('Limit to these types (default: all)'),
       kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference', 'lesson', 'video', 'taught']).optional().describe('Filter notes by kind'),
       source_bot: z.string().optional().describe('Filter by source_bot (notes only)'),
       limit: z.number().min(1).max(50).optional().describe('Max results (default: 25)'),

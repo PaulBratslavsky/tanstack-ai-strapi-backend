@@ -18,6 +18,7 @@ This plugin provides a structured knowledge base that Paul's AI bots (Cursor age
 - **Todos**: Task management with status tracking and priorities
 - **Goals**: Goal tracking with daily/weekly check-ins and streak calculation
 - **Goal Check-ins**: Daily or weekly progress logs for goals
+- **Resources**: Finished deliverables (markdown, Pages, links) with relations back to notes, projects, people, and sources
 
 All content types support slugs, aliases, tags, and rich relations for context traversal.
 
@@ -25,7 +26,7 @@ All content types support slugs, aliases, tags, and rich relations for context t
 
 ## MCP Tools
 
-The plugin exposes 34 MCP tools organized by function:
+The plugin exposes 40 MCP tools organized by function:
 
 ### Core Read Operations
 | Tool | Description | Permission |
@@ -44,6 +45,17 @@ The plugin exposes 34 MCP tools organized by function:
 | `remember` | Create note with duplicate detection | `plugin::paul-brain.note.write` |
 | `update_note` | Patch note fields (append body, add/remove tags) | `plugin::paul-brain.note.write` |
 | `link` | Connect/disconnect note relations | `plugin::paul-brain.note.write` |
+
+### Resources
+| Tool | Description | Permission |
+|------|-------------|------------|
+| `save_resource` | Create a deliverable, or update the row with the same slug | `plugin::paul-brain.resource.write` |
+| `get_resource` | Fetch one resource by documentId or slug, with relations | `plugin::paul-brain.resource.read` |
+| `list_resources` | Newest-first list (format, status, tag, project, since), paginated | `plugin::paul-brain.resource.read` |
+| `update_resource` | Patch a resource, or create a new version (`newVersion`) | `plugin::paul-brain.resource.write` |
+| `link_resource` | Attach or detach notes, projects, people, sources | `plugin::paul-brain.resource.write` |
+
+Finished guides, reports, and Pages are resources (`format: md` with markdown in `body`, or `format: page` with `externalUrl` plus a markdown snapshot). Notes stay drafts. The content type stores lifecycle as `state` and the bot name as `author`; the tools call those `status` and `createdBy`. File upload and text extraction are not in this version.
 
 ### Entities (People, Sources)
 | Tool | Description | Permission |
@@ -104,6 +116,8 @@ Each tool requires specific admin token permissions:
 - `plugin::paul-brain.health.read` — Run health checks
 - `plugin::paul-brain.read` — Search and read entities (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo, list_goals)
 - `plugin::paul-brain.note.write` — Create and update notes (remember, update_note, link)
+- `plugin::paul-brain.resource.read` — Read resources (get_resource, list_resources)
+- `plugin::paul-brain.resource.write` — Create and update resources (save_resource, update_resource, link_resource)
 - `plugin::paul-brain.entity.write` — Create and update people/sources (upsert_person, upsert_source, update_source)
 - `plugin::paul-brain.decision.write` — Log decisions
 - `plugin::paul-brain.meta.write` — Log retros, gaps, capabilities (log_retro, log_gap, record_capability)
@@ -144,10 +158,12 @@ To add paul-brain permissions to an existing admin token:
    - **Read brain guide**
    - **Read brain (recall, get_entity, list_recent)**
    - **Write notes (remember, update_note, link)**
+   - **Read resources (get_resource, list_resources)**
+   - **Write resources (save_resource, update_resource, link_resource)**
    - **Write decisions (log_decision)**
    - *(Optionally)* **Delete entities (forget)**
 5. Scroll to **Plugins → Content Manager** and enable:
-   - **Read** on all paul-brain types (note, person, project, decision, source)
+   - **Read** on all paul-brain types (note, person, project, decision, source, resource)
    - **Create** and **Update** on all paul-brain types
 6. Save the token
 
@@ -223,6 +239,7 @@ The plugin loads from `dist/`, so rebuild after every change during development.
 - `plugin::paul-brain.todo`
 - `plugin::paul-brain.goal`
 - `plugin::paul-brain.goal-checkin`
+- `plugin::paul-brain.resource`
 
 ## Features
 

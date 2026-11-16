@@ -26,6 +26,7 @@ export const register = (strapi: Core.Strapi) => {
         todo: z.number(),
         goal: z.number(),
         goalCheckin: z.number(),
+        resource: z.number(),
       }),
       notesByKind: z.record(z.number()),
       notesByTag: z.record(z.number()),
@@ -68,11 +69,12 @@ export const register = (strapi: Core.Strapi) => {
         todo: 0,
         goal: 0,
         goalCheckin: 0,
+        resource: 0,
       };
 
       const contentTypes = [
         'note', 'person', 'project', 'decision', 'source',
-        'retro', 'gap', 'capability', 'rule', 'todo', 'goal', 'goal-checkin'
+        'retro', 'gap', 'capability', 'rule', 'todo', 'goal', 'goal-checkin', 'resource'
       ];
 
       for (const type of contentTypes) {

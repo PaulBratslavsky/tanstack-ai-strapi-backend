@@ -49,6 +49,12 @@
       "relation": "manyToMany",
       "target": "plugin::paul-brain.note",
       "mappedBy": "sources"
+    },
+    "resources": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.resource",
+      "mappedBy": "sources"
     }
   }
 }

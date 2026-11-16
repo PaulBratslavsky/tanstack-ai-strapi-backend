@@ -8,13 +8,13 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'recall',
     title: 'Recall from Brain',
-    description: 'Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Tag and alias matches are scored in memory. See get_brain_guide for usage.',
+    description: 'Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Resources are included and match title, summary, body, extractedText, and altText. Tag and alias matches are scored in memory. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
       query: z.string().describe('Search query (keywords)'),
-      types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source', 'retro', 'gap', 'capability', 'rule', 'todo', 'goal', 'goal-checkin'])).optional().describe('Limit search to these types (default: all)'),
+      types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source', 'retro', 'gap', 'capability', 'rule', 'todo', 'goal', 'goal-checkin', 'resource'])).optional().describe('Limit search to these types (default: notes, people, projects, decisions, sources, and resources)'),
       kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference', 'lesson', 'video', 'taught']).optional().describe('Filter notes by kind'),
-      tag: z.string().optional().describe('Filter by tag (notes only)'),
+      tag: z.string().optional().describe('Filter by tag (notes and resources)'),
       videoId: z.string().optional().describe('Filter by videoId (notes only)'),
       sourceId: z.string().optional().describe('Filter by linked source documentId (notes only)'),
       since: z.string().optional().describe('Only return items updated after this ISO date'),

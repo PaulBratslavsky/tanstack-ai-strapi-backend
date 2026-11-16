@@ -60,6 +60,12 @@
       "relation": "manyToMany",
       "target": "plugin::paul-brain.decision",
       "inversedBy": "people"
+    },
+    "resources": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::paul-brain.resource",
+      "mappedBy": "people"
     }
   }
 }

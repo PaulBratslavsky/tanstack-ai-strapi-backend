@@ -10,6 +10,7 @@ import rule from './rule';
 import todo from './todo';
 import goal from './goal';
 import goalCheckin from './goal-checkin';
+import resource from './resource';
 
 export default {
   note,
@@ -24,4 +25,5 @@ export default {
   todo,
   goal,
   'goal-checkin': goalCheckin,
+  resource,
 };

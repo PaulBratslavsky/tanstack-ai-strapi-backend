@@ -1,5 +1,7 @@
 # Paul's Brain — Usage Guide for AI Assistants
 
+The guide `get_brain_guide` returns is `brain-guide.ts`. This markdown file is not bundled.
+
 ## What is this?
 
 Paul's Brain is a shared long-term memory system accessible via MCP. All of Paul's AI assistants (Cursor agents, Grok bots, chat interfaces) read and write here to maintain continuity across conversations.

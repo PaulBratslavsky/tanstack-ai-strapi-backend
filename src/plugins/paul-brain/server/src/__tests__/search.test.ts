@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import brain, { SEARCH_PAGE_SIZE, SEARCH_SCAN_CAP } from '../services/brain';
-import { toDateOnly } from '../mcp/utils';
+import { pacificMidnightIso, sinceToUpdatedAt, toDateOnly } from '../mcp/utils';
 
 type Row = Record<string, any>;
 
@@ -72,6 +72,25 @@ function note(index: number, extra: Partial<Row> = {}): Row {
 }
 
 const NOTE_UID = 'plugin::paul-brain.note';
+const RESOURCE_UID = 'plugin::paul-brain.resource';
+
+function resource(index: number, extra: Partial<Row> = {}): Row {
+  const day = new Date(Date.UTC(2020, 0, 1) + index * 86400000).toISOString();
+  return {
+    documentId: `resource-${index}`,
+    title: `Resource ${index}`,
+    slug: `resource-${index}`,
+    format: 'md',
+    state: 'final',
+    summary: '',
+    body: '',
+    extractedText: '',
+    altText: '',
+    tags: [],
+    updatedAt: day,
+    ...extra,
+  };
+}
 
 describe('recall search', () => {
   it('finds a match past the old unordered 100-row window', async () => {
@@ -160,9 +179,95 @@ describe('recall search', () => {
   });
 });
 
+describe('resource recall', () => {
+  it('searches summary, body, extractedText, and altText', async () => {
+    const strapi = mockStrapi({
+      [RESOURCE_UID]: [
+        resource(1, { summary: 'line market brief' }),
+        resource(2, { body: 'hands-on guide to the talk' }),
+        resource(3, { extractedText: 'page seven mentions zephyr' }),
+        resource(4, { altText: 'diagram of the gateway' }),
+        resource(5, { title: 'unrelated', body: 'nothing here' }),
+      ],
+    });
+    const service = brain({ strapi: strapi as any });
+
+    const summary = await service.search({ query: 'market', types: ['resource'] });
+    const body = await service.search({ query: 'hands-on', types: ['resource'] });
+    const extracted = await service.search({ query: 'zephyr', types: ['resource'] });
+    const alt = await service.search({ query: 'gateway', types: ['resource'] });
+
+    expect(summary.map((result) => result.documentId)).toEqual(['resource-1']);
+    expect(body.map((result) => result.documentId)).toEqual(['resource-2']);
+    expect(extracted.map((result) => result.documentId)).toEqual(['resource-3']);
+    expect(alt.map((result) => result.documentId)).toEqual(['resource-4']);
+  });
+
+  it('includes resources in the default type list', async () => {
+    const strapi = mockStrapi({
+      [RESOURCE_UID]: [resource(1, { title: 'Zephyr guide' })],
+    });
+    const service = brain({ strapi: strapi as any });
+
+    const results = await service.search({ query: 'zephyr' });
+
+    expect(results.map((result) => result.documentId)).toEqual(['resource-1']);
+    expect(strapi.calls.some((call) => call.uid === RESOURCE_UID)).toBe(true);
+  });
+
+  it('asks the database for older resource text on every resource field', async () => {
+    const total = SEARCH_SCAN_CAP + 50;
+    const resources = Array.from({ length: total }, (_, index) =>
+      resource(index, index === 0 ? { extractedText: 'zephyr lives in the old pdf text' } : {})
+    );
+    const strapi = mockStrapi({ [RESOURCE_UID]: resources });
+    const service = brain({ strapi: strapi as any });
+
+    const results = await service.search({ query: 'zephyr', types: ['resource'] });
+
+    expect(results.map((result) => result.documentId)).toContain('resource-0');
+    const textQuery = strapi.calls.find((call) => Array.isArray(call.params.filters?.$or));
+    expect(textQuery?.params.filters.$or).toEqual(
+      expect.arrayContaining([
+        { title: { $containsi: 'zephyr' } },
+        { summary: { $containsi: 'zephyr' } },
+        { body: { $containsi: 'zephyr' } },
+        { extractedText: { $containsi: 'zephyr' } },
+        { altText: { $containsi: 'zephyr' } },
+      ])
+    );
+  });
+
+  it('filters resource tags the same way as notes', async () => {
+    const strapi = mockStrapi({
+      [RESOURCE_UID]: [
+        resource(1, { body: 'shared keyword alpha', tags: ['guide'] }),
+        resource(2, { body: 'shared keyword alpha', tags: ['draft'] }),
+      ],
+    });
+    const service = brain({ strapi: strapi as any });
+
+    const results = await service.search({ query: 'alpha', types: ['resource'], tag: 'guide' });
+
+    expect(results.map((result) => result.documentId)).toEqual(['resource-1']);
+  });
+});
+
 describe('toDateOnly', () => {
   it('keeps a calendar date and strips a time from an ISO timestamp', () => {
     expect(toDateOnly('2026-11-15')).toBe('2026-11-15');
     expect(toDateOnly('2026-11-15T08:30:00.000Z')).toBe('2026-11-15');
+  });
+});
+
+describe('Pacific dates', () => {
+  it('maps a calendar date to midnight in America/Los_Angeles', () => {
+    expect(pacificMidnightIso('2026-01-15')).toBe('2026-01-15T08:00:00.000Z');
+    expect(pacificMidnightIso('2026-07-15')).toBe('2026-07-15T07:00:00.000Z');
+  });
+
+  it('leaves a full timestamp alone and converts a date-only since', () => {
+    expect(sinceToUpdatedAt('2026-11-15T18:00:00.000Z')).toBe('2026-11-15T18:00:00.000Z');
+    expect(sinceToUpdatedAt('2026-01-15')).toBe('2026-01-15T08:00:00.000Z');
   });
 });
