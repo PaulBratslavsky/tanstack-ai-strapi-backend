@@ -26,7 +26,7 @@ All content types support slugs, aliases, tags, and rich relations for context t
 
 ## MCP Tools
 
-The plugin exposes 40 MCP tools organized by function:
+The plugin exposes 42 MCP tools organized by function:
 
 ### Core Read Operations
 | Tool | Description | Permission |
@@ -49,13 +49,15 @@ The plugin exposes 40 MCP tools organized by function:
 ### Resources
 | Tool | Description | Permission |
 |------|-------------|------------|
-| `save_resource` | Create a deliverable, or update the row with the same slug | `plugin::paul-brain.resource.write` |
-| `get_resource` | Fetch one resource by documentId or slug, with relations | `plugin::paul-brain.resource.read` |
+| `save_resource` | Create a deliverable, or update the row with the same slug. Same URL or content hash returns the existing row (`deduped: true`) | `plugin::paul-brain.resource.write` |
+| `get_resource` | Fetch one resource by documentId or slug, with relations and private file metadata | `plugin::paul-brain.resource.read` |
 | `list_resources` | Newest-first list (format, status, tag, project, since), paginated | `plugin::paul-brain.resource.read` |
-| `update_resource` | Patch a resource, or create a new version (`newVersion`) | `plugin::paul-brain.resource.write` |
+| `update_resource` | Patch a resource, or create a new version (`newVersion`). Accepts a Page snapshot | `plugin::paul-brain.resource.write` |
 | `link_resource` | Attach or detach notes, projects, people, sources | `plugin::paul-brain.resource.write` |
+| `attach_resource_file` | Attach a private file (base64 or URL, max 25 MB) and extract text or caption it | `plugin::paul-brain.resource.write` |
+| `get_resource_file` | Read file bytes (base64) or a short-lived signed URL. Never the public upload URL | `plugin::paul-brain.resource.read` |
 
-Finished guides, reports, and Pages are resources (`format: md` with markdown in `body`, or `format: page` with `externalUrl` plus a markdown snapshot). Notes stay drafts. The content type stores lifecycle as `state` and the bot name as `author`; the tools call those `status` and `createdBy`. File upload and text extraction are not in this version.
+Finished guides, reports, and Pages are resources (`format: md` with markdown in `body`, or `format: page` with `externalUrl` plus `snapshotMarkdown`). Notes stay drafts. The content type stores lifecycle as `state` (default `final`) and the bot name as `author`; the tools call those `status` and `createdBy`. Files are stored with Strapi's upload plugin. Tool output never includes the provider's public URL. `ANTHROPIC_API_KEY` captions images; without it, upload still succeeds. `PUBLIC_URL` makes large-file `accessUrl` values absolute.
 
 ### Entities (People, Sources)
 | Tool | Description | Permission |
@@ -116,8 +118,8 @@ Each tool requires specific admin token permissions:
 - `plugin::paul-brain.health.read` — Run health checks
 - `plugin::paul-brain.read` — Search and read entities (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo, list_goals)
 - `plugin::paul-brain.note.write` — Create and update notes (remember, update_note, link)
-- `plugin::paul-brain.resource.read` — Read resources (get_resource, list_resources)
-- `plugin::paul-brain.resource.write` — Create and update resources (save_resource, update_resource, link_resource)
+- `plugin::paul-brain.resource.read` — Read resources and their files (get_resource, list_resources, get_resource_file)
+- `plugin::paul-brain.resource.write` — Create and update resources and attach files (save_resource, update_resource, link_resource, attach_resource_file)
 - `plugin::paul-brain.entity.write` — Create and update people/sources (upsert_person, upsert_source, update_source)
 - `plugin::paul-brain.decision.write` — Log decisions
 - `plugin::paul-brain.meta.write` — Log retros, gaps, capabilities (log_retro, log_gap, record_capability)
@@ -158,8 +160,8 @@ To add paul-brain permissions to an existing admin token:
    - **Read brain guide**
    - **Read brain (recall, get_entity, list_recent)**
    - **Write notes (remember, update_note, link)**
-   - **Read resources (get_resource, list_resources)**
-   - **Write resources (save_resource, update_resource, link_resource)**
+   - **Read resources (get_resource, list_resources, get_resource_file)**
+   - **Write resources (save_resource, update_resource, link_resource, attach_resource_file)**
    - **Write decisions (log_decision)**
    - *(Optionally)* **Delete entities (forget)**
 5. Scroll to **Plugins → Content Manager** and enable:

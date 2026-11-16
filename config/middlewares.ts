@@ -7,7 +7,18 @@ const config: Core.Config.Middlewares = [
   'strapi::cors',
   'strapi::poweredBy',
   'strapi::query',
-  'strapi::body',
+  {
+    name: 'strapi::body',
+    config: {
+      // attach_resource_file accepts a 25 MB file as base64 inside the MCP JSON body.
+      jsonLimit: '48mb',
+      formLimit: '48mb',
+      textLimit: '48mb',
+      formidable: {
+        maxFileSize: 25 * 1024 * 1024,
+      },
+    },
+  },
   'strapi::session',
   'strapi::favicon',
   'strapi::public',

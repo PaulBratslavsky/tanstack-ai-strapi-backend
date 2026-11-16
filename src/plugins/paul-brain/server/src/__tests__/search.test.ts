@@ -188,6 +188,8 @@ describe('resource recall', () => {
         resource(3, { extractedText: 'page seven mentions zephyr' }),
         resource(4, { altText: 'diagram of the gateway' }),
         resource(5, { title: 'unrelated', body: 'nothing here' }),
+        resource(6, { caption: 'red barn at dusk' }),
+        resource(7, { snapshotMarkdown: 'canvas-only paragraph about the launch' }),
       ],
     });
     const service = brain({ strapi: strapi as any });
@@ -196,11 +198,15 @@ describe('resource recall', () => {
     const body = await service.search({ query: 'hands-on', types: ['resource'] });
     const extracted = await service.search({ query: 'zephyr', types: ['resource'] });
     const alt = await service.search({ query: 'gateway', types: ['resource'] });
+    const caption = await service.search({ query: 'barn', types: ['resource'] });
+    const snapshot = await service.search({ query: 'canvas-only', types: ['resource'] });
 
     expect(summary.map((result) => result.documentId)).toEqual(['resource-1']);
     expect(body.map((result) => result.documentId)).toEqual(['resource-2']);
     expect(extracted.map((result) => result.documentId)).toEqual(['resource-3']);
     expect(alt.map((result) => result.documentId)).toEqual(['resource-4']);
+    expect(caption.map((result) => result.documentId)).toEqual(['resource-6']);
+    expect(snapshot.map((result) => result.documentId)).toEqual(['resource-7']);
   });
 
   it('includes resources in the default type list', async () => {
@@ -234,6 +240,8 @@ describe('resource recall', () => {
         { body: { $containsi: 'zephyr' } },
         { extractedText: { $containsi: 'zephyr' } },
         { altText: { $containsi: 'zephyr' } },
+        { caption: { $containsi: 'zephyr' } },
+        { snapshotMarkdown: { $containsi: 'zephyr' } },
       ])
     );
   });
