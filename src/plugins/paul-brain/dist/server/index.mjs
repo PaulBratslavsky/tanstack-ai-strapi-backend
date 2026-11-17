@@ -15,7 +15,7 @@ import { inflateRawSync, inflateSync } from "zlib";
 import { mkdtemp, writeFile, rm } from "fs/promises";
 const PLUGIN_NAME$1 = "paul-brain";
 const CONTENT_TYPES = ["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin", "resource"];
-const getUid$1 = (type) => `plugin::${PLUGIN_NAME$1}.${type}`;
+const getUid = (type) => `plugin::${PLUGIN_NAME$1}.${type}`;
 const PERMISSIONS = [
   // Memory subcategory
   {
@@ -20360,7 +20360,7 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.10.0";
+const PLUGIN_VERSION = "1.10.1";
 const register$F = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
@@ -21085,7 +21085,7 @@ const register$C = (strapi2) => {
       const limit = args.limit || 25;
       const allItems = [];
       for (const type of types) {
-        const uid = getUid$1(type);
+        const uid = getUid(type);
         const filters2 = {};
         if (args.kind && type === "note") {
           filters2.kind = { $eq: args.kind };
@@ -21187,7 +21187,7 @@ const register$B = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid$1("note");
+      const uid = getUid("note");
       const slug = brainService.slugify(args.title);
       if (!args.onDuplicate) {
         const candidates = await brainService.findDuplicateNotes(args.title);
@@ -21290,7 +21290,7 @@ const register$B = (strapi2) => {
   });
 };
 async function applyLinks(strapi2, noteDocId, args, brainService) {
-  const uid = getUid$1("note");
+  const uid = getUid("note");
   if (args.link_people) {
     const peopleIds = await Promise.all(
       args.link_people.map(async (name) => {
@@ -21299,7 +21299,7 @@ async function applyLinks(strapi2, noteDocId, args, brainService) {
         if (existingPerson.exists) {
           return existingPerson.documentId;
         }
-        const newPerson = await strapi2.documents(getUid$1("person")).create({
+        const newPerson = await strapi2.documents(getUid("person")).create({
           data: { name, slug: personSlug }
         });
         return newPerson.documentId;
@@ -21318,7 +21318,7 @@ async function applyLinks(strapi2, noteDocId, args, brainService) {
         if (existingProject.exists) {
           return existingProject.documentId;
         }
-        const newProject = await strapi2.documents(getUid$1("project")).create({
+        const newProject = await strapi2.documents(getUid("project")).create({
           data: { name, slug: projectSlug }
         });
         return newProject.documentId;
@@ -21337,7 +21337,7 @@ async function applyLinks(strapi2, noteDocId, args, brainService) {
         if (existingSource.exists) {
           return existingSource.documentId;
         }
-        const newSource = await strapi2.documents(getUid$1("source")).create({
+        const newSource = await strapi2.documents(getUid("source")).create({
           data: { title, slug: sourceSlug }
         });
         return newSource.documentId;
@@ -21372,7 +21372,7 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
           if (existingPerson.exists) {
             return existingPerson.documentId;
           }
-          const newPerson = await strapi2.documents(getUid$1("person")).create({
+          const newPerson = await strapi2.documents(getUid("person")).create({
             data: { name, slug: personSlug }
           });
           return newPerson.documentId;
@@ -21388,7 +21388,7 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
           if (existingProject.exists) {
             return existingProject.documentId;
           }
-          const newProject = await strapi2.documents(getUid$1("project")).create({
+          const newProject = await strapi2.documents(getUid("project")).create({
             data: { name, slug: projectSlug }
           });
           return newProject.documentId;
@@ -21404,7 +21404,7 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
           if (existingSource.exists) {
             return existingSource.documentId;
           }
-          const newSource = await strapi2.documents(getUid$1("source")).create({
+          const newSource = await strapi2.documents(getUid("source")).create({
             data: { title, slug: sourceSlug }
           });
           return newSource.documentId;
@@ -21446,7 +21446,7 @@ const register$A = (strapi2) => {
       policies: [{ action: getActionId("note.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("note");
+      const uid = getUid("note");
       const notes = await strapi22.documents(uid).findMany({
         filters: {
           $or: [
@@ -21642,7 +21642,7 @@ const register$y = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid$1("decision");
+      const uid = getUid("decision");
       const slug = brainService.slugify(args.title);
       const data = {
         title: args.title,
@@ -21725,7 +21725,7 @@ const register$x = (strapi2) => {
       if (!args.confirm) {
         throw new Error("Deletion requires confirm: true");
       }
-      const uid = getUid$1(args.type);
+      const uid = getUid(args.type);
       const entities = await strapi22.documents(uid).findMany({
         filters: {
           $or: [
@@ -21785,7 +21785,7 @@ const register$w = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid$1("retro");
+      const uid = getUid("retro");
       const slug = brainService.slugify(args.title);
       const data = {
         title: args.title,
@@ -21851,7 +21851,7 @@ const register$v = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("retro");
+      const uid = getUid("retro");
       const limit = args.limit || 25;
       const filters2 = {};
       if (args.status) {
@@ -21917,7 +21917,7 @@ const register$u = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid$1("gap");
+      const uid = getUid("gap");
       const slug = brainService.slugify(args.title);
       const today = getTodayPST();
       const existing = await strapi22.documents(uid).findMany({
@@ -22017,7 +22017,7 @@ const register$t = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("gap");
+      const uid = getUid("gap");
       const limit = args.limit || 25;
       const filters2 = {};
       if (args.status) {
@@ -22080,7 +22080,7 @@ const register$s = (strapi2) => {
       policies: [{ action: getActionId("meta.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("capability");
+      const uid = getUid("capability");
       const existing = await strapi22.documents(uid).findMany({
         filters: {
           system: { $eq: args.system },
@@ -22157,7 +22157,7 @@ const register$r = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("capability");
+      const uid = getUid("capability");
       const limit = args.limit || 25;
       const filters2 = {};
       if (args.system) {
@@ -22216,7 +22216,7 @@ const register$q = (strapi2) => {
       policies: [{ action: getActionId("rule.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("rule");
+      const uid = getUid("rule");
       const data = {
         name: args.name,
         match: args.match,
@@ -22269,7 +22269,7 @@ const register$p = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("rule");
+      const uid = getUid("rule");
       const limit = args.limit || 50;
       const filters2 = {};
       if (args.enabled !== void 0) {
@@ -22370,7 +22370,7 @@ const register$o = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid$1("todo");
+      const uid = getUid("todo");
       if (!args.onDuplicate) {
         const candidates = await brainService.findDuplicateTodos(args.title, args.dueDate, args.projectId);
         if (candidates.length > 0) {
@@ -22517,7 +22517,7 @@ async function createNewTodo(strapi2, uid, args) {
     };
   }
   if (args.projectId) {
-    const projectUid = getUid$1("project");
+    const projectUid = getUid("project");
     const projects = await strapi2.documents(projectUid).findMany({
       filters: {
         $or: [
@@ -22572,7 +22572,7 @@ const register$n = (strapi2) => {
       policies: [{ action: getActionId("todo.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("todo");
+      const uid = getUid("todo");
       const todos = await strapi22.documents(uid).findMany({
         filters: { documentId: { $eq: args.identifier } },
         limit: 1
@@ -22681,7 +22681,7 @@ const register$m = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("todo");
+      const uid = getUid("todo");
       const limit = args.limit || 50;
       const filters2 = {};
       if (args.status && args.status.length > 0) {
@@ -22691,7 +22691,7 @@ const register$m = (strapi2) => {
         filters2.priority = { $in: args.priority };
       }
       if (args.project) {
-        const projectUid = getUid$1("project");
+        const projectUid = getUid("project");
         const projects = await strapi22.documents(projectUid).findMany({
           filters: {
             $or: [
@@ -22820,7 +22820,7 @@ const register$l = (strapi2) => {
       policies: [{ action: getActionId("read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("todo");
+      const uid = getUid("todo");
       const todos = await strapi22.documents(uid).findMany({
         filters: { documentId: { $eq: args.identifier } },
         populate: ["relatedNotes", "project"],
@@ -22896,7 +22896,7 @@ const register$k = (strapi2) => {
       policies: [{ action: getActionId("todo.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("todo");
+      const uid = getUid("todo");
       const todos = await strapi22.documents(uid).findMany({
         filters: { documentId: { $eq: args.identifier } },
         limit: 1
@@ -22973,7 +22973,7 @@ const register$j = (strapi2) => {
       policies: [{ action: getActionId("goal.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("goal");
+      const uid = getUid("goal");
       const existingGoals = await strapi22.documents(uid).findMany({
         filters: {
           title: { $eq: args.title },
@@ -23072,7 +23072,7 @@ const register$i = (strapi2) => {
       policies: [{ action: getActionId("goal.read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("goal");
+      const uid = getUid("goal");
       const limit = args.limit || 50;
       const filters2 = {};
       if (args.status && args.status.length > 0) {
@@ -23228,8 +23228,8 @@ const register$h = (strapi2) => {
       policies: [{ action: getActionId("goal.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const goalUid = getUid$1("goal");
-      const checkinUid = getUid$1("goal-checkin");
+      const goalUid = getUid("goal");
+      const checkinUid = getUid("goal-checkin");
       const goals = await strapi22.documents(goalUid).findMany({
         filters: {
           $or: [
@@ -23340,8 +23340,8 @@ const register$g = (strapi2) => {
       policies: [{ action: getActionId("goal.read") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const goalUid = getUid$1("goal");
-      const checkinUid = getUid$1("goal-checkin");
+      const goalUid = getUid("goal");
+      const checkinUid = getUid("goal-checkin");
       const goals = await strapi22.documents(goalUid).findMany({
         filters: {
           $or: [
@@ -23437,7 +23437,7 @@ const register$f = (strapi2) => {
       policies: [{ action: getActionId("goal.write") }]
     },
     createHandler: (strapi22) => async ({ args, context }) => {
-      const uid = getUid$1("goal");
+      const uid = getUid("goal");
       const goals = await strapi22.documents(uid).findMany({
         filters: {
           $or: [
@@ -23548,7 +23548,7 @@ const register$e = (strapi2) => {
         "sanity"
       ];
       if (checksToRun.includes("duplicates")) {
-        const todoUid = getUid$1("todo");
+        const todoUid = getUid("todo");
         const todos = await strapi22.documents(todoUid).findMany({
           filters: {
             state: { $notIn: ["done", "dropped", "superseded"] }
@@ -23575,7 +23575,7 @@ const register$e = (strapi2) => {
             }
           }
         }
-        const noteUid = getUid$1("note");
+        const noteUid = getUid("note");
         const notes = await strapi22.documents(noteUid).findMany({
           limit: 500
         });
@@ -23597,7 +23597,7 @@ const register$e = (strapi2) => {
         }
       }
       if (checksToRun.includes("missing_fields")) {
-        const todoUid = getUid$1("todo");
+        const todoUid = getUid("todo");
         const todos = await strapi22.documents(todoUid).findMany({
           limit: 500
         });
@@ -23645,7 +23645,7 @@ const register$e = (strapi2) => {
         }
       }
       if (checksToRun.includes("stale_notes")) {
-        const noteUid = getUid$1("note");
+        const noteUid = getUid("note");
         const notes = await strapi22.documents(noteUid).findMany({
           filters: {
             durability: { $eq: "temporary" }
@@ -23670,7 +23670,7 @@ const register$e = (strapi2) => {
         }
       }
       if (checksToRun.includes("orphans")) {
-        const noteUid = getUid$1("note");
+        const noteUid = getUid("note");
         const notes = await strapi22.documents(noteUid).findMany({
           populate: ["people", "projects", "sources", "decisions", "relatedTodos"],
           limit: 500
@@ -23694,7 +23694,7 @@ const register$e = (strapi2) => {
         }
       }
       if (checksToRun.includes("broken_relations")) {
-        const noteUid = getUid$1("note");
+        const noteUid = getUid("note");
         const notes = await strapi22.documents(noteUid).findMany({
           populate: ["people", "projects", "sources", "decisions", "relatedTodos"],
           limit: 500
@@ -23723,7 +23723,7 @@ const register$e = (strapi2) => {
         }
       }
       if (checksToRun.includes("old_capabilities")) {
-        const capabilityUid = getUid$1("capability");
+        const capabilityUid = getUid("capability");
         const capabilities = await strapi22.documents(capabilityUid).findMany({
           limit: 500
         });
@@ -23745,7 +23745,7 @@ const register$e = (strapi2) => {
         }
       }
       if (checksToRun.includes("open_retros")) {
-        const retroUid = getUid$1("retro");
+        const retroUid = getUid("retro");
         const retros = await strapi22.documents(retroUid).findMany({
           filters: {
             state: { $eq: "open" }
@@ -23772,7 +23772,7 @@ const register$e = (strapi2) => {
       if (checksToRun.includes("sanity")) {
         const types = ["note", "todo", "person", "project", "retro", "gap", "capability", "rule", "resource"];
         for (const type of types) {
-          const uid = getUid$1(type);
+          const uid = getUid(type);
           const results = await strapi22.documents(uid).findMany({ limit: 1 });
           if (results.length === 0) {
             const rawQuery = await strapi22.db.query(uid).count();
@@ -23839,7 +23839,7 @@ const register$d = (strapi2) => {
       policies: [{ action: getActionId("retro.update") }]
     },
     createHandler: (strapi22) => async ({ args }) => {
-      const uid = getUid$1("retro");
+      const uid = getUid("retro");
       const updates = {};
       if (args.title !== void 0) updates.title = args.title;
       if (args.task !== void 0) updates.task = args.task;
@@ -23899,7 +23899,7 @@ const register$c = (strapi2) => {
       policies: [{ action: getActionId("gap.update") }]
     },
     createHandler: (strapi22) => async ({ args }) => {
-      const uid = getUid$1("gap");
+      const uid = getUid("gap");
       const updates = {};
       if (args.title !== void 0) updates.title = args.title;
       if (args.request !== void 0) updates.request = args.request;
@@ -24001,12 +24001,12 @@ const register$b = (strapi2) => {
     createHandler: (strapi22) => async ({ args }) => {
       const lessonLimit = args.lessonLimit || 10;
       const todoLimit = args.todoLimit || 10;
-      const noteUid = getUid$1("note");
-      const retroUid = getUid$1("retro");
-      const gapUid = getUid$1("gap");
-      const todoUid = getUid$1("todo");
-      const capabilityUid = getUid$1("capability");
-      const ruleUid = getUid$1("rule");
+      const noteUid = getUid("note");
+      const retroUid = getUid("retro");
+      const gapUid = getUid("gap");
+      const todoUid = getUid("todo");
+      const capabilityUid = getUid("capability");
+      const ruleUid = getUid("rule");
       const pinnedLessons = await strapi22.documents(noteUid).findMany({
         filters: {
           kind: { $eq: "lesson" },
@@ -24224,7 +24224,7 @@ const register$a = (strapi2) => {
       ];
       for (const type of contentTypes2) {
         try {
-          const uid = getUid$1(type);
+          const uid = getUid(type);
           const items = await strapi22.documents(uid).findMany({
             limit: -1
           });
@@ -24239,7 +24239,7 @@ const register$a = (strapi2) => {
       let notesWithVideoId = 0;
       let notesWithoutLinks = 0;
       try {
-        const notes = await strapi22.documents(getUid$1("note")).findMany({
+        const notes = await strapi22.documents(getUid("note")).findMany({
           limit: -1,
           populate: ["people", "projects", "sources", "decisions"]
         });
@@ -24267,7 +24267,7 @@ const register$a = (strapi2) => {
       let videoSourcesWithNotes = 0;
       let totalVideoSources = 0;
       try {
-        const sources = await strapi22.documents(getUid$1("source")).findMany({
+        const sources = await strapi22.documents(getUid("source")).findMany({
           limit: -1,
           populate: ["notes"]
         });
@@ -24287,7 +24287,7 @@ const register$a = (strapi2) => {
       }
       let peopleWithoutNotes = 0;
       try {
-        const people = await strapi22.documents(getUid$1("person")).findMany({
+        const people = await strapi22.documents(getUid("person")).findMany({
           limit: -1,
           populate: ["notes"]
         });
@@ -24299,7 +24299,7 @@ const register$a = (strapi2) => {
       }
       let projectsWithoutNotes = 0;
       try {
-        const projects = await strapi22.documents(getUid$1("project")).findMany({
+        const projects = await strapi22.documents(getUid("project")).findMany({
           limit: -1,
           populate: ["notes"]
         });
@@ -24311,7 +24311,7 @@ const register$a = (strapi2) => {
       }
       let sourcesWithoutNotes = 0;
       try {
-        const sources = await strapi22.documents(getUid$1("source")).findMany({
+        const sources = await strapi22.documents(getUid("source")).findMany({
           limit: -1,
           populate: ["notes"]
         });
@@ -24354,7 +24354,7 @@ const register$a = (strapi2) => {
             page++;
           }
           transcriptsTotal = allTranscripts.length;
-          const notes = await strapi22.documents(getUid$1("note")).findMany({
+          const notes = await strapi22.documents(getUid("note")).findMany({
             limit: -1,
             filters: {
               videoId: { $notNull: true }
@@ -24437,7 +24437,7 @@ const register$9 = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid$1("source");
+      const uid = getUid("source");
       const slug = brainService.slugify(args.title);
       let existing = await brainService.findBySlugOrAlias("source", slug);
       if (!existing.exists && args.videoId) {
@@ -24539,7 +24539,7 @@ const register$8 = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid$1("source");
+      const uid = getUid("source");
       const sourceDocId = await brainService.resolveEntityBySlug("source", args.source);
       if (!sourceDocId) {
         throw new Error(`Source not found: ${args.source}`);
@@ -24605,7 +24605,7 @@ const register$7 = (strapi2) => {
     },
     createHandler: (strapi22) => async ({ args, context }) => {
       const brainService = strapi22.plugin(PLUGIN_NAME$1).service("brain");
-      const uid = getUid$1("person");
+      const uid = getUid("person");
       const slug = brainService.slugify(args.name);
       const existing = await brainService.findBySlugOrAlias("person", slug);
       let result;
@@ -24676,7 +24676,7 @@ const RESOURCE_TEXT_FIELDS = [
   "caption",
   "snapshotMarkdown"
 ];
-const RESOURCE_UID = getUid$1("resource");
+const RESOURCE_UID = getUid("resource");
 const POPULATE = ["notes", "projects", "people", "sources", "file", "supersededBy"];
 const RELATION_TYPES = {
   notes: "note",
@@ -24946,7 +24946,7 @@ function createResourceService(strapi2) {
   async function resolveIds(type, identifiers) {
     const ids = [];
     for (const identifier of identifiers) {
-      const found = await findByIdentifier(getUid$1(type), identifier);
+      const found = await findByIdentifier(getUid(type), identifier);
       if (!found) throw new Error(`${type} not found: ${identifier}`);
       ids.push(found.documentId);
     }
@@ -25062,7 +25062,7 @@ function createResourceService(strapi2) {
       if (args.status) assertStatus(args.status);
       let projectId;
       if (args.project) {
-        const project2 = await findByIdentifier(getUid$1("project"), args.project);
+        const project2 = await findByIdentifier(getUid("project"), args.project);
         if (!project2) return emptyList(page, pageSize);
         projectId = project2.documentId;
       }

@@ -1,6 +1,7 @@
 import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
+import { getUid } from '../types';
 import { publicFileView } from '../../services/resource-file';
 
 export const register = (strapi: Core.Strapi) => {
