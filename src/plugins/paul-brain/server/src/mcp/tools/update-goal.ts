@@ -3,6 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
 import { stripNullish } from '../utils';
+import { actorFrom, recordAudit } from '../../services/audit';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -62,6 +63,13 @@ export const register = (strapi: Core.Strapi) => {
       const updated = await strapi.documents(uid).update({
         documentId: goal.documentId,
         data: updateData,
+      });
+      await recordAudit(strapi, {
+        action: 'update',
+        entityKind: 'goal',
+        documentId: updated.documentId,
+        changedFields: Object.keys(updateData),
+        actor: actorFrom(undefined),
       });
 
       const output = stripNullish({

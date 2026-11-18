@@ -3,12 +3,14 @@ import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
 import { stripNullish, getTodayPST, getDaysAgoPST } from '../utils';
+import { withActiveRecords } from '../../services/archive';
+import { collectWaiting } from '../../services/waiting';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'get_briefing',
     title: 'Get Briefing',
-    description: 'Get a compact session briefing with pinned/recent lessons, open retros, open gaps, P0/P1/overdue todos, recent cannot capabilities, and enabled standing rules (highest priority first).',
+    description: 'Get a compact session briefing with pinned/recent lessons, open retros, open gaps, P0/P1/overdue todos, recent cannot capabilities, enabled standing rules, and a waiting array (red approvals, yellow veto window, exhausted webhooks, stale credentials, missing token permissions). Archived notes are excluded.',
     
     resolveInputSchema: () => z.object({
       lessonLimit: z.number().optional().describe('Max number of lessons to return (default: 10)'),
@@ -58,6 +60,12 @@ export const register = (strapi: Core.Strapi) => {
         action: z.string(),
         priority: z.number(),
       })),
+      waiting: z.array(z.object({
+        kind: z.enum(['approval_red', 'approval_yellow', 'delivery_exhausted', 'credential_stale', 'permission_missing']),
+        id: z.string(),
+        summary: z.string(),
+        minutesLeft: z.number().optional(),
+      })),
       summary: z.object({
         lessonsCount: z.number(),
         openRetrosCount: z.number(),
@@ -65,6 +73,7 @@ export const register = (strapi: Core.Strapi) => {
         urgentTodosCount: z.number(),
         cannotCount: z.number(),
         rulesCount: z.number(),
+        waitingCount: z.number(),
       }),
     }),
     
@@ -72,7 +81,7 @@ export const register = (strapi: Core.Strapi) => {
       policies: [{ action: getActionId('brief.read') }],
     },
     
-    createHandler: (strapi) => async ({ args }) => {
+    createHandler: (strapi) => async ({ args, context }) => {
       const lessonLimit = args.lessonLimit || 10;
       const todoLimit = args.todoLimit || 10;
 
@@ -85,10 +94,10 @@ export const register = (strapi: Core.Strapi) => {
 
       // Get pinned lessons
       const pinnedLessons = await strapi.documents(noteUid).findMany({
-        filters: {
+        filters: withActiveRecords('note', {
           kind: { $eq: 'lesson' },
           pinned: { $eq: true },
-        },
+        }),
         limit: lessonLimit,
         sort: ['updatedAt:desc'],
       });
@@ -98,10 +107,10 @@ export const register = (strapi: Core.Strapi) => {
       let recentLessons: any[] = [];
       if (remainingLessonSlots > 0) {
         recentLessons = await strapi.documents(noteUid).findMany({
-          filters: {
+          filters: withActiveRecords('note', {
             kind: { $eq: 'lesson' },
             pinned: { $ne: true },
-          },
+          }),
           limit: remainingLessonSlots,
           sort: ['updatedAt:desc'],
         });
@@ -210,6 +219,8 @@ export const register = (strapi: Core.Strapi) => {
         priority: typeof rule.priority === 'number' ? rule.priority : 0,
       }));
 
+      const waiting = await collectWaiting(strapi, context?.userAbility);
+
       const output = stripNullish({
         lessons,
         openRetros: retros,
@@ -217,6 +228,7 @@ export const register = (strapi: Core.Strapi) => {
         urgentTodos,
         recentCannotCapabilities: cannotCapabilities,
         rules,
+        waiting,
         summary: {
           lessonsCount: lessons.length,
           openRetrosCount: retros.length,
@@ -224,6 +236,7 @@ export const register = (strapi: Core.Strapi) => {
           urgentTodosCount: urgentTodos.length,
           cannotCount: cannotCapabilities.length,
           rulesCount: rules.length,
+          waitingCount: waiting.length,
         },
       });
 

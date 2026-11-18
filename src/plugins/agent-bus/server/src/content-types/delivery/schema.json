@@ -41,7 +41,7 @@
     },
     "state": {
       "type": "enumeration",
-      "enum": ["pending", "delivered", "failed", "exhausted", "skipped"],
+      "enum": ["pending", "delivered", "failed", "exhausted", "skipped", "resolved", "ignored"],
       "default": "pending"
     },
     "attemptCount": {
@@ -62,6 +62,12 @@
       "required": true
     },
     "deliveredAt": {
+      "type": "datetime"
+    },
+    "triageNote": {
+      "type": "text"
+    },
+    "triagedAt": {
       "type": "datetime"
     }
   }

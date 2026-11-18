@@ -2,6 +2,9 @@ import type { Core } from '@strapi/strapi';
 import { getUid } from '../mcp/types';
 import { scanForInjection } from '../utils/sanitizer';
 import type { CallerInfo } from './auth';
+import { shortSubject } from './webhook-payload';
+
+const CREDENTIAL_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface SendMessageInput {
   type: 'question' | 'task' | 'status' | 'proof' | 'result' | 'reply' | 'escalation' | 'notice';
@@ -492,5 +495,187 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
       status: 'claimed', // External API uses status
       claimedUntil: claimedUntil.toISOString(),
     };
+  },
+
+  /**
+   * Live items Paul may need to act on. Subjects only — message bodies are not loaded.
+   */
+  async waitingForPaul() {
+    const approvalUid = getUid('approval');
+    const deliveryUid = getUid('delivery');
+    const credentialUid = getUid('agent-credential');
+    const now = Date.now();
+    const staleBefore = new Date(now - CREDENTIAL_STALE_MS).toISOString();
+
+    const pending = await strapi.documents(approvalUid).findMany({
+      filters: { state: { $eq: 'pending' } },
+      populate: {
+        message: { fields: ['blastRadius'] },
+        thread: { fields: ['subject'] },
+      },
+      sort: ['createdAt:asc'],
+      limit: 100,
+    });
+
+    const redApprovals: Array<{ id: string; subject: string; messageId?: string }> = [];
+    const yellowApprovals: Array<{ id: string; subject: string; messageId?: string; minutesLeft: number }> = [];
+
+    for (const approval of pending || []) {
+      const message = approval.message as any;
+      const thread = approval.thread as any;
+      const subject = shortSubject(thread?.subject);
+      const isRed = message?.blastRadius === 'red' || approval.reviewLevel === 'human';
+      if (isRed) {
+        redApprovals.push({
+          id: approval.documentId,
+          subject,
+          messageId: message?.documentId,
+        });
+        continue;
+      }
+      const vetoMs = approval.vetoUntil ? new Date(approval.vetoUntil).getTime() - now : 0;
+      if (message?.blastRadius === 'yellow' && vetoMs > 0) {
+        yellowApprovals.push({
+          id: approval.documentId,
+          subject,
+          messageId: message?.documentId,
+          minutesLeft: Math.ceil(vetoMs / 60000),
+        });
+      }
+    }
+
+    const exhausted = await strapi.documents(deliveryUid).findMany({
+      filters: { state: { $eq: 'exhausted' } },
+      populate: { agent: { fields: ['slug'] } },
+      sort: ['updatedAt:desc'],
+      limit: 20,
+    });
+
+    const credentials = await strapi.documents(credentialUid).findMany({
+      filters: { state: { $eq: 'active' } },
+      populate: { agent: { fields: ['slug'] } },
+      limit: 200,
+    });
+
+    const staleCredentials = (credentials || [])
+      .filter((row: any) => {
+        const stamp = row.lastUsedAt || row.createdAt;
+        return typeof stamp === 'string' && stamp < staleBefore;
+      })
+      .map((row: any) => ({
+        id: row.documentId,
+        agentSlug: row.agent?.slug,
+        tokenName: row.tokenName,
+        unusedSince: row.lastUsedAt || row.createdAt,
+      }));
+
+    return {
+      redApprovals,
+      yellowApprovals,
+      exhaustedDeliveries: (exhausted || []).map((row: any) => ({
+        id: row.documentId,
+        agentSlug: row.agent?.slug,
+        event: row.event,
+      })),
+      staleCredentials,
+    };
+  },
+
+  /**
+   * When a later delivery to an agent succeeds, close that agent's older exhausted rows.
+   */
+  async resolveOlderExhausted(agentDocumentId: string, succeededAt: string): Promise<number> {
+    if (!agentDocumentId || !succeededAt) return 0;
+    const deliveryUid = getUid('delivery');
+    const older = await strapi.documents(deliveryUid).findMany({
+      filters: {
+        agent: { documentId: { $eq: agentDocumentId } },
+        state: { $eq: 'exhausted' },
+        createdAt: { $lt: succeededAt },
+      },
+      limit: 50,
+    });
+
+    let resolved = 0;
+    for (const row of older || []) {
+      await strapi.documents(deliveryUid).update({
+        documentId: row.documentId,
+        data: {
+          state: 'resolved',
+          triagedAt: new Date().toISOString(),
+          triageNote: 'Auto-resolved after a later delivery to this agent succeeded',
+        },
+      });
+      await this.audit({
+        action: 'delivery.auto_resolved',
+        entityType: 'delivery',
+        entityDocumentId: row.documentId,
+        metadata: { agentDocumentId },
+      });
+      resolved += 1;
+    }
+    return resolved;
+  },
+
+  async triageDelivery(input: {
+    deliveryId: string;
+    action: 'resolved' | 'ignored' | 'retry';
+    note?: string;
+  }): Promise<{ documentId: string; status: string }> {
+    const deliveryUid = getUid('delivery');
+    const rows = await strapi.documents(deliveryUid).findMany({
+      filters: { documentId: { $eq: input.deliveryId } },
+      limit: 1,
+    });
+    if (!rows || rows.length === 0) throw new Error('Delivery not found');
+
+    const delivery = rows[0];
+    if (delivery.state !== 'exhausted') {
+      throw new Error(`Only exhausted deliveries can be triaged (state: ${delivery.state})`);
+    }
+
+    const note = typeof input.note === 'string' ? input.note.replace(/\s+/g, ' ').trim().slice(0, 500) : '';
+    const triagedAt = new Date().toISOString();
+
+    if (input.action === 'retry') {
+      await strapi.documents(deliveryUid).update({
+        documentId: delivery.documentId,
+        data: {
+          state: 'pending',
+          attemptCount: 0,
+          nextAttemptAt: triagedAt,
+          lastError: null,
+          triageNote: note || null,
+          triagedAt,
+        },
+      });
+      await this.audit({
+        action: 'delivery.retry',
+        entityType: 'delivery',
+        entityDocumentId: delivery.documentId,
+        metadata: { hasNote: Boolean(note) },
+      });
+      return { documentId: delivery.documentId, status: 'pending' };
+    }
+
+    if (input.action !== 'resolved' && input.action !== 'ignored') {
+      throw new Error('action must be resolved, ignored, or retry');
+    }
+
+    await strapi.documents(deliveryUid).update({
+      documentId: delivery.documentId,
+      data: {
+        state: input.action,
+        triageNote: note || null,
+        triagedAt,
+      },
+    });
+    await this.audit({
+      action: `delivery.${input.action}`,
+      entityType: 'delivery',
+      entityDocumentId: delivery.documentId,
+      metadata: { hasNote: Boolean(note) },
+    });
+    return { documentId: delivery.documentId, status: input.action };
   },
 });

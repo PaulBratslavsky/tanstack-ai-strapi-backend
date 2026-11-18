@@ -3,6 +3,8 @@ import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
 import { stripNullish, getTodayPST, diffDays } from '../utils';
+import { withActiveRecords } from '../../services/archive';
+import { missingTokenPermissions } from '../token-permissions';
 
 interface Finding {
   severity: 'BLOCK' | 'WARN';
@@ -50,7 +52,8 @@ export const register = (strapi: Core.Strapi) => {
         'broken_relations',
         'old_capabilities',
         'open_retros',
-        'sanity'
+        'sanity',
+        'token_permissions'
       ])).optional().describe('Specific checks to run (default: all)'),
     }),
     
@@ -74,7 +77,7 @@ export const register = (strapi: Core.Strapi) => {
       policies: [{ action: getActionId('health.read') }],
     },
     
-    createHandler: (strapi) => async ({ args }) => {
+    createHandler: (strapi) => async ({ args, context }) => {
       const findings: Finding[] = [];
       const checksToRun = args.checks || [
         'duplicates',
@@ -84,7 +87,8 @@ export const register = (strapi: Core.Strapi) => {
         'broken_relations',
         'old_capabilities',
         'open_retros',
-        'sanity'
+        'sanity',
+        'token_permissions'
       ];
 
       // Check for duplicate todos and notes
@@ -122,6 +126,7 @@ export const register = (strapi: Core.Strapi) => {
 
         const noteUid = getUid('note');
         const notes = await strapi.documents(noteUid).findMany({
+          filters: withActiveRecords('note'),
           limit: 500,
         });
 
@@ -365,6 +370,19 @@ export const register = (strapi: Core.Strapi) => {
               });
             }
           }
+        }
+      }
+
+      if (checksToRun.includes('token_permissions')) {
+        for (const action of missingTokenPermissions(context?.userAbility)) {
+          findings.push({
+            severity: 'WARN',
+            kind: 'missing_token_permission',
+            type: 'permission',
+            ids: [action],
+            message: `Token is missing ${action}`,
+            suggestedFix: `Grant ${action} on this admin token`,
+          });
         }
       }
 

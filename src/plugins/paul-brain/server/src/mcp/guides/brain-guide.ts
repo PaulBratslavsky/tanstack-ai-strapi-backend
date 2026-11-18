@@ -106,11 +106,14 @@ Get a compact session briefing to start every session.
 - P0/P1 or overdue todos
 - Recent 'cannot' capabilities (last 90 days)
 - Enabled standing rules (\`rules\`: name, match, action, priority), highest priority first, up to 20
+- \`waiting\`: live items for Paul. Red agent-bus approvals still pending. Yellow items still inside the veto window, with minutes left. Exhausted agent-bus webhook deliveries. Agent credentials unused for more than 30 days (Pacific date in the summary). Token permissions \`health_check\` reports as missing. Agent-bus rows are omitted when that plugin is not installed. \`summary.waitingCount\` is the number returned
+- Archived notes are left out of the lesson list
 - Call this first to load context, including routing rules. \`summary.rulesCount\` is the number returned
 
 ### kb_stats
 Get knowledge base statistics to understand what's in the brain.
-- Returns counts per content type (note, person, project, resource, and the rest)
+- Returns counts per content type (note, person, project, resource, and the rest). Archived rows are excluded from those counts
+- \`archived\` reports archived totals separately for note, person, project, decision, source, and resource
 - Notes broken down by kind and tag
 - Video notes vs transcripts: shows which YouTube transcripts (from central yt-kb service) lack notes
 - Orphan counts: notes without links, people/projects/sources without notes
@@ -127,13 +130,24 @@ Run diagnostic checks on brain data.
 
 ### remember
 Create a new note with duplicate detection.
-- Returns needsDecision: true with candidates if similar notes found and onDuplicate not set
+- Duplicate check uses recall's search: title, summary, and body, newest-first across notes (not a title-only look at the first 100 rows)
+- Returns needsDecision: true with candidates if a real duplicate is found and onDuplicate is not set
+- \`dedupeKey\` is a stable identity. A live note with the same key is updated (merged) instead of duplicated. If that note already contains the summary and body, remember skips
 - onDuplicate: 'merge' — append to existing note
 - onDuplicate: 'new' — force create new note
 - onDuplicate: 'supersede' — create new and mark old as superseded
 - Always set meaningful tags
 - Set \`source_bot\` to identify which bot created it
 - Use \`createMissing: true\` to auto-create linked entities by name
+
+### verify_note
+Read-only check before saving a note. Same permission as recall (\`plugin::paul-brain.read\`).
+- Input: title, optional summary, body, tags, and dedupeKey
+- Searches title, summary, and body on every note, newest-first, with the same paging as recall. An exact dedupeKey is included even when the wording differs
+- Returns ranked related notes (no note body) and recommendedAction: \`create\`, \`update_existing\`, or \`skip\`
+- \`skip\` means the existing note already contains the proposed summary and body
+- Archived notes are ignored
+- Call this when you are unsure. remember still asks when it finds a duplicate and onDuplicate is not set
 
 ### recall
 Search across brain types with ranked results, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown) as well as note body and tags.
@@ -149,6 +163,7 @@ Search across brain types with ranked results, including resources (title, summa
 - Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
 - Always search before creating notes to avoid duplicates
 - Each type is paged newest-first (\`updatedAt\` desc) up to 1000 rows. Text matches older than that window are still included via a database filter on scalar fields (title, body, and the type's other text fields). Tag and alias matches are scored in memory on the scanned rows
+- Archived notes, people, projects, decisions, sources, and resources are excluded
 
 ### get_entity
 Fetch one entity by type + documentId or slug, including \`resource\`. A raw resource row uses \`state\` and \`author\`; \`get_resource\` returns those as \`status\` and \`createdBy\`.
@@ -158,6 +173,7 @@ Fetch one entity by type + documentId or slug, including \`resource\`. A raw res
 ### list_recent
 Get newest N items across types, including resources.
 - Good for "what did we save today?"
+- Archived rows are excluded
 - Filter by \`kind\` for notes (\`fact\`, \`preference\`, etc.)
 - Filter by \`source_bot\` to see what a specific bot created
 
@@ -248,9 +264,12 @@ Create a decision record (context/decision/rationale).
 - Optionally mark a prior decision as superseded
 
 ### forget
-Delete an entity, including a resource (requires \`confirm: true\`).
-- This is a separate permission (not granted by default)
-- Returns what was deleted for audit
+Archive an entity by default (note, person, project, decision, source, or resource). Requires \`confirm: true\`.
+- Sets an archived flag and \`archivedAt\`. A resource uses state \`archived\` plus \`archivedAt\`
+- Archived rows drop out of recall, list_recent, get_briefing, and the main kb_stats counts
+- \`force: true\` hard-deletes
+- This is a separate permission (not granted by default, and health_check does not nag when it is missing)
+- Each archive or delete writes an audit row: entity kind, documentId, action, changed field names, and actor. The audit row does not store note content
 
 ### log_retro
 Create a retro record (failure on real work + fix).
@@ -369,7 +388,7 @@ Update goal fields.
 
 1. **Start with briefing**: Call \`get_briefing\` at session start to load lessons, open issues, urgent todos, and enabled standing rules
 2. **Check KB stats**: Use \`kb_stats\` to understand what's in the brain and find transcripts without notes
-3. **Search before writing**: Always \`recall\` before creating notes to avoid duplicates
+3. **Search before writing**: Call \`verify_note\` or \`recall\` before creating notes. Pass a \`dedupeKey\` when the same fact will be saved again
 4. **Handle duplicates**: When \`remember\` or \`add_todo\` returns needsDecision with candidates, review and choose merge/new/supersede
 5. **Deduplication**: Let tools check for duplicates automatically — they'll ask when unsure
 6. **Tagging**: Tag liberally. Common tags: \`#strapi\`, \`#mcp\`, \`#cursor\`, \`#ai\`, \`#deployment\`, \`#bug\`, \`#feature\`
@@ -461,7 +480,7 @@ Update goal fields.
 
 Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.guide.read\` — read this guide
-- \`plugin::paul-brain.read\` — recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo
+- \`plugin::paul-brain.read\` — recall, verify_note, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo
 - \`plugin::paul-brain.stats.read\` — kb_stats
 - \`plugin::paul-brain.health.read\` — health_check
 - \`plugin::paul-brain.brief.read\` — get_briefing

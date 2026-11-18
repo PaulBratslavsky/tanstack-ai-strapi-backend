@@ -70,6 +70,13 @@ export const PERMISSIONS = [
     section: 'plugins',
     pluginName: PLUGIN_NAME,
     subCategory: 'operations',
+    uid: 'delivery.manage',
+    displayName: 'Resolve, ignore, or retry webhook deliveries',
+  },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'operations',
     uid: 'audit.read',
     displayName: 'Read audit events',
   },

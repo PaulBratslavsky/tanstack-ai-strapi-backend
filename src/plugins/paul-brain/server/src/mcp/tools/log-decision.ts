@@ -3,6 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import type { BrainService } from '../../services/brain';
+import { actorFrom, recordAudit } from '../../services/audit';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -76,10 +77,24 @@ export const register = (strapi: Core.Strapi) => {
             documentId: supersedesDocId,
             data: { state: 'superseded' },
           });
+          await recordAudit(strapi, {
+            action: 'supersede',
+            entityKind: 'decision',
+            documentId: supersedesDocId,
+            changedFields: ['state'],
+            actor: actorFrom(undefined),
+          });
         }
       }
 
       const result = await strapi.documents(uid).create({ data });
+      await recordAudit(strapi, {
+        action: 'create',
+        entityKind: 'decision',
+        documentId: result.documentId,
+        changedFields: Object.keys(data),
+        actor: actorFrom(undefined),
+      });
 
       const output = {
         created: true,

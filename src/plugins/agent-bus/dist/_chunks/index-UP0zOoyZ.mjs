@@ -66,6 +66,13 @@ const PERMISSIONS = [
     section: "plugins",
     pluginName: PLUGIN_NAME,
     subCategory: "operations",
+    uid: "delivery.manage",
+    displayName: "Resolve, ignore, or retry webhook deliveries"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME,
+    subCategory: "operations",
     uid: "audit.read",
     displayName: "Read audit events"
   }
@@ -92,6 +99,21 @@ const register = ({ strapi }) => {
   }
   strapi.log.debug("[agent-bus] Plugin registered");
 };
+const WEBHOOK_SUBJECT_MAX = 80;
+function shortSubject(subject) {
+  if (typeof subject !== "string") return "";
+  const text = subject.replace(/\s+/g, " ").trim();
+  if (text.length <= WEBHOOK_SUBJECT_MAX) return text;
+  return `${text.slice(0, WEBHOOK_SUBJECT_MAX - 1)}…`;
+}
+function buildWebhookPayload(delivery2, message2) {
+  return {
+    event: delivery2.event,
+    messageId: message2?.documentId || "",
+    threadId: message2?.thread?.documentId || "",
+    subject: shortSubject(message2?.thread?.subject)
+  };
+}
 const BACKOFF_DELAYS_MS = [15e3, 6e4, 3e5, 15e5, 72e5];
 const MAX_ATTEMPTS = 5;
 const startOutboxWorker = (strapi, config2) => {
@@ -109,11 +131,9 @@ const startOutboxWorker = (strapi, config2) => {
         populate: {
           agent: true,
           message: {
-            fields: ["type", "body", "payload", "priority", "blastRadius", "flagged", "state"],
+            fields: ["state"],
             populate: {
-              from: { fields: ["slug"] },
-              to: { fields: ["slug"] },
-              thread: { fields: ["documentId"] }
+              thread: { fields: ["subject"] }
             }
           }
         },
@@ -162,22 +182,7 @@ const startOutboxWorker = (strapi, config2) => {
         }
         try {
           const timestamp = Math.floor(Date.now() / 1e3);
-          const payload = {
-            event: delivery2.event,
-            messageId: message2.documentId,
-            threadId: message2.thread?.documentId,
-            type: message2.type,
-            from: message2.from?.slug,
-            to: message2.to?.slug,
-            priority: message2.priority,
-            blastRadius: message2.blastRadius,
-            flagged: message2.flagged
-          };
-          if (agent2.webhookMode === "full") {
-            payload.body = message2.body;
-            payload.payload = message2.payload;
-            payload.untrusted = true;
-          }
+          const payload = buildWebhookPayload(delivery2, message2);
           const body = JSON.stringify(payload);
           const signatureInput = `${timestamp}.${body}`;
           const signature = crypto.createHmac("sha256", agent2.webhookSecret || "").update(signatureInput).digest("hex");
@@ -228,6 +233,16 @@ const startOutboxWorker = (strapi, config2) => {
                 statusCode: response.status
               }
             });
+            if (agent2.documentId && typeof busService.resolveOlderExhausted === "function") {
+              try {
+                await busService.resolveOlderExhausted(
+                  agent2.documentId,
+                  delivery2.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+                );
+              } catch (resolveError) {
+                strapi.log.warn("[agent-bus] Could not auto-resolve older exhausted deliveries:", resolveError);
+              }
+            }
           } else if (response.status === 410 || response.status === 404) {
             await strapi.documents(deliveryUid).update({
               documentId: delivery2.documentId,
@@ -393,7 +408,7 @@ const bootstrap = async ({ strapi }) => {
   startOutboxWorker(strapi, finalConfig);
   startExpiryWorker(strapi);
   if (strapi.ai?.mcp?.isEnabled()) {
-    const { registerMcpTools } = await import("./mcp-BGwgpsH8.mjs");
+    const { registerMcpTools } = await import("./mcp-DPI54S09.mjs");
     registerMcpTools(strapi);
   } else {
     strapi.log.info("[agent-bus] MCP is not enabled, skipping MCP tool registration");
@@ -1007,7 +1022,9 @@ const attributes$1 = {
       "delivered",
       "failed",
       "exhausted",
-      "skipped"
+      "skipped",
+      "resolved",
+      "ignored"
     ],
     "default": "pending"
   },
@@ -1029,6 +1046,12 @@ const attributes$1 = {
     required: true
   },
   deliveredAt: {
+    type: "datetime"
+  },
+  triageNote: {
+    type: "text"
+  },
+  triagedAt: {
     type: "datetime"
   }
 };
@@ -1259,6 +1282,7 @@ const scanForInjection = (text) => {
   }
   return { flagged: false };
 };
+const CREDENTIAL_STALE_MS = 30 * 24 * 60 * 60 * 1e3;
 const bus$1 = ({ strapi }) => ({
   /**
    * Send a message
@@ -1625,6 +1649,166 @@ const bus$1 = ({ strapi }) => ({
       // External API uses status
       claimedUntil: claimedUntil.toISOString()
     };
+  },
+  /**
+   * Live items Paul may need to act on. Subjects only — message bodies are not loaded.
+   */
+  async waitingForPaul() {
+    const approvalUid = getUid("approval");
+    const deliveryUid = getUid("delivery");
+    const credentialUid = getUid("agent-credential");
+    const now = Date.now();
+    const staleBefore = new Date(now - CREDENTIAL_STALE_MS).toISOString();
+    const pending = await strapi.documents(approvalUid).findMany({
+      filters: { state: { $eq: "pending" } },
+      populate: {
+        message: { fields: ["blastRadius"] },
+        thread: { fields: ["subject"] }
+      },
+      sort: ["createdAt:asc"],
+      limit: 100
+    });
+    const redApprovals = [];
+    const yellowApprovals = [];
+    for (const approval2 of pending || []) {
+      const message2 = approval2.message;
+      const thread2 = approval2.thread;
+      const subject = shortSubject(thread2?.subject);
+      const isRed = message2?.blastRadius === "red" || approval2.reviewLevel === "human";
+      if (isRed) {
+        redApprovals.push({
+          id: approval2.documentId,
+          subject,
+          messageId: message2?.documentId
+        });
+        continue;
+      }
+      const vetoMs = approval2.vetoUntil ? new Date(approval2.vetoUntil).getTime() - now : 0;
+      if (message2?.blastRadius === "yellow" && vetoMs > 0) {
+        yellowApprovals.push({
+          id: approval2.documentId,
+          subject,
+          messageId: message2?.documentId,
+          minutesLeft: Math.ceil(vetoMs / 6e4)
+        });
+      }
+    }
+    const exhausted = await strapi.documents(deliveryUid).findMany({
+      filters: { state: { $eq: "exhausted" } },
+      populate: { agent: { fields: ["slug"] } },
+      sort: ["updatedAt:desc"],
+      limit: 20
+    });
+    const credentials = await strapi.documents(credentialUid).findMany({
+      filters: { state: { $eq: "active" } },
+      populate: { agent: { fields: ["slug"] } },
+      limit: 200
+    });
+    const staleCredentials = (credentials || []).filter((row) => {
+      const stamp = row.lastUsedAt || row.createdAt;
+      return typeof stamp === "string" && stamp < staleBefore;
+    }).map((row) => ({
+      id: row.documentId,
+      agentSlug: row.agent?.slug,
+      tokenName: row.tokenName,
+      unusedSince: row.lastUsedAt || row.createdAt
+    }));
+    return {
+      redApprovals,
+      yellowApprovals,
+      exhaustedDeliveries: (exhausted || []).map((row) => ({
+        id: row.documentId,
+        agentSlug: row.agent?.slug,
+        event: row.event
+      })),
+      staleCredentials
+    };
+  },
+  /**
+   * When a later delivery to an agent succeeds, close that agent's older exhausted rows.
+   */
+  async resolveOlderExhausted(agentDocumentId, succeededAt) {
+    if (!agentDocumentId || !succeededAt) return 0;
+    const deliveryUid = getUid("delivery");
+    const older = await strapi.documents(deliveryUid).findMany({
+      filters: {
+        agent: { documentId: { $eq: agentDocumentId } },
+        state: { $eq: "exhausted" },
+        createdAt: { $lt: succeededAt }
+      },
+      limit: 50
+    });
+    let resolved = 0;
+    for (const row of older || []) {
+      await strapi.documents(deliveryUid).update({
+        documentId: row.documentId,
+        data: {
+          state: "resolved",
+          triagedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          triageNote: "Auto-resolved after a later delivery to this agent succeeded"
+        }
+      });
+      await this.audit({
+        action: "delivery.auto_resolved",
+        entityType: "delivery",
+        entityDocumentId: row.documentId,
+        metadata: { agentDocumentId }
+      });
+      resolved += 1;
+    }
+    return resolved;
+  },
+  async triageDelivery(input) {
+    const deliveryUid = getUid("delivery");
+    const rows = await strapi.documents(deliveryUid).findMany({
+      filters: { documentId: { $eq: input.deliveryId } },
+      limit: 1
+    });
+    if (!rows || rows.length === 0) throw new Error("Delivery not found");
+    const delivery2 = rows[0];
+    if (delivery2.state !== "exhausted") {
+      throw new Error(`Only exhausted deliveries can be triaged (state: ${delivery2.state})`);
+    }
+    const note = typeof input.note === "string" ? input.note.replace(/\s+/g, " ").trim().slice(0, 500) : "";
+    const triagedAt = (/* @__PURE__ */ new Date()).toISOString();
+    if (input.action === "retry") {
+      await strapi.documents(deliveryUid).update({
+        documentId: delivery2.documentId,
+        data: {
+          state: "pending",
+          attemptCount: 0,
+          nextAttemptAt: triagedAt,
+          lastError: null,
+          triageNote: note || null,
+          triagedAt
+        }
+      });
+      await this.audit({
+        action: "delivery.retry",
+        entityType: "delivery",
+        entityDocumentId: delivery2.documentId,
+        metadata: { hasNote: Boolean(note) }
+      });
+      return { documentId: delivery2.documentId, status: "pending" };
+    }
+    if (input.action !== "resolved" && input.action !== "ignored") {
+      throw new Error("action must be resolved, ignored, or retry");
+    }
+    await strapi.documents(deliveryUid).update({
+      documentId: delivery2.documentId,
+      data: {
+        state: input.action,
+        triageNote: note || null,
+        triagedAt
+      }
+    });
+    await this.audit({
+      action: `delivery.${input.action}`,
+      entityType: "delivery",
+      entityDocumentId: delivery2.documentId,
+      metadata: { hasNote: Boolean(note) }
+    });
+    return { documentId: delivery2.documentId, status: input.action };
   }
 });
 const services = {

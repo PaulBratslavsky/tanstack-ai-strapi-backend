@@ -61,6 +61,16 @@
     "source_bot": {
       "type": "string"
     },
+    "dedupeKey": {
+      "type": "string"
+    },
+    "archived": {
+      "type": "boolean",
+      "default": false
+    },
+    "archivedAt": {
+      "type": "datetime"
+    },
     "pinned": {
       "type": "boolean",
       "default": false

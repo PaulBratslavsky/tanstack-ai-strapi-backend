@@ -3,6 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import type { BrainService } from '../../services/brain';
+import { actorFrom, recordAudit } from '../../services/audit';
 import { stripNullish, toDateOnly } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
@@ -58,6 +59,13 @@ export const register = (strapi: Core.Strapi) => {
       const result = await strapi.documents(uid).update({
         documentId: sourceDocId,
         data: updates,
+      });
+      await recordAudit(strapi, {
+        action: 'update',
+        entityKind: 'source',
+        documentId: result.documentId,
+        changedFields: Object.keys(updates),
+        actor: actorFrom(undefined),
       });
 
       const output = stripNullish({

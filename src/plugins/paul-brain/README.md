@@ -26,16 +26,17 @@ All content types support slugs, aliases, tags, and rich relations for context t
 
 ## MCP Tools
 
-The plugin exposes 42 MCP tools organized by function:
+The plugin exposes 43 MCP tools organized by function:
 
 ### Core Read Operations
 | Tool | Description | Permission |
 |------|-------------|------------|
 | `get_brain_guide` | Returns usage guide, conventions, and best practices | `plugin::paul-brain.guide.read` |
-| `get_briefing` | Get session briefing (lessons, open issues, urgent todos, standing rules) | `plugin::paul-brain.brief.read` |
+| `get_briefing` | Session briefing plus a waiting list (approvals, exhausted webhooks, stale credentials, missing token permissions) | `plugin::paul-brain.brief.read` |
 | `kb_stats` | Get KB statistics including transcript coverage from central yt-kb | `plugin::paul-brain.stats.read` |
 | `health_check` | Run diagnostic checks on brain data | `plugin::paul-brain.health.read` |
 | `recall` | Ranked keyword search across all types | `plugin::paul-brain.read` |
+| `verify_note` | Read-only duplicate check with a recommended action (create, update, or skip) | `plugin::paul-brain.read` |
 | `get_entity` | Fetch one entity by type + documentId/slug | `plugin::paul-brain.read` |
 | `list_recent` | Newest N items by updatedAt | `plugin::paul-brain.read` |
 
@@ -106,7 +107,7 @@ Finished guides, reports, and Pages are resources (`format: md` with markdown in
 ### Dangerous Operations
 | Tool | Description | Permission |
 |------|-------------|------------|
-| `forget` | Delete entity (requires confirm: true) | `plugin::paul-brain.forget` |
+| `forget` | Archive by default (`force: true` hard-deletes). Requires confirm | `plugin::paul-brain.forget` |
 
 ## Permissions
 
@@ -116,7 +117,7 @@ Each tool requires specific admin token permissions:
 - `plugin::paul-brain.brief.read` — Get session briefings
 - `plugin::paul-brain.stats.read` — Get KB statistics
 - `plugin::paul-brain.health.read` — Run health checks
-- `plugin::paul-brain.read` — Search and read entities (recall, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo, list_goals)
+- `plugin::paul-brain.read` — Search and read entities (recall, verify_note, get_entity, list_recent, list_retros, list_gaps, list_capabilities, list_rules, list_todos, get_todo, list_goals)
 - `plugin::paul-brain.note.write` — Create and update notes (remember, update_note, link)
 - `plugin::paul-brain.resource.read` — Read resources and their files (get_resource, list_resources, get_resource_file)
 - `plugin::paul-brain.resource.write` — Create and update resources and attach files (save_resource, update_resource, link_resource, attach_resource_file)
@@ -258,7 +259,7 @@ The plugin loads from `dist/`, so rebuild after every change during development.
 - Draft & Publish is **disabled** — all writes are live immediately
 - The plugin is separate from `strapi-plugin-tanstack-ai`'s own note/memory types
 - Search is keyword-based (v1); semantic/vector search may come later
-- `forget` is a hard delete; soft-delete (archived flag) is not yet implemented
+- `forget` archives by default (`archived` + `archivedAt`, or resource `state: archived`). `force: true` hard-deletes. Writes are audited by field name only
 
 ## License
 

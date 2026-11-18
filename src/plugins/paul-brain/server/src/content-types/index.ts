@@ -11,6 +11,7 @@ import todo from './todo';
 import goal from './goal';
 import goalCheckin from './goal-checkin';
 import resource from './resource';
+import auditEvent from './audit-event';
 
 export default {
   note,
@@ -26,4 +27,5 @@ export default {
   goal,
   'goal-checkin': goalCheckin,
   resource,
+  'audit-event': auditEvent,
 };

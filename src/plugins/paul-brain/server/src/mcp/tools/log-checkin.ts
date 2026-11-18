@@ -3,6 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
 import { stripNullish, getTodayPST, diffDays } from '../utils';
+import { actorFrom, recordAudit } from '../../services/audit';
 
 export function calculateStreaks(checkins: any[], cadence: 'daily' | 'weekly'): { currentStreak: number; bestStreak: number } {
   if (checkins.length === 0) {
@@ -185,6 +186,20 @@ export const register = (strapi: Core.Strapi) => {
           bestStreak,
           lastCheckinDate: checkinDate,
         },
+      });
+      await recordAudit(strapi, {
+        action: existingCheckins.length > 0 ? 'update' : 'create',
+        entityKind: 'goal-checkin',
+        documentId: checkin.documentId,
+        changedFields: existingCheckins.length > 0 ? ['met', 'note', 'loggedBy'] : ['goal', 'date', 'met', 'note', 'loggedBy'],
+        actor: actorFrom(undefined, args.loggedBy),
+      });
+      await recordAudit(strapi, {
+        action: 'update',
+        entityKind: 'goal',
+        documentId: goal.documentId,
+        changedFields: ['currentStreak', 'bestStreak', 'lastCheckinDate'],
+        actor: actorFrom(undefined, args.loggedBy),
       });
 
       const output = stripNullish({

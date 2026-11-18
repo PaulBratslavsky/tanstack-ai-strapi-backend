@@ -13,6 +13,9 @@ import * as listApprovals from './list-approvals';
 import * as decide from './decide';
 import * as delegate from './delegate';
 import * as cancel from './cancel';
+import * as deliverySummary from './delivery-summary';
+import * as listDeliveries from './list-deliveries';
+import * as triageDelivery from './triage-delivery';
 
 export const tools = [
   listAgents,
@@ -30,4 +33,7 @@ export const tools = [
   decide,
   delegate,
   cancel,
+  deliverySummary,
+  listDeliveries,
+  triageDelivery,
 ];

@@ -1,6 +1,6 @@
 # Agent Bus Plugin
 
-**Version:** 0.4.0
+**Version:** 0.5.0
 
 A Strapi 5 local plugin that provides a scoped, auditable message bus for registered agents. Agents can send typed messages to each other (primarily to Chief of Staff, the orchestrator) with risk classification, approval workflows, and webhook-based wake-up delivery.
 
@@ -69,6 +69,7 @@ Verified against Strapi 5.60 source.
 - `approval.read` - List pending approvals
 - `approval.decide` - Approve, reject, veto
 - `delivery.read` - Inspect webhook deliveries
+- `delivery.manage` - Resolve, ignore, or retry exhausted webhook deliveries
 
 ## Installation
 
@@ -183,6 +184,9 @@ All tools are prefixed with `agent_bus__`:
 
 - `agent_bus__list_agents` - List active agents and capabilities (`plugin::agent-bus.agent.read`)
 - `agent_bus__register_agent` - Create or update an agent by slug or name (`plugin::agent-bus.agent.manage`). Idempotent. Does not set webhook secrets. Only one orchestrator is allowed.
+- `agent_bus__delivery_summary` - Counts by state and recent failures (`plugin::agent-bus.delivery.read`)
+- `agent_bus__list_deliveries` - Filter deliveries by state, agentId, and since (`plugin::agent-bus.delivery.read`)
+- `agent_bus__triage_delivery` - Resolve, ignore, or retry an exhausted delivery (`plugin::agent-bus.delivery.manage`)
 - `agent_bus__send_message` - Send a message (default to=chief)
 - `agent_bus__check_inbox` - Check own inbox
 - `agent_bus__claim_message` - Claim a message and acquire lease
@@ -210,7 +214,7 @@ Base path: `/api/agent-bus/v1`
 
 ## Webhook Delivery
 
-Agents can register a `webhookUrl` to be notified when messages arrive. The default mode is `reference` (sends only message IDs, not bodies).
+Agents can register a `webhookUrl` to be notified when messages arrive. Every webhook body is a short pointer. Message bodies are never included, including when `webhookMode` is `full`.
 
 ### Authentication
 
@@ -224,14 +228,11 @@ The HMAC signature (`X-Agent-Bus-Signature`) is always included for integrity ve
   "event": "message.queued",
   "messageId": "...",
   "threadId": "...",
-  "type": "question",
-  "from": "claude",
-  "to": "chief",
-  "priority": "P2",
-  "blastRadius": "green",
-  "flagged": false
+  "subject": "short thread subject"
 }
 ```
+
+`subject` is the thread subject, trimmed to 80 characters. It is not the message body. A later successful delivery to the same agent auto-resolves that agent's older exhausted deliveries.
 
 Headers:
 - `X-Agent-Bus-Event`

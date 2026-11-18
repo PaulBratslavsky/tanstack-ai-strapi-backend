@@ -3,6 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import type { BrainService } from '../../services/brain';
+import { actorFrom, recordAudit } from '../../services/audit';
 import { stripNullish, toDateOnly } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
@@ -82,6 +83,13 @@ export const register = (strapi: Core.Strapi) => {
           documentId: existing.documentId!,
           data: updates,
         });
+        await recordAudit(strapi, {
+          action: 'update',
+          entityKind: 'source',
+          documentId: result.documentId,
+          changedFields: Object.keys(updates),
+          actor: actorFrom(undefined),
+        });
         message = 'Updated existing source';
       } else {
         // Create new source
@@ -96,6 +104,13 @@ export const register = (strapi: Core.Strapi) => {
             excerpt: args.excerpt,
             captured_on: args.captured_on ? toDateOnly(args.captured_on) : args.captured_on,
           },
+        });
+        await recordAudit(strapi, {
+          action: 'create',
+          entityKind: 'source',
+          documentId: result.documentId,
+          changedFields: ['title', 'slug', 'type', 'url', 'videoId', 'external_id', 'excerpt', 'captured_on'],
+          actor: actorFrom(undefined),
         });
         created = true;
         message = 'Created new source';

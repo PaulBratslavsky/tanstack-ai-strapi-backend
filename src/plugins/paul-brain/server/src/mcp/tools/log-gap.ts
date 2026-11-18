@@ -4,6 +4,7 @@ import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import { stripNullish, getTodayPST } from '../utils';
 import type { BrainService } from '../../services/brain';
+import { actorFrom, recordAudit } from '../../services/audit';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -72,6 +73,13 @@ export const register = (strapi: Core.Strapi) => {
             seenDates,
           },
         });
+        await recordAudit(strapi, {
+          action: 'update',
+          entityKind: 'gap',
+          documentId: result.documentId,
+          changedFields: ['count', 'seenDates'],
+          actor: actorFrom(undefined),
+        });
         
         created = false;
         message = `Appended to existing gap seenDates (count: ${result.count})`;
@@ -89,6 +97,13 @@ export const register = (strapi: Core.Strapi) => {
         };
 
         result = await strapi.documents(uid).create({ data });
+        await recordAudit(strapi, {
+          action: 'create',
+          entityKind: 'gap',
+          documentId: result.documentId,
+          changedFields: Object.keys(data),
+          actor: actorFrom(undefined),
+        });
         created = true;
         message = 'Created new gap';
       }

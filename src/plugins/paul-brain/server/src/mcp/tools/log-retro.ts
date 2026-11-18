@@ -4,6 +4,7 @@ import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import { getTodayPST } from '../utils';
 import type { BrainService } from '../../services/brain';
+import { actorFrom, recordAudit } from '../../services/audit';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -57,6 +58,13 @@ export const register = (strapi: Core.Strapi) => {
       }
 
       const result = await strapi.documents(uid).create({ data });
+      await recordAudit(strapi, {
+        action: 'create',
+        entityKind: 'retro',
+        documentId: result.documentId,
+        changedFields: Object.keys(data),
+        actor: actorFrom(undefined),
+      });
 
       const output = {
         created: true,
