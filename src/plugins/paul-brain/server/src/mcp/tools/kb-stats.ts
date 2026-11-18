@@ -3,12 +3,13 @@ import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import { stripNullish } from '../utils';
+import { isArchivedRecord } from '../../services/archive';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'kb_stats',
     title: 'Knowledge Base Statistics',
-    description: 'Get counts per paul-brain content type, notes by kind/tag, video notes vs transcripts in central yt-kb service, orphan count. See get_brain_guide for usage.',
+    description: 'Get counts per paul-brain content type (archived rows excluded; archived totals reported separately), notes by kind/tag, video notes vs transcripts in central yt-kb service, orphan count. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({}),
     
@@ -26,6 +27,14 @@ export const register = (strapi: Core.Strapi) => {
         todo: z.number(),
         goal: z.number(),
         goalCheckin: z.number(),
+        resource: z.number(),
+      }),
+      archived: z.object({
+        note: z.number(),
+        person: z.number(),
+        project: z.number(),
+        decision: z.number(),
+        source: z.number(),
         resource: z.number(),
       }),
       notesByKind: z.record(z.number()),
@@ -71,6 +80,14 @@ export const register = (strapi: Core.Strapi) => {
         goalCheckin: 0,
         resource: 0,
       };
+      const archived = {
+        note: 0,
+        person: 0,
+        project: 0,
+        decision: 0,
+        source: 0,
+        resource: 0,
+      };
 
       const contentTypes = [
         'note', 'person', 'project', 'decision', 'source',
@@ -84,7 +101,11 @@ export const register = (strapi: Core.Strapi) => {
             limit: -1,
           });
           const key = type === 'goal-checkin' ? 'goalCheckin' : type;
-          contentTypeCounts[key] = items.length;
+          const live = items.filter((item) => !isArchivedRecord(type, item));
+          contentTypeCounts[key] = live.length;
+          if (Object.prototype.hasOwnProperty.call(archived, key)) {
+            archived[key as keyof typeof archived] = items.length - live.length;
+          }
         } catch (err) {
           strapi.log.warn(`Failed to count ${type}:`, err);
         }
@@ -102,6 +123,7 @@ export const register = (strapi: Core.Strapi) => {
         });
 
         for (const note of notes) {
+          if (note.archived === true) continue;
           if (note.kind) {
             notesByKind[note.kind] = (notesByKind[note.kind] || 0) + 1;
           }
@@ -141,6 +163,7 @@ export const register = (strapi: Core.Strapi) => {
         });
 
         for (const source of sources) {
+          if (source.archived === true) continue;
           if (source.type === 'video') {
             totalVideoSources++;
             if (Array.isArray(source.notes) && source.notes.length > 0) {
@@ -162,8 +185,8 @@ export const register = (strapi: Core.Strapi) => {
           limit: -1,
           populate: ['notes'],
         });
-        peopleWithoutNotes = people.filter(p => 
-          !Array.isArray(p.notes) || p.notes.length === 0
+        peopleWithoutNotes = people.filter(p =>
+          p.archived !== true && (!Array.isArray(p.notes) || p.notes.filter((n) => n.archived !== true).length === 0)
         ).length;
       } catch (err) {
         strapi.log.warn('Failed to analyze people:', err);
@@ -175,8 +198,8 @@ export const register = (strapi: Core.Strapi) => {
           limit: -1,
           populate: ['notes'],
         });
-        projectsWithoutNotes = projects.filter(p => 
-          !Array.isArray(p.notes) || p.notes.length === 0
+        projectsWithoutNotes = projects.filter(p =>
+          p.archived !== true && (!Array.isArray(p.notes) || p.notes.filter((n) => n.archived !== true).length === 0)
         ).length;
       } catch (err) {
         strapi.log.warn('Failed to analyze projects:', err);
@@ -188,8 +211,8 @@ export const register = (strapi: Core.Strapi) => {
           limit: -1,
           populate: ['notes'],
         });
-        sourcesWithoutNotes = sources.filter(s => 
-          !Array.isArray(s.notes) || s.notes.length === 0
+        sourcesWithoutNotes = sources.filter(s =>
+          s.archived !== true && (!Array.isArray(s.notes) || s.notes.filter((n) => n.archived !== true).length === 0)
         ).length;
       } catch (err) {
         strapi.log.warn('Failed to analyze sources:', err);
@@ -244,7 +267,7 @@ export const register = (strapi: Core.Strapi) => {
             },
           });
 
-          const notedVideoIds = new Set(notes.map(n => n.videoId));
+          const notedVideoIds = new Set(notes.filter((n) => n.archived !== true).map(n => n.videoId));
 
           for (const transcript of allTranscripts) {
             if (!notedVideoIds.has(transcript.youtubeVideoId)) {
@@ -261,6 +284,7 @@ export const register = (strapi: Core.Strapi) => {
 
       const output = stripNullish({
         contentTypeCounts,
+        archived,
         notesByKind,
         notesByTag,
         videoNotes: {

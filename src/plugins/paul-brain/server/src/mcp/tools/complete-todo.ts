@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
+import { actorFrom, recordAudit } from '../../services/audit';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -60,6 +61,13 @@ export const register = (strapi: Core.Strapi) => {
       const result = await strapi.documents(uid).update({
         documentId: todo.documentId,
         data: updates,
+      });
+      await recordAudit(strapi, {
+        action: 'update',
+        entityKind: 'todo',
+        documentId: result.documentId,
+        changedFields: Object.keys(updates),
+        actor: actorFrom(context),
       });
 
       const output = {

@@ -1,6 +1,7 @@
 import type { Core } from '@strapi/strapi';
 import crypto from 'crypto';
 import { getUid } from '../mcp/types';
+import { buildWebhookPayload } from '../services/webhook-payload';
 
 /**
  * Webhook outbox worker
@@ -28,11 +29,9 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
         populate: {
           agent: true,
           message: {
-            fields: ['type', 'body', 'payload', 'priority', 'blastRadius', 'flagged', 'state'],
+            fields: ['state'],
             populate: {
-              from: { fields: ['slug'] },
-              to: { fields: ['slug'] },
-              thread: { fields: ['documentId'] },
+              thread: { fields: ['subject'] },
             },
           },
         },
@@ -90,27 +89,9 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
         }
 
         try {
-          // Build webhook payload
+          // Pointer only: event, message id, thread id, short subject. Never the message body.
           const timestamp = Math.floor(Date.now() / 1000);
-          const payload: any = {
-            event: delivery.event,
-            messageId: message.documentId,
-            threadId: message.thread?.documentId,
-            type: message.type,
-            from: message.from?.slug,
-            to: message.to?.slug,
-            priority: message.priority,
-            blastRadius: message.blastRadius,
-            flagged: message.flagged,
-          };
-
-          // Include body/payload for full mode
-          if (agent.webhookMode === 'full') {
-            payload.body = message.body;
-            payload.payload = message.payload;
-            payload.untrusted = true;
-          }
-
+          const payload = buildWebhookPayload(delivery, message);
           const body = JSON.stringify(payload);
 
           // Sign the request
@@ -179,6 +160,17 @@ export const startOutboxWorker = (strapi: Core.Strapi, config: any) => {
                 statusCode: response.status,
               },
             });
+
+            if (agent.documentId && typeof busService.resolveOlderExhausted === 'function') {
+              try {
+                await busService.resolveOlderExhausted(
+                  agent.documentId,
+                  delivery.createdAt || new Date().toISOString()
+                );
+              } catch (resolveError) {
+                strapi.log.warn('[agent-bus] Could not auto-resolve older exhausted deliveries:', resolveError);
+              }
+            }
           } else if (response.status === 410 || response.status === 404) {
             // Gone/Not Found - might be intentional, mark as skipped
             await strapi.documents(deliveryUid).update({

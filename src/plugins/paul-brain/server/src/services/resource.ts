@@ -4,6 +4,7 @@ import path from 'path';
 import type { Core } from '@strapi/strapi';
 import { getUid } from '../mcp/types';
 import { getTodayPST, sinceToUpdatedAt, stripNullish } from '../mcp/utils';
+import { recordAudit } from './audit';
 import {
   BASE64_INLINE_LIMIT,
   captionResource,
@@ -527,6 +528,13 @@ export function createResourceService(strapi: Core.Strapi) {
           documentId: existing.documentId,
           data,
         });
+        await recordAudit(strapi, {
+          action: 'update',
+          entityKind: 'resource',
+          documentId: updated.documentId,
+          changedFields: Object.keys(data),
+          actor: args.createdBy,
+        });
 
         return {
           created: false,
@@ -558,6 +566,13 @@ export function createResourceService(strapi: Core.Strapi) {
       assignLinks(data, links);
 
       const created = await documents(RESOURCE_UID).create({ data });
+      await recordAudit(strapi, {
+        action: 'create',
+        entityKind: 'resource',
+        documentId: created.documentId,
+        changedFields: Object.keys(data),
+        actor: args.createdBy,
+      });
       return {
         created: true,
         deduped: false,
@@ -715,12 +730,26 @@ export function createResourceService(strapi: Core.Strapi) {
         if (fileId != null) data.file = fileId;
 
         const created = await documents(RESOURCE_UID).create({ data });
+        await recordAudit(strapi, {
+          action: 'create',
+          entityKind: 'resource',
+          documentId: created.documentId,
+          changedFields: Object.keys(data),
+          actor: args.createdBy,
+        });
         const supersededBy: Record<string, unknown> = {
           supersededBy: { connect: [{ documentId: created.documentId }] },
         };
         await documents(RESOURCE_UID).update({
           documentId: existing.documentId,
           data: supersededBy,
+        });
+        await recordAudit(strapi, {
+          action: 'supersede',
+          entityKind: 'resource',
+          documentId: existing.documentId,
+          changedFields: ['supersededBy'],
+          actor: args.createdBy,
         });
 
         return {
@@ -765,6 +794,13 @@ export function createResourceService(strapi: Core.Strapi) {
         documentId: existing.documentId,
         data,
       });
+      await recordAudit(strapi, {
+        action: 'update',
+        entityKind: 'resource',
+        documentId: updated.documentId,
+        changedFields: Object.keys(data),
+        actor: args.createdBy,
+      });
       return {
         updated: true,
         newVersion: false,
@@ -789,6 +825,13 @@ export function createResourceService(strapi: Core.Strapi) {
         data: {
           [args.relation]: args.operation === 'connect' ? connect(ids) : disconnect(ids),
         },
+      });
+      await recordAudit(strapi, {
+        action: 'update',
+        entityKind: 'resource',
+        documentId: resource.documentId,
+        changedFields: [args.relation],
+        actor: 'token',
       });
 
       const verb = args.operation === 'connect' ? 'Connected' : 'Disconnected';
@@ -918,6 +961,13 @@ export function createResourceService(strapi: Core.Strapi) {
         else if (mime === 'application/pdf') data.format = 'pdf';
       }
       await documents(RESOURCE_UID).update({ documentId: resource.documentId, data });
+      await recordAudit(strapi, {
+        action: 'update',
+        entityKind: 'resource',
+        documentId: resource.documentId,
+        changedFields: Object.keys(data),
+        actor: 'token',
+      });
 
       if (previousId != null && previousId !== stored.id && uploadService.remove) {
         try {

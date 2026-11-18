@@ -3,6 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid } from '../types';
 import { getTodayPST } from '../utils';
+import { actorFrom, recordAudit } from '../../services/audit';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -58,10 +59,24 @@ export const register = (strapi: Core.Strapi) => {
           documentId: existing[0].documentId,
           data,
         });
+        await recordAudit(strapi, {
+          action: 'update',
+          entityKind: 'capability',
+          documentId: result.documentId,
+          changedFields: Object.keys(data),
+          actor: actorFrom(undefined),
+        });
         created = false;
         message = 'Updated existing capability';
       } else {
         result = await strapi.documents(uid).create({ data });
+        await recordAudit(strapi, {
+          action: 'create',
+          entityKind: 'capability',
+          documentId: result.documentId,
+          changedFields: Object.keys(data),
+          actor: actorFrom(undefined),
+        });
         created = true;
         message = 'Created new capability';
       }

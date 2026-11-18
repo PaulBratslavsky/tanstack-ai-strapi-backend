@@ -3,12 +3,13 @@ import { z } from '@strapi/utils';
 import { getActionId } from '../permissions';
 import { getUid, CONTENT_TYPES } from '../types';
 import { stripNullish } from '../utils';
+import { isArchivedRecord, withActiveRecords } from '../../services/archive';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'list_recent',
     title: 'List Recent Brain Items',
-    description: 'Get newest N items by updatedAt across or within types. Good for "what did we save today?". Optional filters: types, kind (notes only), source_bot. See get_brain_guide for usage.',
+    description: 'Get newest N items by updatedAt across or within types. Archived rows are excluded. Good for "what did we save today?". Optional filters: types, kind (notes only), source_bot. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
       types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source', 'resource'])).optional().describe('Limit to these types (default: all)'),
@@ -42,7 +43,7 @@ export const register = (strapi: Core.Strapi) => {
       for (const type of types) {
         const uid = getUid(type as any);
         
-        const filters: any = {};
+        const filters: any = withActiveRecords(type, {});
         if (args.kind && type === 'note') {
           filters.kind = { $eq: args.kind };
         }
@@ -58,6 +59,7 @@ export const register = (strapi: Core.Strapi) => {
           });
 
           for (const item of items) {
+            if (isArchivedRecord(type, item)) continue;
             let sanitized = item;
             try {
               sanitized = await strapi.contentAPI.sanitize.output(item, uid, context.userAbility);

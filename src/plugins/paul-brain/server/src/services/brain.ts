@@ -1,4 +1,5 @@
 import type { Core } from '@strapi/strapi';
+import { isArchivedRecord, withActiveRecords } from './archive';
 import { RESOURCE_TEXT_FIELDS } from './resource';
 
 const PLUGIN_NAME = 'paul-brain';
@@ -200,6 +201,7 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
 
         const populate = type === 'note' ? ['sources', 'people'] : undefined;
         const keywords = searchKeywords(query);
+        const liveFilters = withActiveRecords(type, filters);
 
         const collect = async (queryFilters: Record<string, unknown>) => {
           const collected: any[] = [];
@@ -233,14 +235,14 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
           return collected;
         };
 
-        const entities = await collect(filters);
+        const entities = await collect(liveFilters);
 
         // The newest-first window can hide older text matches. Ask the database
         // for those directly, then merge. Tags and aliases stay in the JS scorer.
         if (entities.length >= SEARCH_SCAN_CAP) {
           const textFilter = textMatchFilter(keywords, TEXT_SEARCH_FIELDS[type] || []);
           if (textFilter) {
-            const olderMatches = await collect({ ...filters, ...textFilter });
+            const olderMatches = await collect({ ...liveFilters, ...textFilter });
             const seen = new Set(entities.map((entity) => entity.documentId));
             for (const match of olderMatches) {
               if (!seen.has(match.documentId)) {
@@ -252,6 +254,8 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
         }
 
         for (const entity of entities) {
+          if (isArchivedRecord(type, entity)) continue;
+
           // Apply tag filter in JS for DB-agnostic compatibility
           if (tag && (type === 'note' || type === 'resource')) {
             const entityTags = Array.isArray(entity.tags) ? entity.tags : [];
@@ -422,24 +426,207 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
     return candidates;
   },
 
-  async findDuplicateNotes(title: string): Promise<any[]> {
+  async findActiveByDedupeKey(dedupeKey: string): Promise<any | null> {
+    const key = dedupeKey.trim();
+    if (!key) return null;
     const uid = `plugin::${PLUGIN_NAME}.note`;
-    const slug = this.slugify(title);
-    
     const notes = await strapi.documents(uid).findMany({
-      limit: 100,
+      filters: withActiveRecords('note', { dedupeKey: { $eq: key } }),
+      sort: ['updatedAt:desc'],
+      limit: 5,
     });
+    return (notes || []).find((note: any) => note?.archived !== true) || null;
+  },
 
-    const candidates = [];
-    for (const note of notes) {
-      if (note.slug === slug || this.isSimilar(title, note.title)) {
-        candidates.push(note);
+  /**
+   * Rank notes that resemble a proposal.
+   * Candidates come from search() (title, summary, and body; newest-first pages, same cap as recall),
+   * plus an exact dedupeKey lookup and an exact slug lookup. Archived notes are ignored.
+   */
+  async assessNote(input: NoteProposal): Promise<NoteAssessment> {
+    const byId = new Map<string, RankedCandidate>();
+    const uid = `plugin::${PLUGIN_NAME}.note`;
+
+    const consider = (entity: any, match: RelatedNote['match'], score: number) => {
+      if (!entity?.documentId || entity.archived === true) return;
+      const prev = byId.get(entity.documentId);
+      if (!prev) {
+        byId.set(entity.documentId, { entity, match, score });
+        return;
+      }
+      const betterMatch = MATCH_RANK[match] > MATCH_RANK[prev.match];
+      if (betterMatch || score > prev.score) {
+        byId.set(entity.documentId, {
+          entity: prev.entity.body || prev.entity.summary ? prev.entity : entity,
+          match: betterMatch ? match : prev.match,
+          score: Math.max(score, prev.score),
+        });
+      }
+    };
+
+    if (input.dedupeKey) {
+      const keyed = await this.findActiveByDedupeKey(input.dedupeKey);
+      if (keyed) consider(keyed, 'dedupeKey', 100);
+    }
+
+    const slug = this.slugify(input.title || '');
+    if (slug) {
+      const bySlug = await this.findBySlugOrAlias('note', slug);
+      if (bySlug.exists && bySlug.entity?.archived !== true) {
+        consider(bySlug.entity, 'slug', 40);
       }
     }
 
-    return candidates;
+    const query = proposalQuery(input);
+    if (searchKeywords(query).length > 0) {
+      const hits = await this.search({ query, types: ['note'], limit: 25 });
+      if (hits.length > 0) {
+        const rows = await strapi.documents(uid).findMany({
+          filters: withActiveRecords('note', {
+            documentId: { $in: hits.map((hit) => hit.documentId) },
+          }),
+          limit: hits.length,
+        });
+        const rowById = new Map((rows || []).map((row: any) => [row.documentId, row]));
+        for (const hit of hits) {
+          const entity = rowById.get(hit.documentId) || {
+            documentId: hit.documentId,
+            title: hit.title,
+            slug: hit.slug,
+            summary: undefined,
+            updatedAt: hit.updatedAt,
+          };
+          const title = entity.title || hit.title || '';
+          const strongTitle =
+            this.isSimilar(input.title, title) || titlePhraseIn(entity, input.title);
+          let score = hit.score;
+          let match: RelatedNote['match'] = 'search';
+          if (strongTitle) {
+            score += 12;
+            match = 'title';
+          }
+          score += Math.min(3, sharedTagCount(input.tags, entity.tags));
+          consider(entity, match, score);
+        }
+      }
+    }
+
+    const ranked = [...byId.values()].sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return String(b.entity.updatedAt || '').localeCompare(String(a.entity.updatedAt || ''));
+    });
+
+    const related: RelatedNote[] = ranked.slice(0, 8).map((candidate) => ({
+      documentId: candidate.entity.documentId,
+      title: candidate.entity.title || '',
+      slug: candidate.entity.slug || '',
+      kind: candidate.entity.kind,
+      summary: candidate.entity.summary,
+      score: Math.round(candidate.score * 100) / 100,
+      match: candidate.match,
+      updatedAt: candidate.entity.updatedAt,
+    }));
+
+    const top = ranked[0];
+    let recommendedAction: NoteRecommendation = 'create';
+    if (top && (top.match === 'dedupeKey' || top.match === 'slug' || top.match === 'title')) {
+      recommendedAction = noteContentAlreadyStored(top.entity, input) ? 'skip' : 'update_existing';
+    }
+
+    return { recommendedAction, related };
+  },
+
+  async findDuplicateNotes(
+    title: string,
+    extra: Omit<NoteProposal, 'title'> = {}
+  ): Promise<any[]> {
+    const assessment = await this.assessNote({ title, ...extra });
+    if (assessment.recommendedAction === 'create') return [];
+    return assessment.related.map((note) => ({
+      documentId: note.documentId,
+      title: note.title,
+      slug: note.slug,
+      kind: note.kind,
+      summary: note.summary,
+    }));
   },
 });
+
+export type NoteRecommendation = 'create' | 'update_existing' | 'skip';
+
+export interface NoteProposal {
+  title: string;
+  summary?: string;
+  body?: string;
+  tags?: string[];
+  dedupeKey?: string;
+}
+
+export interface RelatedNote {
+  documentId: string;
+  title: string;
+  slug: string;
+  kind?: string;
+  summary?: string;
+  score: number;
+  match: 'dedupeKey' | 'slug' | 'title' | 'search';
+  updatedAt?: string;
+}
+
+export interface NoteAssessment {
+  recommendedAction: NoteRecommendation;
+  related: RelatedNote[];
+}
+
+interface RankedCandidate {
+  entity: any;
+  match: RelatedNote['match'];
+  score: number;
+}
+
+const MATCH_RANK: Record<RelatedNote['match'], number> = {
+  search: 0,
+  title: 1,
+  slug: 2,
+  dedupeKey: 3,
+};
+
+function plainTitle(title: string): string {
+  return title.toLowerCase().trim().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
+}
+
+function proposalQuery(input: NoteProposal): string {
+  const body = typeof input.body === 'string' ? input.body.replace(/\s+/g, ' ').trim().slice(0, 240) : '';
+  return [input.title, input.summary, body].filter((part) => typeof part === 'string' && part.trim()).join(' ');
+}
+
+function titlePhraseIn(entity: { title?: string; summary?: string; body?: string }, title: string): boolean {
+  const phrase = plainTitle(title);
+  if (phrase.length < 8) return false;
+  const haystack = plainTitle(`${entity.title || ''} ${entity.summary || ''} ${entity.body || ''}`);
+  return haystack.includes(phrase);
+}
+
+function sharedTagCount(left?: string[], right?: string[]): number {
+  if (!Array.isArray(left) || !Array.isArray(right)) return 0;
+  const have = new Set(right.map((tag) => String(tag).toLowerCase()));
+  return left.filter((tag) => have.has(String(tag).toLowerCase())).length;
+}
+
+/** True when the proposal adds no summary or body beyond what the existing note already has. */
+export function noteContentAlreadyStored(
+  existing: { title?: string; summary?: string; body?: string },
+  input: NoteProposal
+): boolean {
+  const incoming = [input.summary, input.body]
+    .map((part) => (typeof part === 'string' ? part.trim() : ''))
+    .filter((part) => part.length > 0);
+  if (incoming.length === 0) {
+    return plainTitle(existing.title || '') === plainTitle(input.title || '');
+  }
+  const haystack = `${existing.summary || ''}\n${existing.body || ''}`;
+  return incoming.every((part) => haystack.includes(part));
+}
 
 export default brain;
 export type BrainService = ReturnType<typeof brain>;

@@ -2,6 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import type { BrainService } from '../../services/brain';
+import { actorFrom, recordAudit } from '../../services/audit';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -100,6 +101,14 @@ export const register = (strapi: Core.Strapi) => {
         targetDocIds,
         args.operation
       );
+
+      await recordAudit(strapi, {
+        action: 'update',
+        entityKind: 'note',
+        documentId: noteDocId,
+        changedFields: [args.relation],
+        actor: actorFrom(context),
+      });
 
       const output = {
         linked: true,

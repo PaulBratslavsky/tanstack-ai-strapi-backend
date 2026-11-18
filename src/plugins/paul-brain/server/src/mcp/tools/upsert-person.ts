@@ -3,6 +3,7 @@ import { z } from '@strapi/utils';
 import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import type { BrainService } from '../../services/brain';
+import { actorFrom, recordAudit } from '../../services/audit';
 import { stripNullish, toDateOnly } from '../utils';
 
 export const register = (strapi: Core.Strapi) => {
@@ -61,6 +62,13 @@ export const register = (strapi: Core.Strapi) => {
           documentId: existing.documentId!,
           data: updates,
         });
+        await recordAudit(strapi, {
+          action: 'update',
+          entityKind: 'person',
+          documentId: result.documentId,
+          changedFields: Object.keys(updates),
+          actor: actorFrom(undefined),
+        });
         message = 'Updated existing person';
       } else {
         // Create new person
@@ -75,6 +83,13 @@ export const register = (strapi: Core.Strapi) => {
             notes_md: args.notes_md,
             last_contact: args.last_contact ? toDateOnly(args.last_contact) : args.last_contact,
           },
+        });
+        await recordAudit(strapi, {
+          action: 'create',
+          entityKind: 'person',
+          documentId: result.documentId,
+          changedFields: ['name', 'slug', 'role', 'org', 'email', 'handles', 'notes_md', 'last_contact'],
+          actor: actorFrom(undefined),
         });
         created = true;
         message = 'Created new person';

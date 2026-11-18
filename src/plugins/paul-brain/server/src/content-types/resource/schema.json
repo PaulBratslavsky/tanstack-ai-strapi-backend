@@ -64,6 +64,9 @@
       "enum": ["draft", "final", "archived"],
       "default": "final"
     },
+    "archivedAt": {
+      "type": "datetime"
+    },
     "tags": {
       "type": "json",
       "default": []

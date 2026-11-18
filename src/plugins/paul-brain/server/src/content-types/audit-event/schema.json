@@ -1,0 +1,46 @@
+{
+  "kind": "collectionType",
+  "collectionName": "paul_brain_audit_events",
+  "info": {
+    "singularName": "audit-event",
+    "pluralName": "audit-events",
+    "displayName": "Audit Event",
+    "description": "Field-name audit trail for brain writes and deletes. No note content is stored."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "content-manager": {
+      "visible": true
+    },
+    "content-api": {
+      "visible": false
+    }
+  },
+  "attributes": {
+    "at": {
+      "type": "datetime",
+      "required": true
+    },
+    "action": {
+      "type": "string",
+      "required": true
+    },
+    "actor": {
+      "type": "string"
+    },
+    "entityKind": {
+      "type": "string",
+      "required": true
+    },
+    "entityDocumentId": {
+      "type": "string",
+      "required": true
+    },
+    "changedFields": {
+      "type": "json",
+      "default": []
+    }
+  }
+}

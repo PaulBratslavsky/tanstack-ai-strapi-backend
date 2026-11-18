@@ -4,6 +4,7 @@ import { getActionId, PLUGIN_NAME } from '../permissions';
 import { getUid } from '../types';
 import { stripNullish } from '../utils';
 import type { BrainService } from '../../services/brain';
+import { actorFrom, recordAudit } from '../../services/audit';
 
 export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
@@ -123,6 +124,13 @@ export const register = (strapi: Core.Strapi) => {
               documentId: existing.documentId,
               data: updates,
             });
+            await recordAudit(strapi, {
+              action: 'merge',
+              entityKind: 'todo',
+              documentId: result.documentId,
+              changedFields: Object.keys(updates),
+              actor: actorFrom(undefined, args.capturedBy),
+            });
 
             const output = stripNullish({
               documentId: result.documentId,
@@ -152,6 +160,20 @@ export const register = (strapi: Core.Strapi) => {
                 supersededBy: { connect: [{ documentId: newTodo.documentId }] },
               },
             });
+            await recordAudit(strapi, {
+              action: 'create',
+              entityKind: 'todo',
+              documentId: newTodo.documentId,
+              changedFields: ['title', 'state', 'priority'],
+              actor: actorFrom(undefined, args.capturedBy),
+            });
+            await recordAudit(strapi, {
+              action: 'supersede',
+              entityKind: 'todo',
+              documentId: existing.documentId,
+              changedFields: ['state', 'supersededBy'],
+              actor: actorFrom(undefined, args.capturedBy),
+            });
 
             const output = stripNullish({
               documentId: newTodo.documentId,
@@ -176,6 +198,13 @@ export const register = (strapi: Core.Strapi) => {
 
       // Create new todo
       const result = await createNewTodo(strapi, uid, args);
+      await recordAudit(strapi, {
+        action: 'create',
+        entityKind: 'todo',
+        documentId: result.documentId,
+        changedFields: ['title', 'state', 'priority', 'dueDate', 'context', 'goal', 'acceptanceCriteria'],
+        actor: actorFrom(undefined, args.capturedBy),
+      });
 
       const output = stripNullish({
         documentId: result.documentId,

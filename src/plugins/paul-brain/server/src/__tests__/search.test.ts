@@ -4,6 +4,39 @@ import { pacificMidnightIso, sinceToUpdatedAt, toDateOnly } from '../mcp/utils';
 
 type Row = Record<string, any>;
 
+function matches(row: Row, filters: any): boolean {
+  if (!filters || typeof filters !== 'object') return true;
+  if (Array.isArray(filters.$and) && !filters.$and.every((clause: any) => matches(row, clause))) return false;
+  if (Array.isArray(filters.$or) && !filters.$or.some((clause: any) => matches(row, clause))) return false;
+  for (const [key, cond] of Object.entries(filters)) {
+    if (key === '$and' || key === '$or') continue;
+    if (!matchField(row, key, cond)) return false;
+  }
+  return true;
+}
+
+function matchField(row: Row, key: string, cond: any): boolean {
+  if (cond && typeof cond === 'object' && cond.documentId?.$eq) {
+    return (row[key] || []).some((item: any) => item.documentId === cond.documentId.$eq);
+  }
+  if (cond && typeof cond === 'object') {
+    if ('$eq' in cond && row[key] !== cond.$eq) return false;
+    if ('$ne' in cond && row[key] === cond.$ne) return false;
+    if ('$in' in cond && !cond.$in.includes(row[key])) return false;
+    if ('$gte' in cond && String(row[key] ?? '') < String(cond.$gte)) return false;
+    if ('$containsi' in cond) {
+      return String(row[key] ?? '').toLowerCase().includes(String(cond.$containsi).toLowerCase());
+    }
+    if ('$null' in cond) {
+      const isNull = row[key] == null;
+      if (Boolean(cond.$null) !== isNull) return false;
+    }
+    if ('$notNull' in cond && (row[key] == null) === Boolean(cond.$notNull)) return false;
+    return true;
+  }
+  return row[key] === cond;
+}
+
 function mockStrapi(rowsByUid: Record<string, Row[]>) {
   const calls: Array<{ uid: string; params: any }> = [];
 
@@ -15,33 +48,7 @@ function mockStrapi(rowsByUid: Record<string, Row[]>) {
       return {
         async findMany(params: any) {
           calls.push({ uid, params });
-          let list = rows.slice();
-          const filters = params.filters || {};
-
-          if (filters.kind?.$eq) {
-            list = list.filter((row) => row.kind === filters.kind.$eq);
-          }
-          if (filters.videoId?.$eq) {
-            list = list.filter((row) => row.videoId === filters.videoId.$eq);
-          }
-          if (filters.updatedAt?.$gte) {
-            list = list.filter((row) => row.updatedAt >= filters.updatedAt.$gte);
-          }
-          if (filters.sources?.documentId?.$eq) {
-            const sourceId = filters.sources.documentId.$eq;
-            list = list.filter((row) =>
-              (row.sources || []).some((source: any) => source.documentId === sourceId)
-            );
-          }
-          if (Array.isArray(filters.$or)) {
-            list = list.filter((row) =>
-              filters.$or.some((clause: Record<string, { $containsi?: string }>) => {
-                const [field, cond] = Object.entries(clause)[0];
-                const value = String(row[field] ?? '').toLowerCase();
-                return value.includes(String(cond.$containsi ?? '').toLowerCase());
-              })
-            );
-          }
+          let list = rows.filter((row) => matches(row, params.filters || {}));
 
           list.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
           const start = params.start ?? 0;
@@ -258,6 +265,95 @@ describe('resource recall', () => {
     const results = await service.search({ query: 'alpha', types: ['resource'], tag: 'guide' });
 
     expect(results.map((result) => result.documentId)).toEqual(['resource-1']);
+  });
+});
+
+describe('note duplicate check', () => {
+  it('uses newest-first search and recommends update when the title lives in an older body', async () => {
+    const notes = Array.from({ length: 150 }, (_, index) =>
+      note(index, index === 0 ? { title: 'Unrelated log', body: 'zephyr habitat details from the oldest note' } : {})
+    );
+    const strapi = mockStrapi({ [NOTE_UID]: notes });
+    const service = brain({ strapi: strapi as any });
+
+    const assessment = await service.assessNote({
+      title: 'Zephyr habitat',
+      summary: 'where it lives',
+    });
+
+    expect(assessment.recommendedAction).toBe('update_existing');
+    expect(assessment.related.map((item) => item.documentId)).toContain('note-0');
+    expect(assessment.related.find((item) => item.documentId === 'note-0')?.match).toBe('title');
+    expect(strapi.calls.some((call) => Array.isArray(call.params.sort) && call.params.sort[0] === 'updatedAt:desc')).toBe(true);
+    expect(strapi.calls.some((call) => call.params.start === SEARCH_PAGE_SIZE)).toBe(true);
+    expect(JSON.stringify(assessment)).not.toContain('details from the oldest note');
+  });
+
+  it('skips when the proposed summary and body are already stored', async () => {
+    const strapi = mockStrapi({
+      [NOTE_UID]: [note(4, { title: 'Zephyr habitat', summary: 'where it lives', body: 'full details' })],
+    });
+    const service = brain({ strapi: strapi as any });
+    const assessment = await service.assessNote({
+      title: 'Zephyr habitat',
+      summary: 'where it lives',
+      body: 'full details',
+    });
+    expect(assessment.recommendedAction).toBe('skip');
+  });
+
+  it('recommends update when dedupeKey matches and the body is new', async () => {
+    const strapi = mockStrapi({
+      [NOTE_UID]: [note(4, { title: 'Other', body: 'old text', dedupeKey: 'launch-2026' })],
+    });
+    const service = brain({ strapi: strapi as any });
+    const assessment = await service.assessNote({
+      title: 'Launch plan',
+      body: 'new paragraph',
+      dedupeKey: 'launch-2026',
+    });
+    expect(assessment.recommendedAction).toBe('update_existing');
+    expect(assessment.related[0].match).toBe('dedupeKey');
+    expect(assessment.related[0].documentId).toBe('note-4');
+  });
+
+  it('recommends create when nothing is related, including an archived key match', async () => {
+    const strapi = mockStrapi({
+      [NOTE_UID]: [
+        note(1, { title: 'Cooking pasta', body: 'boil water' }),
+        note(2, { title: 'Quarterly budget review', body: 'old', dedupeKey: 'budget', archived: true }),
+      ],
+    });
+    const service = brain({ strapi: strapi as any });
+    const assessment = await service.assessNote({
+      title: 'Quarterly budget review',
+      body: 'fresh numbers',
+      dedupeKey: 'budget',
+    });
+    expect(assessment.recommendedAction).toBe('create');
+    expect(assessment.related.map((item) => item.documentId)).not.toContain('note-2');
+  });
+});
+
+describe('archived rows', () => {
+  it('leaves archived notes and resources out of recall', async () => {
+    const strapi = mockStrapi({
+      [NOTE_UID]: [
+        note(2, { title: 'Zephyr habitat', body: 'live' }),
+        note(3, { title: 'Zephyr habitat archived', body: 'zephyr habitat hidden', archived: true }),
+      ],
+      [RESOURCE_UID]: [
+        resource(2, { title: 'Zephyr guide', state: 'final' }),
+        resource(3, { title: 'Zephyr archive', state: 'archived' }),
+      ],
+    });
+    const service = brain({ strapi: strapi as any });
+
+    const notes = await service.search({ query: 'zephyr habitat', types: ['note'] });
+    const resources = await service.search({ query: 'zephyr', types: ['resource'] });
+
+    expect(notes.map((result) => result.documentId)).toEqual(['note-2']);
+    expect(resources.map((result) => result.documentId)).toEqual(['resource-2']);
   });
 });
 

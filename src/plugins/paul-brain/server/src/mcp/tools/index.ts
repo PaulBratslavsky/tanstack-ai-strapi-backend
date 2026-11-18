@@ -3,6 +3,7 @@ import * as recall from './recall';
 import * as getEntity from './get-entity';
 import * as listRecent from './list-recent';
 import * as remember from './remember';
+import * as verifyNote from './verify-note';
 import * as updateNote from './update-note';
 import * as link from './link';
 import * as logDecision from './log-decision';
@@ -48,6 +49,7 @@ export const tools = [
   getEntity,
   listRecent,
   remember,
+  verifyNote,
   updateNote,
   upsertPerson,
   upsertSource,
