@@ -158,10 +158,17 @@ const PERMISSIONS = [
     subCategory: "administration",
     uid: "forget",
     displayName: "Delete records"
+  },
+  {
+    section: "plugins",
+    pluginName: PLUGIN_NAME$1,
+    subCategory: "administration",
+    uid: "search.reindex",
+    displayName: "Rebuild the hybrid search index"
   }
 ];
 const getActionId = (uid) => `plugin::${PLUGIN_NAME$1}.${uid}`;
-const register$H = ({ strapi: strapi2 }) => {
+const register$I = ({ strapi: strapi2 }) => {
   const actionProvider = strapi2.service("admin::permission").actionProvider;
   const existingActions = PERMISSIONS.filter(
     (permission) => actionProvider.has(`plugin::paul-brain.${permission.uid}`)
@@ -20021,7 +20028,7 @@ Run diagnostic checks on brain data.
 
 ### remember
 Create a new note with duplicate detection.
-- Duplicate check uses recall's search: title, summary, and body, newest-first across notes (not a title-only look at the first 100 rows)
+- When \`OPENAI_API_KEY\` is set and note embeddings exist, duplicate detection uses semantic similar() (cosine at least 0.9) plus dedupeKey and slug. Otherwise it uses recall's keyword search: title, summary, and body, newest-first across notes (not a title-only look at the first 100 rows)
 - Returns needsDecision: true with candidates if a real duplicate is found and onDuplicate is not set
 - \`dedupeKey\` is a stable identity. A live note with the same key is updated (merged) instead of duplicated. If that note already contains the summary and body, remember skips
 - onDuplicate: 'merge' — append to existing note
@@ -20034,27 +20041,34 @@ Create a new note with duplicate detection.
 ### verify_note
 Read-only check before saving a note. Same permission as recall (\`plugin::paul-brain.read\`).
 - Input: title, optional summary, body, tags, and dedupeKey
-- Searches title, summary, and body on every note, newest-first, with the same paging as recall. An exact dedupeKey is included even when the wording differs
+- When embeddings are available, a cosine match of at least 0.9 recommends \`update_existing\` (or \`skip\` when the text is already stored). Without \`OPENAI_API_KEY\`, or before the first reindex, it searches title, summary, and body on every note, newest-first, with the same paging as recall. An exact dedupeKey is included even when the wording differs
 - Returns ranked related notes (no note body) and recommendedAction: \`create\`, \`update_existing\`, or \`skip\`
 - \`skip\` means the existing note already contains the proposed summary and body
 - Archived notes are ignored
 - Call this when you are unsure. remember still asks when it finds a duplicate and onDuplicate is not set
 
 ### recall
-Search across brain types with ranked results, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown) as well as note body and tags.
+Search across brain types with hybrid keyword and semantic ranking, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown) as well as note body and tags.
 - Use specific queries: "strapi mcp tools" not just "strapi"
 - Filter by type: \`["note", "person"]\`. Resources are included by default. Use \`types: ["resource"]\` to search only deliverables. Resource matches look at title, summary, body, extractedText, altText, caption, and snapshotMarkdown
 - Filter by kind: \`"video"\`, \`"lesson"\`, \`"fact"\`, etc.
 - Filter by tag: \`"strapi"\` (notes and resources)
 - Filter by videoId: find notes for a specific YouTube video
 - Filter by sourceId: find notes linked to a specific source
-- Results are ranked: title match > alias/tag match > body match
-- Pinned notes rank higher
-- Recent items rank higher
+- Order comes from reciprocal rank fusion of Postgres full-text search (weight 2.5) and embedding cosine. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that rank
+- Tag and alias overlaps add a small boost on top of that fusion. Pinned notes get a boost too
+- \`searchMode\` is \`hybrid\` or \`keyword-only\`. Without \`OPENAI_API_KEY\`, results are keyword-only and \`statusMessage\` says so. The keyword scan is the fallback when the index is not ready
 - Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
 - Always search before creating notes to avoid duplicates
-- Each type is paged newest-first (\`updatedAt\` desc) up to 1000 rows. Text matches older than that window are still included via a database filter on scalar fields (title, body, and the type's other text fields). Tag and alias matches are scored in memory on the scanned rows
 - Archived notes, people, projects, decisions, sources, and resources are excluded
+
+### reindex_search
+Rebuild the hybrid search index. Permission \`plugin::paul-brain.search.reindex\` (grant this on tokens that should backfill; it is not part of the normal brain token).
+- \`dryRun: true\` counts rows that would be embedded and does not call OpenAI or write
+- Pages through each content type. Embed failures are reported per row and do not stop the run
+- Without \`OPENAI_API_KEY\`, keyword text is refreshed and embeddings stay deferred. \`statusMessage\` says the key is missing
+- The admin Hybrid Search page and \`POST /hybrid-search/reindex\` call the same rebuild
+- Run it once after deploy so existing rows get vectors. Later edits update the index on save
 
 ### get_entity
 Fetch one entity by type + documentId or slug, including \`resource\`. A raw resource row uses \`state\` and \`author\`; \`get_resource\` returns those as \`status\` and \`createdBy\`.
@@ -20388,11 +20402,12 @@ Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.goal.read\` — list_goals, get_goal_progress
 - \`plugin::paul-brain.goal.write\` — add_goal, update_goal, log_checkin
 - \`plugin::paul-brain.forget\` — forget (dangerous, usually not granted)
+- \`plugin::paul-brain.search.reindex\` — reindex_search (not granted by default; add it to tokens that should rebuild the index)
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.11.0";
-const register$G = (strapi2) => {
+const PLUGIN_VERSION = "1.12.0";
+const register$H = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
     title: "Get Brain Usage Guide",
@@ -20426,7 +20441,7 @@ Plugin version: ${PLUGIN_VERSION}`
 };
 const getBrainGuide = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$G
+  register: register$H
 }, Symbol.toStringTag, { value: "Module" }));
 function stripNullish(obj) {
   if (obj === null || obj === void 0) {
@@ -20503,11 +20518,11 @@ function sinceToUpdatedAt(since) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return pacificMidnightIso(trimmed);
   return trimmed;
 }
-const register$F = (strapi2) => {
+const register$G = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "recall",
     title: "Recall from Brain",
-    description: "Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Resources are included and match title, summary, body, extractedText, altText, caption, and snapshotMarkdown. Tag and alias matches are scored in memory. See get_brain_guide for usage.",
+    description: "Search across brain types with hybrid keyword and semantic ranking. Score is cosine similarity; order is reciprocal rank fusion plus tag, alias, and title boosts. Without OPENAI_API_KEY, results are keyword-only and statusMessage says so. Resources match title, summary, body, extractedText, altText, caption, and snapshotMarkdown. Archived rows are excluded. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       query: string().describe("Search query (keywords)"),
       types: array(_enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin", "resource"])).optional().describe("Limit search to these types (default: notes, people, projects, decisions, sources, and resources)"),
@@ -20529,9 +20544,12 @@ const register$F = (strapi2) => {
         score: number(),
         updatedAt: string(),
         linkedSourceIds: array(string()).optional(),
-        linkedPersonIds: array(string()).optional()
+        linkedPersonIds: array(string()).optional(),
+        matchTier: _enum(["top", "strong", "good", "related"]).optional()
       })),
-      count: number()
+      count: number(),
+      searchMode: _enum(["hybrid", "keyword-only", "keyword-scan"]).optional(),
+      statusMessage: string().nullish()
     }),
     auth: {
       policies: [{ action: getActionId("read") }]
@@ -20550,7 +20568,9 @@ const register$F = (strapi2) => {
       });
       const output = stripNullish({
         results,
-        count: results.length
+        count: results.length,
+        searchMode: results.searchMode,
+        statusMessage: results.statusMessage
       });
       return {
         content: [
@@ -20566,7 +20586,7 @@ const register$F = (strapi2) => {
 };
 const recall = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$F
+  register: register$G
 }, Symbol.toStringTag, { value: "Module" }));
 const EXTRACTED_TEXT_MAX = 5e5;
 const TEXT_MIMES = /* @__PURE__ */ new Set([
@@ -21025,7 +21045,7 @@ async function captionResource(options2) {
     return void 0;
   }
 }
-const register$E = (strapi2) => {
+const register$F = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_entity",
     title: "Get Brain Entity",
@@ -21084,7 +21104,7 @@ const register$E = (strapi2) => {
 };
 const getEntity = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$E
+  register: register$F
 }, Symbol.toStringTag, { value: "Module" }));
 const ARCHIVE_FLAG_TYPES = ["note", "person", "project", "decision", "source"];
 const FLAG_SET = new Set(ARCHIVE_FLAG_TYPES);
@@ -21114,7 +21134,7 @@ function withActiveRecords(type, filters2 = {}) {
   }
   return { ...filters2, ...active };
 }
-const register$D = (strapi2) => {
+const register$E = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_recent",
     title: "List Recent Brain Items",
@@ -21199,7 +21219,7 @@ const register$D = (strapi2) => {
 };
 const listRecent = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$D
+  register: register$E
 }, Symbol.toStringTag, { value: "Module" }));
 const FIELD_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 function actorFrom(context, explicit) {
@@ -22074,6 +22094,131 @@ function createResourceService(strapi2) {
     return null;
   }
 }
+const DEFAULT_TYPES = ["note", "person", "project", "decision", "source", "resource"];
+const NOTE_UID = "plugin::paul-brain.note";
+function hybridService(strapi2) {
+  if (typeof strapi2.plugin !== "function") return null;
+  try {
+    const plugin = strapi2.plugin("hybrid-search");
+    return plugin?.service?.("search") ?? null;
+  } catch {
+    return null;
+  }
+}
+function rowsOf(page) {
+  if (Array.isArray(page)) return page;
+  if (page && typeof page === "object" && Array.isArray(page.results)) {
+    return page.results;
+  }
+  return [];
+}
+async function searchWithHybrid(strapi2, options2) {
+  const service = hybridService(strapi2);
+  if (!service?.search) return null;
+  const types = options2.types?.length ? options2.types : DEFAULT_TYPES;
+  const limit = Math.min(options2.limit ?? 25, 25);
+  const equals = {};
+  if (options2.kind) equals.kind = options2.kind;
+  if (options2.videoId) equals.videoId = options2.videoId;
+  let response;
+  try {
+    response = await service.search({
+      query: options2.query,
+      uids: types.map((type) => getUid(type)),
+      limit: 100,
+      equals: Object.keys(equals).length ? equals : void 0,
+      since: options2.since,
+      tag: options2.tag
+    });
+  } catch (error2) {
+    strapi2.log?.warn?.("[paul-brain] hybrid search failed; using keyword scan", error2);
+    return null;
+  }
+  const raw = Array.isArray(response?.results) ? response.results : [];
+  if (raw.length === 0 && response?.lexicalReady === false) return null;
+  const hits = [];
+  for (const type of types) {
+    const uid = getUid(type);
+    const typed = raw.filter((hit) => hit.uid === uid || hit.type === uid);
+    if (typed.length === 0) continue;
+    const filters2 = withActiveRecords(type, {});
+    if (options2.since) filters2.updatedAt = { $gte: options2.since };
+    if (type === "note" && options2.kind) filters2.kind = { $eq: options2.kind };
+    if (type === "note" && options2.videoId) filters2.videoId = { $eq: options2.videoId };
+    if (type === "note" && options2.sourceId) filters2.sources = { documentId: { $eq: options2.sourceId } };
+    filters2.documentId = { $in: typed.map((hit) => hit.documentId) };
+    let rows = [];
+    try {
+      const page = await strapi2.documents(uid).findMany({
+        filters: filters2,
+        populate: type === "note" ? ["sources", "people"] : void 0,
+        limit: typed.length
+      });
+      rows = rowsOf(page);
+    } catch (error2) {
+      strapi2.log?.warn?.(`[paul-brain] hybrid result load failed for ${type}`, error2);
+      continue;
+    }
+    const byId = new Map(rows.map((row) => [row.documentId, row]));
+    for (const hit of typed) {
+      const entity = byId.get(hit.documentId);
+      if (!entity || isArchivedRecord(type, entity)) continue;
+      if (options2.tag && (type === "note" || type === "resource")) {
+        const entityTags = Array.isArray(entity.tags) ? entity.tags : [];
+        if (!entityTags.some((tag) => tag.toLowerCase() === options2.tag.toLowerCase())) continue;
+      }
+      const result = {
+        type,
+        documentId: entity.documentId,
+        slug: entity.slug,
+        title: entity.title,
+        name: entity.name,
+        snippet: hit.snippet || "",
+        score: typeof hit.score === "number" ? hit.score : 0,
+        updatedAt: entity.updatedAt,
+        matchTier: hit.matchTier
+      };
+      if (type === "note") {
+        const sources = Array.isArray(entity.sources) ? entity.sources : [];
+        const people = Array.isArray(entity.people) ? entity.people : [];
+        if (sources.length > 0) result.linkedSourceIds = sources.map((source2) => source2.documentId);
+        if (people.length > 0) result.linkedPersonIds = people.map((person2) => person2.documentId);
+      }
+      hits.push(result);
+    }
+  }
+  const order = /* @__PURE__ */ new Map();
+  raw.forEach((hit, index2) => {
+    order.set(`${hit.uid || hit.type}:${hit.documentId}`, index2);
+  });
+  hits.sort((a, b) => {
+    const left = order.get(`${getUid(a.type)}:${a.documentId}`) ?? 0;
+    const right = order.get(`${getUid(b.type)}:${b.documentId}`) ?? 0;
+    return left - right;
+  });
+  const sliced = hits.slice(0, limit);
+  sliced.searchMode = response.mode === "hybrid" ? "hybrid" : "keyword-only";
+  sliced.statusMessage = response.statusMessage ?? null;
+  return sliced;
+}
+async function similarNoteHits(strapi2, text) {
+  const service = hybridService(strapi2);
+  if (!service?.similar || !text.trim()) return { mode: "keyword", hits: [] };
+  try {
+    const result = await service.similar({
+      text,
+      uids: [NOTE_UID],
+      threshold: 0.9,
+      limit: 8
+    });
+    if (!result?.enabled || !result.indexedCount) return { mode: "keyword", hits: [] };
+    const hits = Array.isArray(result.results) ? result.results.map((hit) => ({ documentId: String(hit.documentId), score: Number(hit.score) || 0 })) : [];
+    return { mode: "similar", hits };
+  } catch (error2) {
+    strapi2.log?.warn?.("[paul-brain] similar() failed; using keyword duplicate check", error2);
+    return { mode: "keyword", hits: [] };
+  }
+}
 const PLUGIN_NAME = "paul-brain";
 const SEARCH_PAGE_SIZE = 100;
 const SEARCH_SCAN_CAP = 1e3;
@@ -22172,6 +22317,12 @@ ${data.body}`;
     return strapi2.documents(uid).update({ documentId, data: updates });
   },
   async search(options2) {
+    try {
+      const hybridResults = await searchWithHybrid(strapi2, options2);
+      if (hybridResults) return hybridResults;
+    } catch (err) {
+      strapi2.log.warn("[paul-brain] hybrid search failed; using keyword scan", err);
+    }
     const { query, types = ["note", "person", "project", "decision", "source", "resource"], kind: kind2, tag, videoId, sourceId, since, limit = 25 } = options2;
     const results = [];
     const queryLower = query.toLowerCase();
@@ -22305,7 +22456,9 @@ ${data.body}`;
       }
     }
     results.sort((a, b) => b.score - a.score);
-    return results.slice(0, Math.min(limit, 25));
+    const scanned = results.slice(0, Math.min(limit, 25));
+    scanned.searchMode = "keyword-scan";
+    return scanned;
   },
   async linkEntities(noteDocumentId, relation, targetDocumentIds, operation) {
     const uid = `plugin::${PLUGIN_NAME}.note`;
@@ -22381,19 +22534,20 @@ ${data.body}`;
   async assessNote(input) {
     const byId = /* @__PURE__ */ new Map();
     const uid = `plugin::${PLUGIN_NAME}.note`;
-    const consider = (entity, match, score) => {
+    const consider = (entity, match, score, semantic2 = false) => {
       if (!entity?.documentId || entity.archived === true) return;
       const prev = byId.get(entity.documentId);
       if (!prev) {
-        byId.set(entity.documentId, { entity, match, score });
+        byId.set(entity.documentId, { entity, match, score, semantic: semantic2 });
         return;
       }
       const betterMatch = MATCH_RANK[match] > MATCH_RANK[prev.match];
-      if (betterMatch || score > prev.score) {
+      if (betterMatch || score > prev.score || semantic2) {
         byId.set(entity.documentId, {
           entity: prev.entity.body || prev.entity.summary ? prev.entity : entity,
           match: betterMatch ? match : prev.match,
-          score: Math.max(score, prev.score)
+          score: Math.max(score, prev.score),
+          semantic: prev.semantic || semantic2
         });
       }
     };
@@ -22409,7 +22563,23 @@ ${data.body}`;
       }
     }
     const query = proposalQuery(input);
-    if (searchKeywords(query).length > 0) {
+    const semantic = await similarNoteHits(strapi2, query);
+    if (semantic.mode === "similar") {
+      if (semantic.hits.length > 0) {
+        const rows = await strapi2.documents(uid).findMany({
+          filters: withActiveRecords("note", {
+            documentId: { $in: semantic.hits.map((hit) => hit.documentId) }
+          }),
+          limit: semantic.hits.length
+        });
+        const rowById = new Map((rows || []).map((row) => [row.documentId, row]));
+        for (const hit of semantic.hits) {
+          const entity = rowById.get(hit.documentId);
+          if (!entity) continue;
+          consider(entity, "search", Math.round(hit.score * 1e3) / 10, true);
+        }
+      }
+    } else if (searchKeywords(query).length > 0) {
       const hits = await this.search({ query, types: ["note"], limit: 25 });
       if (hits.length > 0) {
         const rows = await strapi2.documents(uid).findMany({
@@ -22456,7 +22626,7 @@ ${data.body}`;
     }));
     const top = ranked[0];
     let recommendedAction = "create";
-    if (top && (top.match === "dedupeKey" || top.match === "slug" || top.match === "title")) {
+    if (top && (top.match === "dedupeKey" || top.match === "slug" || top.match === "title" || top.semantic)) {
       recommendedAction = noteContentAlreadyStored(top.entity, input) ? "skip" : "update_existing";
     }
     return { recommendedAction, related };
@@ -22506,11 +22676,11 @@ function noteContentAlreadyStored(existing, input) {
 ${existing.body || ""}`;
   return incoming.every((part) => haystack.includes(part));
 }
-const register$C = (strapi2) => {
+const register$D = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "remember",
     title: "Remember in Brain",
-    description: "Create a note with duplicate detection across title, summary, and body (newest-first, same scan as recall). A matching dedupeKey updates the existing note instead of creating another. onDuplicate: merge (append to existing), new (force new), supersede (mark old as superseded). Always set tags and source_bot.",
+    description: "Create a note with duplicate detection. When embeddings are available, similar() at cosine 0.9 finds semantic duplicates; otherwise the keyword scan is used. A matching dedupeKey updates the existing note instead of creating another. onDuplicate: merge (append to existing), new (force new), supersede (mark old as superseded). Always set tags and source_bot.",
     resolveInputSchema: () => object({
       title: string().describe("Note title (used to generate slug)"),
       body: string().optional().describe("Note body (markdown)"),
@@ -22873,13 +23043,13 @@ async function createNewNote(strapi2, uid, args, slug, brainService) {
 }
 const remember = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$C
+  register: register$D
 }, Symbol.toStringTag, { value: "Module" }));
-const register$B = (strapi2) => {
+const register$C = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "verify_note",
     title: "Verify Note Before Saving",
-    description: "Read-only duplicate check. Searches every note (title, summary, and body, newest-first, same paging as recall) plus an optional dedupeKey. Returns ranked related notes and a recommendedAction: create, update_existing, or skip.",
+    description: "Read-only duplicate check. Uses similar() at cosine 0.9 when note embeddings exist, and the keyword scan when OPENAI_API_KEY is missing or nothing is indexed yet. An optional dedupeKey is always checked. Returns ranked related notes and a recommendedAction: create, update_existing, or skip.",
     resolveInputSchema: () => object({
       title: string().describe("Proposed note title"),
       summary: string().max(280).optional().describe("Proposed summary"),
@@ -22930,9 +23100,9 @@ const register$B = (strapi2) => {
 };
 const verifyNote = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$B
+  register: register$C
 }, Symbol.toStringTag, { value: "Module" }));
-const register$A = (strapi2) => {
+const register$B = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_note",
     title: "Update Brain Note",
@@ -23030,9 +23200,9 @@ ${args.appendBody}` : args.appendBody;
 };
 const updateNote = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$A
+  register: register$B
 }, Symbol.toStringTag, { value: "Module" }));
-const register$z = (strapi2) => {
+const register$A = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "link",
     title: "Link Brain Entities",
@@ -23141,9 +23311,9 @@ const register$z = (strapi2) => {
 };
 const link = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$z
+  register: register$A
 }, Symbol.toStringTag, { value: "Module" }));
-const register$y = (strapi2) => {
+const register$z = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_decision",
     title: "Log Brain Decision",
@@ -23243,10 +23413,10 @@ const register$y = (strapi2) => {
 };
 const logDecision = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$y
+  register: register$z
 }, Symbol.toStringTag, { value: "Module" }));
 const FORGET_TYPES = ["note", "person", "project", "decision", "source", "resource"];
-const register$x = (strapi2) => {
+const register$y = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "forget",
     title: "Forget from Brain",
@@ -23354,9 +23524,9 @@ function identityOf(entity) {
 }
 const forget = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$x
+  register: register$y
 }, Symbol.toStringTag, { value: "Module" }));
-const register$w = (strapi2) => {
+const register$x = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_retro",
     title: "Log Brain Retro",
@@ -23427,9 +23597,9 @@ const register$w = (strapi2) => {
 };
 const logRetro = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$w
+  register: register$x
 }, Symbol.toStringTag, { value: "Module" }));
-const register$v = (strapi2) => {
+const register$w = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_retros",
     title: "List Brain Retros",
@@ -23492,9 +23662,9 @@ const register$v = (strapi2) => {
 };
 const listRetros = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$v
+  register: register$w
 }, Symbol.toStringTag, { value: "Module" }));
-const register$u = (strapi2) => {
+const register$v = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_gap",
     title: "Log Brain Gap",
@@ -23606,9 +23776,9 @@ const register$u = (strapi2) => {
 };
 const logGap = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$u
+  register: register$v
 }, Symbol.toStringTag, { value: "Module" }));
-const register$t = (strapi2) => {
+const register$u = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_gaps",
     title: "List Brain Gaps",
@@ -23673,9 +23843,9 @@ const register$t = (strapi2) => {
 };
 const listGaps = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$t
+  register: register$u
 }, Symbol.toStringTag, { value: "Module" }));
-const register$s = (strapi2) => {
+const register$t = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "record_capability",
     title: "Record Brain Capability",
@@ -23761,9 +23931,9 @@ const register$s = (strapi2) => {
 };
 const recordCapability = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$s
+  register: register$t
 }, Symbol.toStringTag, { value: "Module" }));
-const register$r = (strapi2) => {
+const register$s = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_capabilities",
     title: "List Brain Capabilities",
@@ -23825,9 +23995,9 @@ const register$r = (strapi2) => {
 };
 const listCapabilities = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$r
+  register: register$s
 }, Symbol.toStringTag, { value: "Module" }));
-const register$q = (strapi2) => {
+const register$r = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_rule",
     title: "Add Brain Rule",
@@ -23881,9 +24051,9 @@ const register$q = (strapi2) => {
 };
 const addRule = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$q
+  register: register$r
 }, Symbol.toStringTag, { value: "Module" }));
-const register$p = (strapi2) => {
+const register$q = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_rules",
     title: "List Brain Rules",
@@ -23952,9 +24122,9 @@ const register$p = (strapi2) => {
 };
 const listRules = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$p
+  register: register$q
 }, Symbol.toStringTag, { value: "Module" }));
-const register$o = (strapi2) => {
+const register$p = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_todo",
     title: "Add Todo",
@@ -24201,9 +24371,9 @@ async function createNewTodo(strapi2, uid, args) {
 }
 const addTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$o
+  register: register$p
 }, Symbol.toStringTag, { value: "Module" }));
-const register$n = (strapi2) => {
+const register$o = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_todo",
     title: "Update Todo",
@@ -24316,9 +24486,9 @@ ${args.appendContext}` : args.appendContext;
 };
 const updateTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$n
+  register: register$o
 }, Symbol.toStringTag, { value: "Module" }));
-const register$m = (strapi2) => {
+const register$n = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_todos",
     title: "List Todos",
@@ -24449,9 +24619,9 @@ const register$m = (strapi2) => {
 };
 const listTodos = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$m
+  register: register$n
 }, Symbol.toStringTag, { value: "Module" }));
-const register$l = (strapi2) => {
+const register$m = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_todo",
     title: "Get Todo",
@@ -24548,9 +24718,9 @@ const register$l = (strapi2) => {
 };
 const getTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$l
+  register: register$m
 }, Symbol.toStringTag, { value: "Module" }));
-const register$k = (strapi2) => {
+const register$l = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "complete_todo",
     title: "Complete Todo",
@@ -24624,9 +24794,9 @@ const register$k = (strapi2) => {
 };
 const completeTodo = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$k
+  register: register$l
 }, Symbol.toStringTag, { value: "Module" }));
-const register$j = (strapi2) => {
+const register$k = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "add_goal",
     title: "Add Goal",
@@ -24727,9 +24897,9 @@ const register$j = (strapi2) => {
 };
 const addGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$j
+  register: register$k
 }, Symbol.toStringTag, { value: "Module" }));
-const register$i = (strapi2) => {
+const register$j = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_goals",
     title: "List Goals",
@@ -24817,7 +24987,7 @@ const register$i = (strapi2) => {
 };
 const listGoals = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$i
+  register: register$j
 }, Symbol.toStringTag, { value: "Module" }));
 function calculateStreaks(checkins, cadence) {
   if (checkins.length === 0) {
@@ -24891,7 +25061,7 @@ function calculateStreaks(checkins, cadence) {
   }
   return { currentStreak, bestStreak };
 }
-const register$h = (strapi2) => {
+const register$i = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "log_checkin",
     title: "Log Goal Check-in",
@@ -25011,9 +25181,9 @@ const register$h = (strapi2) => {
 const logCheckin = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   calculateStreaks,
-  register: register$h
+  register: register$i
 }, Symbol.toStringTag, { value: "Module" }));
-const register$g = (strapi2) => {
+const register$h = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_goal_progress",
     title: "Get Goal Progress",
@@ -25110,9 +25280,9 @@ const register$g = (strapi2) => {
 };
 const getGoalProgress = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$g
+  register: register$h
 }, Symbol.toStringTag, { value: "Module" }));
-const register$f = (strapi2) => {
+const register$g = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "update_goal",
     title: "Update Goal",
@@ -25193,10 +25363,10 @@ const register$f = (strapi2) => {
 };
 const updateGoal = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  register: register$f
+  register: register$g
 }, Symbol.toStringTag, { value: "Module" }));
 const EXPECTED_TOKEN_ACTIONS = PERMISSIONS.map((permission) => permission.uid).filter(
-  (uid) => uid !== "forget"
+  (uid) => uid !== "forget" && uid !== "search.reindex"
 );
 function missingTokenPermissions(userAbility) {
   if (!userAbility || typeof userAbility.can !== "function") return [];
@@ -25215,7 +25385,7 @@ function isSimilar(title1, title2) {
   const similarity = 2 * commonWords.length / (words1.length + words2.length);
   return similarity > 0.7;
 }
-const register$e = (strapi2) => {
+const register$f = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "health_check",
     title: "Health Check",
@@ -25541,6 +25711,95 @@ const register$e = (strapi2) => {
   });
 };
 const healthCheck = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  register: register$f
+}, Symbol.toStringTag, { value: "Module" }));
+const TYPE_NAMES = [...CONTENT_TYPES];
+const register$e = (strapi2) => {
+  strapi2.ai.mcp.registerTool({
+    name: "reindex_search",
+    title: "Reindex Hybrid Search",
+    description: "Rebuild the hybrid search index for brain content. Pages through every configured type, embeds changed text with OpenAI when OPENAI_API_KEY is set, and reports per-row errors. dryRun counts work without calling OpenAI or writing. Without the key, keyword text is refreshed and semantic rows stay deferred. Archived rows are removed from the index.",
+    resolveInputSchema: () => object({
+      types: array(_enum(TYPE_NAMES)).optional().describe("Limit the rebuild to these brain types. Default: every indexed type"),
+      dryRun: boolean().optional().describe("Count what would change without calling OpenAI or writing")
+    }),
+    resolveOutputSchema: () => object({
+      dryRun: boolean(),
+      partial: boolean(),
+      scanned: number(),
+      embedded: number(),
+      skipped: number(),
+      failed: number(),
+      removed: number(),
+      deferred: number(),
+      errors: array(
+        object({
+          type: string(),
+          documentId: string(),
+          message: string()
+        })
+      ),
+      statusMessage: string().nullish()
+    }),
+    auth: {
+      policies: [{ action: getActionId("search.reindex") }]
+    },
+    createHandler: (strapi22) => async ({ args }) => {
+      const unavailable = {
+        dryRun: Boolean(args.dryRun),
+        partial: true,
+        scanned: 0,
+        embedded: 0,
+        skipped: 0,
+        failed: 0,
+        removed: 0,
+        deferred: 0,
+        errors: [{ type: "hybrid-search", documentId: "*", message: "hybrid-search plugin is not enabled" }],
+        statusMessage: "hybrid-search plugin is not enabled"
+      };
+      let report = unavailable;
+      try {
+        const service = strapi22.plugin("hybrid-search").service("search");
+        const result = await service.reindex({
+          uids: args.types?.map((type) => getUid(type)),
+          dryRun: args.dryRun,
+          wait: true
+        });
+        const uidToType = new Map(CONTENT_TYPES.map((type) => [getUid(type), type]));
+        report = {
+          dryRun: Boolean(result?.dryRun),
+          partial: Boolean(result?.partial),
+          scanned: Number(result?.scanned) || 0,
+          embedded: Number(result?.embedded) || 0,
+          skipped: Number(result?.skipped) || 0,
+          failed: Number(result?.failed) || 0,
+          removed: Number(result?.removed) || 0,
+          deferred: Number(result?.deferred) || 0,
+          errors: Array.isArray(result?.errors) ? result.errors.map((error2) => ({
+            type: uidToType.get(error2.uid) || error2.uid || "unknown",
+            documentId: String(error2.documentId || "*"),
+            message: String(error2.message || "failed")
+          })) : [],
+          statusMessage: result?.statusMessage ?? null
+        };
+      } catch (error2) {
+        const message = error2 instanceof Error ? error2.message : "reindex failed";
+        report = {
+          ...unavailable,
+          errors: [{ type: "hybrid-search", documentId: "*", message }],
+          statusMessage: message
+        };
+      }
+      const output = stripNullish(report);
+      return {
+        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
+        structuredContent: output
+      };
+    }
+  });
+};
+const reindexSearch = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   register: register$e
 }, Symbol.toStringTag, { value: "Module" }));
@@ -26948,6 +27207,7 @@ const tools = [
   getGoalProgress,
   updateGoal,
   healthCheck,
+  reindexSearch,
   getBriefing
 ];
 const registerMcpTools = (strapi2) => {
@@ -28203,7 +28463,7 @@ const controllers = {
   resourceFile: controller
 };
 const index = {
-  register: register$H,
+  register: register$I,
   bootstrap,
   contentTypes,
   services,

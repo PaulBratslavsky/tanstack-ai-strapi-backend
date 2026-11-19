@@ -357,6 +357,90 @@ describe('archived rows', () => {
   });
 });
 
+describe('hybrid recall', () => {
+  it('keeps hybrid order and cosine, and leaves archived rows out', async () => {
+    const notes = [
+      note(1, { title: 'Live habitat', body: 'zephyr lives here' }),
+      note(2, { title: 'Archived habitat', body: 'zephyr hidden', archived: true }),
+    ];
+    const strapi = mockStrapi({ [NOTE_UID]: notes });
+    (strapi as any).plugin = () => ({
+      service: () => ({
+        search: async () => ({
+          mode: 'hybrid',
+          lexicalReady: true,
+          statusMessage: null,
+          results: [
+            { uid: NOTE_UID, type: NOTE_UID, documentId: 'note-2', score: 0.2, snippet: 'hidden', matchTier: 'top' },
+            { uid: NOTE_UID, type: NOTE_UID, documentId: 'note-1', score: 0.91, snippet: 'live snippet', matchTier: 'strong' },
+          ],
+        }),
+      }),
+    });
+    const service = brain({ strapi: strapi as any });
+    const results = await service.search({ query: 'zephyr', types: ['note'] }) as any;
+    expect(results.map((result: any) => result.documentId)).toEqual(['note-1']);
+    expect(results[0].score).toBe(0.91);
+    expect(results[0].matchTier).toBe('strong');
+    expect(results[0].snippet).toBe('live snippet');
+    expect(results.searchMode).toBe('hybrid');
+  });
+
+  it('uses the keyword scan when hybrid has no index yet', async () => {
+    const strapi = mockStrapi({
+      [NOTE_UID]: [note(1, { title: 'Zephyr habitat', body: 'lives in the canyon' })],
+    });
+    (strapi as any).plugin = () => ({
+      service: () => ({
+        search: async () => ({ mode: 'keyword-only', lexicalReady: false, results: [], statusMessage: 'Semantic search is off because OPENAI_API_KEY is not set.' }),
+      }),
+    });
+    const service = brain({ strapi: strapi as any });
+    const results = await service.search({ query: 'zephyr', types: ['note'] }) as any;
+    expect(results.map((result: any) => result.documentId)).toEqual(['note-1']);
+    expect(results.searchMode).toBe('keyword-scan');
+  });
+
+  it('recommends update when similar() is at least 0.9', async () => {
+    const strapi = mockStrapi({
+      [NOTE_UID]: [note(4, { title: 'Zephyr habitat', summary: 'old summary', body: 'old body' })],
+    });
+    (strapi as any).plugin = () => ({
+      service: () => ({
+        similar: async () => ({
+          enabled: true,
+          indexedCount: 2,
+          results: [{ documentId: 'note-4', score: 0.94 }],
+        }),
+      }),
+    });
+    const service = brain({ strapi: strapi as any });
+    const assessment = await service.assessNote({ title: 'Where zephyr lives', body: 'a new paragraph' });
+    expect(assessment.recommendedAction).toBe('update_existing');
+    expect(assessment.related[0].documentId).toBe('note-4');
+    expect(assessment.related[0].match).toBe('search');
+  });
+
+  it('keeps the keyword duplicate check when similar() is disabled', async () => {
+    const strapi = mockStrapi({
+      [NOTE_UID]: [note(4, { title: 'Zephyr habitat', summary: 'where it lives', body: 'full details' })],
+    });
+    (strapi as any).plugin = () => ({
+      service: () => ({
+        similar: async () => ({ enabled: false, indexedCount: 0, statusMessage: 'missing key', results: [] }),
+        search: async () => ({ mode: 'keyword-only', lexicalReady: false, results: [], statusMessage: 'missing' }),
+      }),
+    });
+    const service = brain({ strapi: strapi as any });
+    const assessment = await service.assessNote({
+      title: 'Zephyr habitat',
+      summary: 'where it lives',
+      body: 'full details',
+    });
+    expect(assessment.recommendedAction).toBe('skip');
+  });
+});
+
 describe('toDateOnly', () => {
   it('keeps a calendar date and strips a time from an ISO timestamp', () => {
     expect(toDateOnly('2026-11-15')).toBe('2026-11-15');

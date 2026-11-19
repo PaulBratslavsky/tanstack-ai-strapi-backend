@@ -1,0 +1,69 @@
+{
+  "name": "strapi-plugin-hybrid-search",
+  "version": "1.0.0",
+  "description": "Generic hybrid keyword and semantic search for Strapi 5",
+  "strapi": {
+    "kind": "plugin",
+    "name": "hybrid-search",
+    "displayName": "Hybrid Search",
+    "description": "Keyword plus semantic search over configured content types"
+  },
+  "type": "commonjs",
+  "exports": {
+    "./package.json": "./package.json",
+    "./strapi-admin": {
+      "types": "./dist/admin/src/index.d.ts",
+      "source": "./admin/src/index.ts",
+      "import": "./dist/admin/index.mjs",
+      "require": "./dist/admin/index.js",
+      "default": "./dist/admin/index.js"
+    },
+    "./strapi-server": {
+      "types": "./dist/server/src/index.d.ts",
+      "source": "./server/src/index.ts",
+      "import": "./dist/server/index.mjs",
+      "require": "./dist/server/index.js",
+      "default": "./dist/server/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "strapi-plugin build",
+    "watch": "strapi-plugin watch",
+    "verify": "strapi-plugin verify",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@strapi/design-system": "^2.0.0-rc.12",
+    "@strapi/icons": "^2.0.0-rc.12",
+    "@strapi/sdk-plugin": "^5.0.0",
+    "@strapi/strapi": "5.60.0",
+    "@strapi/typescript-utils": "5.60.0",
+    "@types/node": "^22",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@vitest/ui": "^5.1.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-intl": "^6.8.7",
+    "react-router-dom": "^6.30.3",
+    "styled-components": "^6.0.0",
+    "typescript": "^5",
+    "vite": "^6.4.6",
+    "vitest": "^5.1.0"
+  },
+  "peerDependencies": {
+    "@strapi/design-system": "^2.0.0",
+    "@strapi/icons": "^2.0.0",
+    "@strapi/strapi": "^5.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-router-dom": "^6.30.3",
+    "styled-components": "^6.0.0"
+  },
+  "author": "Paul Bratslavsky",
+  "license": "MIT"
+}

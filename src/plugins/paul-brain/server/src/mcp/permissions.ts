@@ -136,6 +136,13 @@ export const PERMISSIONS = [
     uid: 'forget',
     displayName: 'Delete records',
   },
+  {
+    section: 'plugins',
+    pluginName: PLUGIN_NAME,
+    subCategory: 'administration',
+    uid: 'search.reindex',
+    displayName: 'Rebuild the hybrid search index',
+  },
 ];
 
 export const getActionId = (uid: string) => `plugin::${PLUGIN_NAME}.${uid}`;

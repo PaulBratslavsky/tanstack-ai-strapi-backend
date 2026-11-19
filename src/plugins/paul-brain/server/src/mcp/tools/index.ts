@@ -27,6 +27,7 @@ import * as logCheckin from './log-checkin';
 import * as getGoalProgress from './get-goal-progress';
 import * as updateGoal from './update-goal';
 import * as healthCheck from './health-check';
+import * as reindexSearch from './reindex-search';
 import * as updateRetro from './update-retro';
 import * as updateGap from './update-gap';
 import * as getBriefing from './get-briefing';
@@ -85,5 +86,6 @@ export const tools = [
   getGoalProgress,
   updateGoal,
   healthCheck,
+  reindexSearch,
   getBriefing,
 ];
