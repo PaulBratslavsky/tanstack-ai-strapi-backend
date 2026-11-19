@@ -1,4 +1,5 @@
 import type { Core } from '@strapi/strapi';
+import { brainHybridSearchTypes } from '../src/plugins/paul-brain/server/src/hybrid-search-config';
 
 const allowedMediaTypes = [
   'image/*',
@@ -61,6 +62,16 @@ const config = ({ env }: Core.Config.Shared.ConfigParams): Core.Config.Plugin =>
         apiKey: env('ANTHROPIC_API_KEY'),
         baseURL: env('OLLAMA_HOST'),
       },
+    },
+  },
+
+  'hybrid-search': {
+    enabled: true,
+    resolve: './src/plugins/hybrid-search',
+    config: {
+      // paul-brain owns this map. The plugin does not know these types.
+      types: brainHybridSearchTypes,
+      similarThreshold: 0.9,
     },
   },
 

@@ -8,7 +8,7 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'verify_note',
     title: 'Verify Note Before Saving',
-    description: 'Read-only duplicate check. Searches every note (title, summary, and body, newest-first, same paging as recall) plus an optional dedupeKey. Returns ranked related notes and a recommendedAction: create, update_existing, or skip.',
+    description: 'Read-only duplicate check. Uses similar() at cosine 0.9 when note embeddings exist, and the keyword scan when OPENAI_API_KEY is missing or nothing is indexed yet. An optional dedupeKey is always checked. Returns ranked related notes and a recommendedAction: create, update_existing, or skip.',
 
     resolveInputSchema: () => z.object({
       title: z.string().describe('Proposed note title'),

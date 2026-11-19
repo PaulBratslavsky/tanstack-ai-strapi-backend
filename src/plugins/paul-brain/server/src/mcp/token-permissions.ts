@@ -5,7 +5,7 @@ import { getActionId, PERMISSIONS } from './permissions';
  * `forget` is intentionally withheld (hard delete) and is not reported as missing.
  */
 export const EXPECTED_TOKEN_ACTIONS = PERMISSIONS.map((permission) => permission.uid).filter(
-  (uid) => uid !== 'forget'
+  (uid) => uid !== 'forget' && uid !== 'search.reindex'
 );
 
 export interface TokenAbility {

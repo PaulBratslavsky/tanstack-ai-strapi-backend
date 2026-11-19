@@ -130,7 +130,7 @@ Run diagnostic checks on brain data.
 
 ### remember
 Create a new note with duplicate detection.
-- Duplicate check uses recall's search: title, summary, and body, newest-first across notes (not a title-only look at the first 100 rows)
+- When \`OPENAI_API_KEY\` is set and note embeddings exist, duplicate detection uses semantic similar() (cosine at least 0.9) plus dedupeKey and slug. Otherwise it uses recall's keyword search: title, summary, and body, newest-first across notes (not a title-only look at the first 100 rows)
 - Returns needsDecision: true with candidates if a real duplicate is found and onDuplicate is not set
 - \`dedupeKey\` is a stable identity. A live note with the same key is updated (merged) instead of duplicated. If that note already contains the summary and body, remember skips
 - onDuplicate: 'merge' — append to existing note
@@ -143,27 +143,34 @@ Create a new note with duplicate detection.
 ### verify_note
 Read-only check before saving a note. Same permission as recall (\`plugin::paul-brain.read\`).
 - Input: title, optional summary, body, tags, and dedupeKey
-- Searches title, summary, and body on every note, newest-first, with the same paging as recall. An exact dedupeKey is included even when the wording differs
+- When embeddings are available, a cosine match of at least 0.9 recommends \`update_existing\` (or \`skip\` when the text is already stored). Without \`OPENAI_API_KEY\`, or before the first reindex, it searches title, summary, and body on every note, newest-first, with the same paging as recall. An exact dedupeKey is included even when the wording differs
 - Returns ranked related notes (no note body) and recommendedAction: \`create\`, \`update_existing\`, or \`skip\`
 - \`skip\` means the existing note already contains the proposed summary and body
 - Archived notes are ignored
 - Call this when you are unsure. remember still asks when it finds a duplicate and onDuplicate is not set
 
 ### recall
-Search across brain types with ranked results, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown) as well as note body and tags.
+Search across brain types with hybrid keyword and semantic ranking, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown) as well as note body and tags.
 - Use specific queries: "strapi mcp tools" not just "strapi"
 - Filter by type: \`["note", "person"]\`. Resources are included by default. Use \`types: ["resource"]\` to search only deliverables. Resource matches look at title, summary, body, extractedText, altText, caption, and snapshotMarkdown
 - Filter by kind: \`"video"\`, \`"lesson"\`, \`"fact"\`, etc.
 - Filter by tag: \`"strapi"\` (notes and resources)
 - Filter by videoId: find notes for a specific YouTube video
 - Filter by sourceId: find notes linked to a specific source
-- Results are ranked: title match > alias/tag match > body match
-- Pinned notes rank higher
-- Recent items rank higher
+- Order comes from reciprocal rank fusion of Postgres full-text search (weight 2.5) and embedding cosine. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that rank
+- Tag and alias overlaps add a small boost on top of that fusion. Pinned notes get a boost too
+- \`searchMode\` is \`hybrid\` or \`keyword-only\`. Without \`OPENAI_API_KEY\`, results are keyword-only and \`statusMessage\` says so. The keyword scan is the fallback when the index is not ready
 - Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
 - Always search before creating notes to avoid duplicates
-- Each type is paged newest-first (\`updatedAt\` desc) up to 1000 rows. Text matches older than that window are still included via a database filter on scalar fields (title, body, and the type's other text fields). Tag and alias matches are scored in memory on the scanned rows
 - Archived notes, people, projects, decisions, sources, and resources are excluded
+
+### reindex_search
+Rebuild the hybrid search index. Permission \`plugin::paul-brain.search.reindex\` (grant this on tokens that should backfill; it is not part of the normal brain token).
+- \`dryRun: true\` counts rows that would be embedded and does not call OpenAI or write
+- Pages through each content type. Embed failures are reported per row and do not stop the run
+- Without \`OPENAI_API_KEY\`, keyword text is refreshed and embeddings stay deferred. \`statusMessage\` says the key is missing
+- The admin Hybrid Search page and \`POST /hybrid-search/reindex\` call the same rebuild
+- Run it once after deploy so existing rows get vectors. Later edits update the index on save
 
 ### get_entity
 Fetch one entity by type + documentId or slug, including \`resource\`. A raw resource row uses \`state\` and \`author\`; \`get_resource\` returns those as \`status\` and \`createdBy\`.
@@ -497,6 +504,7 @@ Each tool requires specific permissions on your admin token:
 - \`plugin::paul-brain.goal.read\` — list_goals, get_goal_progress
 - \`plugin::paul-brain.goal.write\` — add_goal, update_goal, log_checkin
 - \`plugin::paul-brain.forget\` — forget (dangerous, usually not granted)
+- \`plugin::paul-brain.search.reindex\` — reindex_search (not granted by default; add it to tokens that should rebuild the index)
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;

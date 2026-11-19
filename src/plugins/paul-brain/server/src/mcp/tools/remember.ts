@@ -11,7 +11,7 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'remember',
     title: 'Remember in Brain',
-    description: 'Create a note with duplicate detection across title, summary, and body (newest-first, same scan as recall). A matching dedupeKey updates the existing note instead of creating another. onDuplicate: merge (append to existing), new (force new), supersede (mark old as superseded). Always set tags and source_bot.',
+    description: 'Create a note with duplicate detection. When embeddings are available, similar() at cosine 0.9 finds semantic duplicates; otherwise the keyword scan is used. A matching dedupeKey updates the existing note instead of creating another. onDuplicate: merge (append to existing), new (force new), supersede (mark old as superseded). Always set tags and source_bot.',
     
     resolveInputSchema: () => z.object({
       title: z.string().describe('Note title (used to generate slug)'),

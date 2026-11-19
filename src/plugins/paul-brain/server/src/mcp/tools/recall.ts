@@ -8,7 +8,7 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'recall',
     title: 'Recall from Brain',
-    description: 'Search across brain types with ranked keyword search. Pages each type newest-first (updatedAt desc, up to 1000 rows) and also filters title/body in the database so older text matches are not dropped. Resources are included and match title, summary, body, extractedText, altText, caption, and snapshotMarkdown. Tag and alias matches are scored in memory. See get_brain_guide for usage.',
+    description: 'Search across brain types with hybrid keyword and semantic ranking. Score is cosine similarity; order is reciprocal rank fusion plus tag, alias, and title boosts. Without OPENAI_API_KEY, results are keyword-only and statusMessage says so. Resources match title, summary, body, extractedText, altText, caption, and snapshotMarkdown. Archived rows are excluded. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
       query: z.string().describe('Search query (keywords)'),
@@ -33,8 +33,11 @@ export const register = (strapi: Core.Strapi) => {
         updatedAt: z.string(),
         linkedSourceIds: z.array(z.string()).optional(),
         linkedPersonIds: z.array(z.string()).optional(),
+        matchTier: z.enum(['top', 'strong', 'good', 'related']).optional(),
       })),
       count: z.number(),
+      searchMode: z.enum(['hybrid', 'keyword-only', 'keyword-scan']).optional(),
+      statusMessage: z.string().nullish(),
     }),
     
     auth: {
@@ -58,6 +61,8 @@ export const register = (strapi: Core.Strapi) => {
       const output = stripNullish({
         results,
         count: results.length,
+        searchMode: (results as { searchMode?: 'hybrid' | 'keyword-only' | 'keyword-scan' }).searchMode,
+        statusMessage: (results as { statusMessage?: string | null }).statusMessage,
       });
 
       return {

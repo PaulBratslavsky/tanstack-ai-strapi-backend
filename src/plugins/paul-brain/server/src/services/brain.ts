@@ -1,6 +1,7 @@
 import type { Core } from '@strapi/strapi';
 import { isArchivedRecord, withActiveRecords } from './archive';
 import { RESOURCE_TEXT_FIELDS } from './resource';
+import { searchWithHybrid, similarNoteHits } from './hybrid-recall';
 
 const PLUGIN_NAME = 'paul-brain';
 
@@ -172,6 +173,13 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
   },
 
   async search(options: SearchOptions): Promise<SearchResult[]> {
+    try {
+      const hybridResults = await searchWithHybrid(strapi, options);
+      if (hybridResults) return hybridResults;
+    } catch (err) {
+      strapi.log.warn('[paul-brain] hybrid search failed; using keyword scan', err);
+    }
+
     const { query, types = ['note', 'person', 'project', 'decision', 'source', 'resource'], kind, tag, videoId, sourceId, since, limit = 25 } = options;
     
     const results: SearchResult[] = [];
@@ -342,7 +350,9 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
     }
 
     results.sort((a, b) => b.score - a.score);
-    return results.slice(0, Math.min(limit, 25));
+    const scanned = results.slice(0, Math.min(limit, 25));
+    (scanned as SearchResult[] & { searchMode?: string }).searchMode = 'keyword-scan';
+    return scanned;
   },
 
   async linkEntities(
@@ -447,19 +457,20 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
     const byId = new Map<string, RankedCandidate>();
     const uid = `plugin::${PLUGIN_NAME}.note`;
 
-    const consider = (entity: any, match: RelatedNote['match'], score: number) => {
+    const consider = (entity: any, match: RelatedNote['match'], score: number, semantic = false) => {
       if (!entity?.documentId || entity.archived === true) return;
       const prev = byId.get(entity.documentId);
       if (!prev) {
-        byId.set(entity.documentId, { entity, match, score });
+        byId.set(entity.documentId, { entity, match, score, semantic });
         return;
       }
       const betterMatch = MATCH_RANK[match] > MATCH_RANK[prev.match];
-      if (betterMatch || score > prev.score) {
+      if (betterMatch || score > prev.score || semantic) {
         byId.set(entity.documentId, {
           entity: prev.entity.body || prev.entity.summary ? prev.entity : entity,
           match: betterMatch ? match : prev.match,
           score: Math.max(score, prev.score),
+          semantic: prev.semantic || semantic,
         });
       }
     };
@@ -478,7 +489,23 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
     }
 
     const query = proposalQuery(input);
-    if (searchKeywords(query).length > 0) {
+    const semantic = await similarNoteHits(strapi, query);
+    if (semantic.mode === 'similar') {
+      if (semantic.hits.length > 0) {
+        const rows = await strapi.documents(uid).findMany({
+          filters: withActiveRecords('note', {
+            documentId: { $in: semantic.hits.map((hit) => hit.documentId) },
+          }),
+          limit: semantic.hits.length,
+        });
+        const rowById = new Map((rows || []).map((row: any) => [row.documentId, row]));
+        for (const hit of semantic.hits) {
+          const entity = rowById.get(hit.documentId);
+          if (!entity) continue;
+          consider(entity, 'search', Math.round(hit.score * 1000) / 10, true);
+        }
+      }
+    } else if (searchKeywords(query).length > 0) {
       const hits = await this.search({ query, types: ['note'], limit: 25 });
       if (hits.length > 0) {
         const rows = await strapi.documents(uid).findMany({
@@ -529,7 +556,7 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
 
     const top = ranked[0];
     let recommendedAction: NoteRecommendation = 'create';
-    if (top && (top.match === 'dedupeKey' || top.match === 'slug' || top.match === 'title')) {
+    if (top && (top.match === 'dedupeKey' || top.match === 'slug' || top.match === 'title' || top.semantic)) {
       recommendedAction = noteContentAlreadyStored(top.entity, input) ? 'skip' : 'update_existing';
     }
 
@@ -582,6 +609,7 @@ interface RankedCandidate {
   entity: any;
   match: RelatedNote['match'];
   score: number;
+  semantic?: boolean;
 }
 
 const MATCH_RANK: Record<RelatedNote['match'], number> = {
