@@ -125,7 +125,7 @@ const HomePage = () => {
         )}
         {status?.statusMessage && (
           <Box paddingBottom={4}>
-            <Alert title="Embeddings disabled" variant="warning" closeLabel="Close">
+            <Alert title={status.apiKeyConfigured ? 'Reindex needed' : 'Embeddings disabled'} variant="warning" closeLabel="Close">
               {status.statusMessage}
             </Alert>
           </Box>

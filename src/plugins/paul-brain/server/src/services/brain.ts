@@ -180,7 +180,7 @@ const brain = ({ strapi }: { strapi: Core.Strapi }) => ({
       strapi.log.warn('[paul-brain] hybrid search failed; using keyword scan', err);
     }
 
-    const { query, types = ['note', 'person', 'project', 'decision', 'source', 'resource'], kind, tag, videoId, sourceId, since, limit = 25 } = options;
+    const { query, types = ['note', 'person', 'project', 'decision', 'source', 'resource', 'todo'], kind, tag, videoId, sourceId, since, limit = 25 } = options;
     
     const results: SearchResult[] = [];
     const queryLower = query.toLowerCase();

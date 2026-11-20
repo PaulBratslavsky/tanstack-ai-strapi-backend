@@ -20036,15 +20036,15 @@ Read-only check before saving a note. Same permission as recall (\`plugin::paul-
 - Call this when you are unsure. remember still asks when it finds a duplicate and onDuplicate is not set
 
 ### recall
-Search across brain types with hybrid keyword and semantic ranking, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown) as well as note body and tags.
+Search across brain types with hybrid keyword and semantic ranking, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown), open todos (title, goal, acceptance criteria, context), and note body and tags.
 - Use specific queries: "strapi mcp tools" not just "strapi"
-- Filter by type: \`["note", "person"]\`. Resources are included by default. Use \`types: ["resource"]\` to search only deliverables. Resource matches look at title, summary, body, extractedText, altText, caption, and snapshotMarkdown
+- Filter by type: \`["note", "person"]\`. Notes, people, projects, decisions, sources, resources, and todos are included by default. Use \`types: ["todo"]\` to search only todos, or \`types: ["resource"]\` for deliverables. Resource matches look at title, summary, body, extractedText, altText, caption, and snapshotMarkdown
 - Filter by kind: \`"video"\`, \`"lesson"\`, \`"fact"\`, etc.
 - Filter by tag: \`"strapi"\` (notes and resources)
 - Filter by videoId: find notes for a specific YouTube video
 - Filter by sourceId: find notes linked to a specific source
-- Order comes from reciprocal rank fusion of Postgres full-text search (weight 2.5) and embedding cosine. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that rank
-- Tag and alias overlaps add a small boost on top of that fusion. Pinned notes get a boost too
+- Order follows cosine similarity. Keyword rank, tag overlap, aliases, and pinned notes add a small bonus that can reorder close neighbors. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that order
+- A recipe change marks old vectors stale. Search skips them until Reindex all rebuilds them
 - \`searchMode\` is \`hybrid\` or \`keyword-only\`. Without \`OPENAI_API_KEY\`, results are keyword-only and \`statusMessage\` says so. The keyword scan is the fallback when the index is not ready
 - Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
 - Always search before creating notes to avoid duplicates
@@ -20056,7 +20056,7 @@ Rebuild the hybrid search index. Permission \`plugin::paul-brain.search.reindex\
 - Pages through each content type. Embed failures are reported per row and do not stop the run
 - Without \`OPENAI_API_KEY\`, keyword text is refreshed and embeddings stay deferred. \`statusMessage\` says the key is missing
 - The admin Hybrid Search page and \`POST /hybrid-search/reindex\` call the same rebuild
-- Run it once after deploy so existing rows get vectors. Later edits update the index on save
+- Run it once after deploy, and again after an embedding recipe change, so existing rows get vectors. Later edits update the index on save
 
 ### get_entity
 Fetch one entity by type + documentId or slug, including \`resource\`. A raw resource row uses \`state\` and \`author\`; \`get_resource\` returns those as \`status\` and \`createdBy\`.
@@ -20394,7 +20394,7 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.12.0";
+const PLUGIN_VERSION = "1.13.0";
 const register$H = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
@@ -20510,10 +20510,10 @@ const register$G = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "recall",
     title: "Recall from Brain",
-    description: "Search across brain types with hybrid keyword and semantic ranking. Score is cosine similarity; order is reciprocal rank fusion plus tag, alias, and title boosts. Without OPENAI_API_KEY, results are keyword-only and statusMessage says so. Resources match title, summary, body, extractedText, altText, caption, and snapshotMarkdown. Archived rows are excluded. See get_brain_guide for usage.",
+    description: "Search across brain types with hybrid keyword and semantic ranking. Score is cosine similarity, and that cosine sets the order; keyword, tag, alias, and pinned boosts only reorder close neighbors. Without OPENAI_API_KEY, or while vectors are stale, results are keyword-only and statusMessage says so. Default types include notes, people, projects, decisions, sources, resources, and todos. Resources match title, summary, body, extractedText, altText, caption, and snapshotMarkdown. Todos match title, goal, acceptance criteria, and context. Archived rows are excluded. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       query: string().describe("Search query (keywords)"),
-      types: array(_enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin", "resource"])).optional().describe("Limit search to these types (default: notes, people, projects, decisions, sources, and resources)"),
+      types: array(_enum(["note", "person", "project", "decision", "source", "retro", "gap", "capability", "rule", "todo", "goal", "goal-checkin", "resource"])).optional().describe("Limit search to these types (default: notes, people, projects, decisions, sources, resources, and todos)"),
       kind: _enum(["fact", "preference", "idea", "todo", "log", "reference", "lesson", "video", "taught"]).optional().describe("Filter notes by kind"),
       tag: string().optional().describe("Filter by tag (notes and resources)"),
       videoId: string().optional().describe("Filter by videoId (notes only)"),
@@ -22082,7 +22082,7 @@ function createResourceService(strapi2) {
     return null;
   }
 }
-const DEFAULT_TYPES = ["note", "person", "project", "decision", "source", "resource"];
+const DEFAULT_TYPES = ["note", "person", "project", "decision", "source", "resource", "todo"];
 const NOTE_UID = "plugin::paul-brain.note";
 function hybridService(strapi2) {
   if (typeof strapi2.plugin !== "function") return null;
@@ -22311,7 +22311,7 @@ ${data.body}`;
     } catch (err) {
       strapi2.log.warn("[paul-brain] hybrid search failed; using keyword scan", err);
     }
-    const { query, types = ["note", "person", "project", "decision", "source", "resource"], kind: kind2, tag, videoId, sourceId, since, limit = 25 } = options2;
+    const { query, types = ["note", "person", "project", "decision", "source", "resource", "todo"], kind: kind2, tag, videoId, sourceId, since, limit = 25 } = options2;
     const results = [];
     const queryLower = query.toLowerCase();
     for (const type of types) {

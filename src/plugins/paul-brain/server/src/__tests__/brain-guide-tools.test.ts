@@ -3,7 +3,7 @@ import { BRAIN_GUIDE } from '../mcp/guides/brain-guide';
 import { tools } from '../mcp/tools';
 
 describe('get_brain_guide', () => {
-  it('documents exactly the tools that register, and reports 1.12.0', async () => {
+  it('documents exactly the tools that register, and reports 1.13.0', async () => {
     const registered: Array<{ name: string; createHandler: () => () => Promise<any> }> = [];
     const strapi = {
       ai: {
@@ -24,9 +24,9 @@ describe('get_brain_guide', () => {
     const guide = registered.find((tool) => tool.name === 'get_brain_guide');
     expect(guide).toBeDefined();
     const result = await guide!.createHandler()();
-    expect(result.structuredContent.version).toBe('1.12.0');
+    expect(result.structuredContent.version).toBe('1.13.0');
     expect(result.structuredContent.guide).toBe(BRAIN_GUIDE);
-    expect(result.content[0].text).toContain('Plugin version: 1.12.0');
+    expect(result.content[0].text).toContain('Plugin version: 1.13.0');
 
     const toolSection = BRAIN_GUIDE.split('## When to Use Which Tool')[1].split('## Best Practices')[0];
     const headings = [...toolSection.matchAll(/^### ([a-z0-9_]+)/gm)].map((match) => match[1]);

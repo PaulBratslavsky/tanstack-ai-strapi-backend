@@ -386,6 +386,33 @@ describe('hybrid recall', () => {
     expect(results.searchMode).toBe('hybrid');
   });
 
+  it('asks hybrid search for todos by default and still finds them on the keyword scan', async () => {
+    const todoUid = 'plugin::paul-brain.todo';
+    let uids: string[] = [];
+    const strapi = mockStrapi({
+      [todoUid]: [{
+        documentId: 'todo-urology',
+        title: 'Book the urology visit',
+        goal: 'doctor appointment still open',
+        acceptanceCriteria: 'Labcorp blood work is scheduled',
+        context: 'referral is sitting in the inbox',
+        updatedAt: '2026-03-01T00:00:00.000Z',
+      }],
+    });
+    (strapi as any).plugin = () => ({
+      service: () => ({
+        search: async (input: { uids?: string[] }) => {
+          uids = input.uids || [];
+          return { mode: 'keyword-only', lexicalReady: false, results: [], statusMessage: null };
+        },
+      }),
+    });
+    const service = brain({ strapi: strapi as any });
+    const results = await service.search({ query: 'urology blood work' });
+    expect(uids).toContain(todoUid);
+    expect(results.map((result) => result.documentId)).toContain('todo-urology');
+  });
+
   it('uses the keyword scan when hybrid has no index yet', async () => {
     const strapi = mockStrapi({
       [NOTE_UID]: [note(1, { title: 'Zephyr habitat', body: 'lives in the canyon' })],

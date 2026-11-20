@@ -8,11 +8,11 @@ export const register = (strapi: Core.Strapi) => {
   strapi.ai.mcp.registerTool({
     name: 'recall',
     title: 'Recall from Brain',
-    description: 'Search across brain types with hybrid keyword and semantic ranking. Score is cosine similarity; order is reciprocal rank fusion plus tag, alias, and title boosts. Without OPENAI_API_KEY, results are keyword-only and statusMessage says so. Resources match title, summary, body, extractedText, altText, caption, and snapshotMarkdown. Archived rows are excluded. See get_brain_guide for usage.',
+    description: 'Search across brain types with hybrid keyword and semantic ranking. Score is cosine similarity, and that cosine sets the order; keyword, tag, alias, and pinned boosts only reorder close neighbors. Without OPENAI_API_KEY, or while vectors are stale, results are keyword-only and statusMessage says so. Default types include notes, people, projects, decisions, sources, resources, and todos. Resources match title, summary, body, extractedText, altText, caption, and snapshotMarkdown. Todos match title, goal, acceptance criteria, and context. Archived rows are excluded. See get_brain_guide for usage.',
     
     resolveInputSchema: () => z.object({
       query: z.string().describe('Search query (keywords)'),
-      types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source', 'retro', 'gap', 'capability', 'rule', 'todo', 'goal', 'goal-checkin', 'resource'])).optional().describe('Limit search to these types (default: notes, people, projects, decisions, sources, and resources)'),
+      types: z.array(z.enum(['note', 'person', 'project', 'decision', 'source', 'retro', 'gap', 'capability', 'rule', 'todo', 'goal', 'goal-checkin', 'resource'])).optional().describe('Limit search to these types (default: notes, people, projects, decisions, sources, resources, and todos)'),
       kind: z.enum(['fact', 'preference', 'idea', 'todo', 'log', 'reference', 'lesson', 'video', 'taught']).optional().describe('Filter notes by kind'),
       tag: z.string().optional().describe('Filter by tag (notes and resources)'),
       videoId: z.string().optional().describe('Filter by videoId (notes only)'),

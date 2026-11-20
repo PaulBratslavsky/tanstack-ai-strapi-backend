@@ -1,6 +1,7 @@
-import { useRef, useEffect, forwardRef } from "react";
-import { jsx } from "react/jsx-runtime";
-import { useTheme } from "styled-components";
+"use strict";
+const react = require("react");
+const jsxRuntime = require("react/jsx-runtime");
+const styledComponents = require("styled-components");
 const __variableDynamicImportRuntimeHelper = (glob, path, segs) => {
   const v = glob[path];
   if (v) {
@@ -19,20 +20,20 @@ const __variableDynamicImportRuntimeHelper = (glob, path, segs) => {
 };
 const PLUGIN_ID = "hybrid-search";
 const Initializer = ({ setPlugin }) => {
-  const ref = useRef(setPlugin);
-  useEffect(() => {
+  const ref = react.useRef(setPlugin);
+  react.useEffect(() => {
     ref.current(PLUGIN_ID);
   }, []);
   return null;
 };
 const GLASS_PATH = "M13.5 2a8.5 8.5 0 1 0 5.3 15.1l6.6 6.6a1.5 1.5 0 0 0 2.1-2.1l-6.6-6.6A8.5 8.5 0 0 0 13.5 2Zm0 3a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11Z";
-const SearchIcon = forwardRef(
+const SearchIcon = react.forwardRef(
   ({ fill = "currentColor", stroke, ...props }, ref) => {
-    const theme = useTheme();
+    const theme = styledComponents.useTheme();
     const colors = theme?.colors ?? {};
     const resolvedFill = fill && fill in colors ? colors[fill] : fill;
     const resolvedStroke = stroke && stroke in colors ? colors[stroke] : stroke;
-    return /* @__PURE__ */ jsx(
+    return /* @__PURE__ */ jsxRuntime.jsx(
       "svg",
       {
         xmlns: "http://www.w3.org/2000/svg",
@@ -45,7 +46,7 @@ const SearchIcon = forwardRef(
         focusable: "false",
         ref,
         ...props,
-        children: /* @__PURE__ */ jsx("path", { fillRule: "evenodd", clipRule: "evenodd", d: GLASS_PATH })
+        children: /* @__PURE__ */ jsxRuntime.jsx("path", { fillRule: "evenodd", clipRule: "evenodd", d: GLASS_PATH })
       }
     );
   }
@@ -63,7 +64,7 @@ const index = {
       },
       permissions: [{ action: `plugin::${PLUGIN_ID}.read`, subject: null }],
       Component: async () => {
-        const { App } = await import("./App-eYKSmSqX.mjs");
+        const { App } = await Promise.resolve().then(() => require("./App-BWZblquI.js"));
         return App;
       }
     });
@@ -78,7 +79,7 @@ const index = {
     return Promise.all(
       locales.map(async (locale) => {
         try {
-          const { default: data } = await __variableDynamicImportRuntimeHelper(/* @__PURE__ */ Object.assign({ "./translations/en.json": () => import("./en-DbH-vPsi.mjs") }), `./translations/${locale}.json`, 3);
+          const { default: data } = await __variableDynamicImportRuntimeHelper(/* @__PURE__ */ Object.assign({ "./translations/en.json": () => Promise.resolve().then(() => require("./en-BH-Xyec2.js")) }), `./translations/${locale}.json`, 3);
           return { data, locale };
         } catch {
           return { data: {}, locale };
@@ -87,7 +88,5 @@ const index = {
     );
   }
 };
-export {
-  PLUGIN_ID as P,
-  index as i
-};
+exports.PLUGIN_ID = PLUGIN_ID;
+exports.index = index;

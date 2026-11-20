@@ -33,6 +33,21 @@ export interface KeywordFilter {
   since?: string;
 }
 
+/** Function words. A match on these alone is not evidence. */
+const STOPWORDS = new Set([
+  'a', 'an', 'the', 'to', 'of', 'in', 'on', 'for', 'and', 'or', 'me', 'my', 'i', 'do', 'be', 'is', 'it',
+  'when', 'what', 'with', 'from', 'that', 'this', 'at', 'by', 'as', 'are', 'was', 'were', 'you', 'your',
+]);
+
+export function contentKeywords(queryText: string): string[] {
+  return queryText
+    .toLowerCase()
+    .split(/\s+/)
+    .map((part) => part.replace(/[^a-z0-9]+/g, ''))
+    .filter((part) => part.length >= 3 && !STOPWORDS.has(part))
+    .slice(0, 8);
+}
+
 const quote = (ident: string) => {
   if (!isSafeIdent(ident)) throw new Error(`Unsafe SQL identifier: ${ident}`);
   return `"${ident}"`;
@@ -143,13 +158,9 @@ export async function searchKeyword(
   limit: number,
   filter?: KeywordFilter
 ): Promise<KeywordHit[]> {
-  const keywords = queryText
-    .toLowerCase()
-    .split(/\s+/)
-    .map((part) => part.replace(/[^a-z0-9]+/g, ''))
-    .filter((part) => part.length >= 2)
-    .slice(0, 8);
+  const keywords = contentKeywords(queryText);
   if (keywords.length === 0 || limit <= 0) return [];
+  const lexicalQuery = keywords.join(' ');
 
   if (client === 'postgres') {
     const query = knex(type.table)
@@ -157,12 +168,12 @@ export async function searchKeyword(
         documentId: type.documentId,
         snippet: knex.raw(
           `ts_headline('english', coalesce(${quote(TEXT_COLUMN)}, ''), plainto_tsquery('english', ?), 'MaxWords=24, MinWords=6, MaxFragments=1')`,
-          [queryText]
+          [lexicalQuery]
         ),
-        rank: knex.raw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?))`, [queryText]),
+        rank: knex.raw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?))`, [lexicalQuery]),
       })
-      .whereRaw(`${quote(TSV_COLUMN)} @@ plainto_tsquery('english', ?)`, [queryText])
-      .orderByRaw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?)) DESC`, [queryText])
+      .whereRaw(`${quote(TSV_COLUMN)} @@ plainto_tsquery('english', ?)`, [lexicalQuery])
+      .orderByRaw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?)) DESC`, [lexicalQuery])
       .limit(limit);
     applyCommon(query, type, filter);
     const rows = await query;

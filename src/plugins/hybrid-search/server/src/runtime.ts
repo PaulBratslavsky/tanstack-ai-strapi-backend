@@ -20,6 +20,7 @@ import {
   isSafeIdent,
   missingKeyMessage,
   pageThrough,
+  passageSnippet,
   shouldSkipEmbed,
   textHash,
 } from './services/text';
@@ -476,7 +477,12 @@ export class HybridRuntime {
     const query = String(input.query || '').trim();
     const limit = Math.min(Math.max(input.limit ?? 25, 1), 100);
     const uids = this.selectedUids(input.uids);
-    const statusMessage = this.embedder.hasKey() ? null : missingKeyMessage();
+    const staleCount = uids.reduce((sum, uid) => sum + this.memory.counts(uid).stale, 0);
+    const currentCount = this.memory.currentCount(uids);
+    let statusMessage = this.embedder.hasKey() ? null : missingKeyMessage();
+    if (this.embedder.hasKey() && staleCount > 0) {
+      statusMessage = `${staleCount} embeddings are stale for recipe ${EMBEDDING_VERSION}. Run Reindex all to rebuild them. Search skips stale vectors.`;
+    }
     if (!query) {
       return { results: [], mode: this.embedder.hasKey() ? 'hybrid' : 'keyword-only', statusMessage, lexicalReady: this.lexicalReady };
     }
@@ -512,12 +518,14 @@ export class HybridRuntime {
     if (this.embedder.hasKey()) {
       const embedded = await this.embedder.embed(query);
       if (embedded.ok === true) {
-        mode = 'hybrid';
-        const ranked = this.memory.rank(Float32Array.from(embedded.vector), new Set(uids), VECTOR_LIMIT);
-        for (const hit of ranked) {
-          const key = idKey(hit.uid, hit.documentId);
-          cosineScores.set(key, hit.score);
-          if (hit.preview) previews.set(key, hit.preview);
+        if (currentCount > 0) {
+          mode = 'hybrid';
+          const ranked = this.memory.rank(Float32Array.from(embedded.vector), new Set(uids), VECTOR_LIMIT);
+          for (const hit of ranked) {
+            const key = idKey(hit.uid, hit.documentId);
+            cosineScores.set(key, hit.score);
+            if (hit.preview) previews.set(key, hit.preview);
+          }
         }
       } else if (embedded.reason !== 'missing-key') {
         this.log('warn', `[hybrid-search] Query embedding failed: ${embedded.message}`);
@@ -535,7 +543,7 @@ export class HybridRuntime {
     for (const key of allowed.keys()) {
       const row = allowed.get(key)!;
       meta.set(key, row.meta);
-      if (!snippets.has(key) && row.snippet) snippets.set(key, row.snippet);
+      if (row.snippet) snippets.set(key, row.snippet);
     }
     const ranked = rankHybrid({ query, keywordOrder: keywordKept, cosineScores: cosineKept, meta });
     const results = ranked.slice(0, limit).map((hit) => {
@@ -590,7 +598,7 @@ export class HybridRuntime {
             aliases: labels(config.aliasField ? row[config.aliasField] : []),
             pinned: config.pinnedField ? row[config.pinnedField] === true : false,
           },
-          snippet: String(row[titleField] || '').slice(0, 180),
+          snippet: passageSnippet(input.query, config.fields, row, titleField),
         });
       }
     }
@@ -832,9 +840,14 @@ export class HybridRuntime {
     const apiKeyConfigured = this.embedder.hasKey();
     return {
       embeddings: apiKeyConfigured ? 'ready' : 'disabled',
-      statusMessage: apiKeyConfigured ? null : missingKeyMessage(),
+      statusMessage: !apiKeyConfigured
+        ? missingKeyMessage()
+        : totals.stale > 0
+          ? `${totals.stale} embeddings are stale for recipe ${EMBEDDING_VERSION}. Run Reindex all to rebuild them.`
+          : null,
       model: EMBEDDING_MODEL,
       embeddingVersion: EMBEDDING_VERSION,
+      embedRecipeVersion: EMBEDDING_VERSION,
       apiKeyConfigured,
       pgvector: this.pgvector,
       vectorStore: 'memory',

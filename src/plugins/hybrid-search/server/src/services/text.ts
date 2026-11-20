@@ -1,11 +1,16 @@
 import { createHash } from 'crypto';
 
-/** Bump when the text builder changes. Stored with every vector. */
-export const EMBEDDING_VERSION = 1;
+/**
+ * Bump when the text builder changes. Stored with every vector.
+ * 2: field labels plus the body/summary/description fields, not title alone.
+ * A mismatch marks the row stale so search skips it until Reindex.
+ */
+export const EMBEDDING_VERSION = 2;
 
 export const EMBEDDING_MODEL = 'text-embedding-3-small';
 
-export const MAX_EMBED_CHARS = 8000;
+/** ~6k tokens. text-embedding-3-small accepts 8192 tokens. */
+export const MAX_EMBED_CHARS = 24000;
 
 const MISSING_KEY_MESSAGE =
   'Semantic search is off because OPENAI_API_KEY is not set. Results are keyword-only. Add the key and run Reindex to build embeddings.';
@@ -65,9 +70,38 @@ export function buildEmbedText(
   entry: Record<string, unknown>,
   maxChars: number = MAX_EMBED_CHARS
 ): string {
-  const parts = fields.map((field) => fieldToText(entry[field])).filter((part) => part.length > 0);
+  const parts = fields
+    .map((field) => {
+      const text = fieldToText(entry[field]);
+      return text ? `${field}: ${text}` : '';
+    })
+    .filter((part) => part.length > 0);
   const normalized = normalizeDocumentText(parts.join('\n\n'));
   return normalized.slice(0, maxChars);
+}
+
+/**
+ * Best-matching passage from the body fields. The title is only the
+ * fallback when the entry has no other text.
+ */
+export function passageSnippet(
+  query: string,
+  fields: string[],
+  entry: Record<string, unknown>,
+  titleField?: string
+): string {
+  const titleKey = titleField || 'title';
+  const keywords = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 3);
+  const body = fields
+    .filter((field) => field !== titleKey && field !== 'title' && field !== 'name')
+    .map((field) => fieldToText(entry[field]))
+    .filter((part) => part.length > 0)
+    .join('\n');
+  if (body) return snippetAround(normalizeDocumentText(body), keywords, 220);
+  return String(entry[titleKey] || '').slice(0, 180);
 }
 
 export interface StoredVectorIdentity {
