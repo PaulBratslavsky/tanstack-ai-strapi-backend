@@ -464,6 +464,22 @@ async function countIndexable(knex, type) {
   const value = row?.count ?? row?.["count(*)"] ?? 0;
   return Number(value) || 0;
 }
+const NON_FIELD_TYPES = /* @__PURE__ */ new Set(["relation", "media", "component", "dynamiczone"]);
+function isSelectableField(model, field) {
+  if (!field) return false;
+  const attribute = model?.attributes?.[field];
+  if (!attribute?.type) return false;
+  return !NON_FIELD_TYPES.has(attribute.type);
+}
+function selectableFields(model, requested) {
+  const fields = [];
+  for (const field of requested) {
+    if (!field || fields.includes(field)) continue;
+    if (!isSelectableField(model, field)) continue;
+    fields.push(field);
+  }
+  return fields;
+}
 const VECTOR_TABLE = "hybrid_search_vectors";
 const keyOf = (uid, documentId) => `${uid}\0${documentId}`;
 class MemoryVectorIndex {
@@ -851,15 +867,17 @@ class HybridRuntime {
   async loadEntry(uid, documentId) {
     const config2 = this.types()[uid];
     if (!config2) return null;
-    const fields = Array.from(
-      new Set(
-        [config2.titleField, config2.tagField, config2.aliasField, config2.pinnedField, config2.exclude?.field, ...config2.fields].filter(
-          (field) => Boolean(field)
-        )
-      )
-    );
+    const fields = selectableFields(this.model(uid), [
+      config2.titleField,
+      config2.tagField,
+      config2.aliasField,
+      config2.pinnedField,
+      config2.exclude?.field,
+      ...config2.fields
+    ]);
     const draftAndPublish = Boolean(this.model(uid)?.options?.draftAndPublish);
-    const params = { documentId, fields };
+    const params = { documentId };
+    if (fields.length > 0) params.fields = fields;
     if (draftAndPublish) params.status = "published";
     const entry = await this.strapi.documents(uid).findOne(params);
     return entry || null;
@@ -1140,13 +1158,16 @@ class HybridRuntime {
   }
   async loadRows(uid, documentIds, input) {
     const config2 = this.types()[uid];
-    const fields = Array.from(
-      new Set(
-        [config2.titleField, config2.tagField, config2.aliasField, config2.pinnedField, config2.exclude?.field, "title", "name", ...config2.fields].filter(
-          (field) => Boolean(field) && Boolean(this.model(uid)?.attributes?.[field] || field === "title" || field === "name")
-        )
-      )
-    );
+    const fields = selectableFields(this.model(uid), [
+      config2.titleField,
+      config2.tagField,
+      config2.aliasField,
+      config2.pinnedField,
+      config2.exclude?.field,
+      "title",
+      "name",
+      ...config2.fields
+    ]);
     const filters = this.documentFilters(uid, input, documentIds);
     const draftAndPublish = Boolean(this.model(uid)?.options?.draftAndPublish);
     const rows = [];
@@ -1154,9 +1175,9 @@ class HybridRuntime {
       const slice = documentIds.slice(offset, offset + REINDEX_PAGE_SIZE);
       const params = {
         filters: { ...filters, documentId: { $in: slice } },
-        fields,
         limit: slice.length
       };
+      if (fields.length > 0) params.fields = fields;
       if (draftAndPublish) params.status = "published";
       const page = await this.strapi.documents(uid).findMany(params);
       rows.push(...asArray(page));
@@ -1167,15 +1188,17 @@ class HybridRuntime {
     const config2 = this.types()[uid];
     const model = this.model(uid);
     const clauses = [];
-    if (input.since) clauses.push({ updatedAt: { $gte: input.since } });
+    if (input.since && isSelectableField(model, "updatedAt")) clauses.push({ updatedAt: { $gte: input.since } });
     for (const [field, value] of Object.entries(input.equals || {})) {
-      if (model?.attributes?.[field]) clauses.push({ [field]: { $eq: value } });
+      if (isSelectableField(model, field)) clauses.push({ [field]: { $eq: value } });
     }
     const exclude = config2.exclude;
-    if (exclude?.equals === true) {
-      clauses.push({ $or: [{ [exclude.field]: { $eq: false } }, { [exclude.field]: { $null: true } }] });
-    } else if (exclude) {
-      clauses.push({ $or: [{ [exclude.field]: { $ne: exclude.equals } }, { [exclude.field]: { $null: true } }] });
+    if (exclude && isSelectableField(model, exclude.field)) {
+      if (exclude.equals === true) {
+        clauses.push({ $or: [{ [exclude.field]: { $eq: false } }, { [exclude.field]: { $null: true } }] });
+      } else {
+        clauses.push({ $or: [{ [exclude.field]: { $ne: exclude.equals } }, { [exclude.field]: { $null: true } }] });
+      }
     }
     if (clauses.length === 0) return {};
     if (clauses.length === 1) return clauses[0];
@@ -1249,17 +1272,19 @@ class HybridRuntime {
         const config2 = this.types()[uid];
         if (!config2 || typeof this.strapi.documents !== "function") continue;
         const draftAndPublish = Boolean(this.model(uid)?.options?.draftAndPublish);
-        const fields = Array.from(
-          new Set(
-            [config2.titleField, config2.tagField, config2.aliasField, config2.pinnedField, config2.exclude?.field, ...config2.fields].filter(
-              (field) => Boolean(field)
-            )
-          )
-        );
+        const fields = selectableFields(this.model(uid), [
+          config2.titleField,
+          config2.tagField,
+          config2.aliasField,
+          config2.pinnedField,
+          config2.exclude?.field,
+          ...config2.fields
+        ]);
         try {
           await pageThrough(
             async (start, limit) => {
-              const params = { fields, start, limit, sort: ["documentId:asc"] };
+              const params = { start, limit, sort: ["documentId:asc"] };
+              if (fields.length > 0) params.fields = fields;
               if (draftAndPublish) params.status = "published";
               return asArray(await this.strapi.documents(uid).findMany(params));
             },
