@@ -1,6 +1,6 @@
 {
   "name": "strapi-plugin-hybrid-search",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Generic hybrid keyword and semantic search for Strapi 5",
   "strapi": {
     "kind": "plugin",
