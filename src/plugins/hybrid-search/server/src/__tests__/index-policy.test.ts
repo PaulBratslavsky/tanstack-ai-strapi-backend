@@ -42,6 +42,11 @@ describe('embed text', () => {
     expect(shouldSkipEmbed({ model: EMBEDDING_MODEL, version: EMBEDDING_VERSION, textHash: 'other', status: 'current', hasVector: true }, next)).toBe(false);
     expect(shouldSkipEmbed({ model: 'other-model', version: EMBEDDING_VERSION, textHash: hash, status: 'current', hasVector: true }, next)).toBe(false);
     expect(shouldSkipEmbed({ model: EMBEDDING_MODEL, version: EMBEDDING_VERSION + 1, textHash: hash, status: 'current', hasVector: true }, next)).toBe(false);
+    expect(shouldSkipEmbed({ model: EMBEDDING_MODEL, version: 1, textHash: hash, status: 'current', hasVector: true }, next)).toBe(false);
+    expect(effectiveStatus(
+      { model: EMBEDDING_MODEL, embeddingVersion: 1, status: 'current', hasVector: true },
+      { model: EMBEDDING_MODEL, version: EMBEDDING_VERSION }
+    )).toBe('stale');
     expect(shouldSkipEmbed({ model: EMBEDDING_MODEL, version: EMBEDDING_VERSION, textHash: hash, status: 'failed', hasVector: true }, next)).toBe(false);
     expect(shouldSkipEmbed(null, next)).toBe(false);
   });

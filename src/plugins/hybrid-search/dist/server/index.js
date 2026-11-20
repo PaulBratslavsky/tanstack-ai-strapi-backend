@@ -31,9 +31,9 @@ const register = ({ strapi }) => {
     strapi.log.error("[hybrid-search] Permission registration failed. Boot continues.", error);
   }
 };
-const EMBEDDING_VERSION = 1;
+const EMBEDDING_VERSION = 2;
 const EMBEDDING_MODEL = "text-embedding-3-small";
-const MAX_EMBED_CHARS = 8e3;
+const MAX_EMBED_CHARS = 24e3;
 const MISSING_KEY_MESSAGE = "Semantic search is off because OPENAI_API_KEY is not set. Results are keyword-only. Add the key and run Reindex to build embeddings.";
 function missingKeyMessage() {
   return MISSING_KEY_MESSAGE;
@@ -70,9 +70,19 @@ function fieldToText(value) {
   return "";
 }
 function buildEmbedText(fields, entry, maxChars = MAX_EMBED_CHARS) {
-  const parts = fields.map((field) => fieldToText(entry[field])).filter((part) => part.length > 0);
+  const parts = fields.map((field) => {
+    const text = fieldToText(entry[field]);
+    return text ? `${field}: ${text}` : "";
+  }).filter((part) => part.length > 0);
   const normalized = normalizeDocumentText(parts.join("\n\n"));
   return normalized.slice(0, maxChars);
+}
+function passageSnippet(query, fields, entry, titleField) {
+  const titleKey = titleField;
+  const keywords = query.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3);
+  const body = fields.filter((field) => field !== titleKey && field !== "title" && field !== "name").map((field) => fieldToText(entry[field])).filter((part) => part.length > 0).join("\n");
+  if (body) return snippetAround(normalizeDocumentText(body), keywords, 220);
+  return String(entry[titleKey] || "").slice(0, 180);
 }
 function shouldSkipEmbed(stored, next) {
   if (!stored?.hasVector) return false;
@@ -239,7 +249,7 @@ function createEmbedder(options) {
   };
 }
 const RRF_K = 60;
-const BM25_WEIGHT = 2.5;
+const BM25_WEIGHT = 1;
 const TAG_BOOST_PER_TAG = 0.06;
 const TITLE_BOOST_PER_TOKEN = 0.015;
 const TITLE_TOKEN_MIN_IDF = 1.5;
@@ -265,7 +275,7 @@ function rankByFusedScore(rrfScores, cosineScores) {
     rrfScore,
     cosineScore: cosineScores.get(id) ?? 0,
     matchTier: "related"
-  })).sort((a, b) => b.rrfScore - a.rrfScore || a.id.localeCompare(b.id)).map((hit, rank) => ({ ...hit, matchTier: getMatchTier(rank, hit.cosineScore) }));
+  })).sort((a, b) => b.cosineScore + b.rrfScore - (a.cosineScore + a.rrfScore) || a.id.localeCompare(b.id)).map((hit, rank) => ({ ...hit, matchTier: getMatchTier(rank, hit.cosineScore) }));
 }
 function tokenize(text) {
   if (!text) return [];
@@ -341,6 +351,42 @@ function rankHybrid(input) {
 }
 const TEXT_COLUMN = "hybrid_search_text";
 const TSV_COLUMN = "hybrid_search_tsv";
+const STOPWORDS = /* @__PURE__ */ new Set([
+  "a",
+  "an",
+  "the",
+  "to",
+  "of",
+  "in",
+  "on",
+  "for",
+  "and",
+  "or",
+  "me",
+  "my",
+  "i",
+  "do",
+  "be",
+  "is",
+  "it",
+  "when",
+  "what",
+  "with",
+  "from",
+  "that",
+  "this",
+  "at",
+  "by",
+  "as",
+  "are",
+  "was",
+  "were",
+  "you",
+  "your"
+]);
+function contentKeywords(queryText) {
+  return queryText.toLowerCase().split(/\s+/).map((part) => part.replace(/[^a-z0-9]+/g, "")).filter((part) => part.length >= 3 && !STOPWORDS.has(part)).slice(0, 8);
+}
 const quote = (ident) => {
   if (!isSafeIdent(ident)) throw new Error(`Unsafe SQL identifier: ${ident}`);
   return `"${ident}"`;
@@ -421,17 +467,18 @@ function applyCommon(query, type, filter) {
   }
 }
 async function searchKeyword(knex, client, type, queryText, limit, filter) {
-  const keywords = queryText.toLowerCase().split(/\s+/).map((part) => part.replace(/[^a-z0-9]+/g, "")).filter((part) => part.length >= 2).slice(0, 8);
+  const keywords = contentKeywords(queryText);
   if (keywords.length === 0 || limit <= 0) return [];
+  const lexicalQuery = keywords.join(" ");
   if (client === "postgres") {
     const query2 = knex(type.table).select({
       documentId: type.documentId,
       snippet: knex.raw(
         `ts_headline('english', coalesce(${quote(TEXT_COLUMN)}, ''), plainto_tsquery('english', ?), 'MaxWords=24, MinWords=6, MaxFragments=1')`,
-        [queryText]
+        [lexicalQuery]
       ),
-      rank: knex.raw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?))`, [queryText])
-    }).whereRaw(`${quote(TSV_COLUMN)} @@ plainto_tsquery('english', ?)`, [queryText]).orderByRaw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?)) DESC`, [queryText]).limit(limit);
+      rank: knex.raw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?))`, [lexicalQuery])
+    }).whereRaw(`${quote(TSV_COLUMN)} @@ plainto_tsquery('english', ?)`, [lexicalQuery]).orderByRaw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?)) DESC`, [lexicalQuery]).limit(limit);
     applyCommon(query2, type, filter);
     const rows2 = await query2;
     return rows2.map((row) => ({
@@ -1041,7 +1088,12 @@ class HybridRuntime {
     const query = String(input.query || "").trim();
     const limit = Math.min(Math.max(input.limit ?? 25, 1), 100);
     const uids = this.selectedUids(input.uids);
-    const statusMessage = this.embedder.hasKey() ? null : missingKeyMessage();
+    const staleCount = uids.reduce((sum, uid) => sum + this.memory.counts(uid).stale, 0);
+    const currentCount = this.memory.currentCount(uids);
+    let statusMessage = this.embedder.hasKey() ? null : missingKeyMessage();
+    if (this.embedder.hasKey() && staleCount > 0) {
+      statusMessage = `${staleCount} embeddings are stale for recipe ${EMBEDDING_VERSION}. Run Reindex all to rebuild them. Search skips stale vectors.`;
+    }
     if (!query) {
       return { results: [], mode: this.embedder.hasKey() ? "hybrid" : "keyword-only", statusMessage, lexicalReady: this.lexicalReady };
     }
@@ -1075,12 +1127,14 @@ class HybridRuntime {
     if (this.embedder.hasKey()) {
       const embedded = await this.embedder.embed(query);
       if (embedded.ok === true) {
-        mode = "hybrid";
-        const ranked2 = this.memory.rank(Float32Array.from(embedded.vector), new Set(uids), VECTOR_LIMIT);
-        for (const hit of ranked2) {
-          const key = idKey(hit.uid, hit.documentId);
-          cosineScores.set(key, hit.score);
-          if (hit.preview) previews.set(key, hit.preview);
+        if (currentCount > 0) {
+          mode = "hybrid";
+          const ranked2 = this.memory.rank(Float32Array.from(embedded.vector), new Set(uids), VECTOR_LIMIT);
+          for (const hit of ranked2) {
+            const key = idKey(hit.uid, hit.documentId);
+            cosineScores.set(key, hit.score);
+            if (hit.preview) previews.set(key, hit.preview);
+          }
         }
       } else if (embedded.reason !== "missing-key") {
         this.log("warn", `[hybrid-search] Query embedding failed: ${embedded.message}`);
@@ -1097,7 +1151,7 @@ class HybridRuntime {
     for (const key of allowed.keys()) {
       const row = allowed.get(key);
       meta.set(key, row.meta);
-      if (!snippets.has(key) && row.snippet) snippets.set(key, row.snippet);
+      if (row.snippet) snippets.set(key, row.snippet);
     }
     const ranked = rankHybrid({ query, keywordOrder: keywordKept, cosineScores: cosineKept, meta });
     const results = ranked.slice(0, limit).map((hit) => {
@@ -1150,7 +1204,7 @@ class HybridRuntime {
             aliases: labels(config2.aliasField ? row[config2.aliasField] : []),
             pinned: config2.pinnedField ? row[config2.pinnedField] === true : false
           },
-          snippet: String(row[titleField] || "").slice(0, 180)
+          snippet: passageSnippet(input.query, config2.fields, row, titleField)
         });
       }
     }
@@ -1379,9 +1433,10 @@ class HybridRuntime {
     const apiKeyConfigured = this.embedder.hasKey();
     return {
       embeddings: apiKeyConfigured ? "ready" : "disabled",
-      statusMessage: apiKeyConfigured ? null : missingKeyMessage(),
+      statusMessage: !apiKeyConfigured ? missingKeyMessage() : totals.stale > 0 ? `${totals.stale} embeddings are stale for recipe ${EMBEDDING_VERSION}. Run Reindex all to rebuild them.` : null,
       model: EMBEDDING_MODEL,
       embeddingVersion: EMBEDDING_VERSION,
+      embedRecipeVersion: EMBEDDING_VERSION,
       apiKeyConfigured,
       pgvector: this.pgvector,
       vectorStore: "memory",

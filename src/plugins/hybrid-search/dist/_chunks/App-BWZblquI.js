@@ -5,7 +5,7 @@ const admin = require("@strapi/strapi/admin");
 const reactRouterDom = require("react-router-dom");
 const react = require("react");
 const designSystem = require("@strapi/design-system");
-const index = require("./index-CUi9aVfI.js");
+const index = require("./index-BctnPZRt.js");
 const formatPacific = (iso) => {
   if (!iso) return "—";
   const date = new Date(iso);
@@ -72,7 +72,7 @@ const HomePage = () => {
         /* @__PURE__ */ jsxRuntime.jsx(designSystem.Button, { variant: "tertiary", onClick: load, disabled: busy, children: "Refresh" })
       ] }),
       error && /* @__PURE__ */ jsxRuntime.jsx(designSystem.Box, { paddingBottom: 4, children: /* @__PURE__ */ jsxRuntime.jsx(designSystem.Alert, { title: "Status unavailable", variant: "danger", closeLabel: "Close", children: error }) }),
-      status?.statusMessage && /* @__PURE__ */ jsxRuntime.jsx(designSystem.Box, { paddingBottom: 4, children: /* @__PURE__ */ jsxRuntime.jsx(designSystem.Alert, { title: "Embeddings disabled", variant: "warning", closeLabel: "Close", children: status.statusMessage }) }),
+      status?.statusMessage && /* @__PURE__ */ jsxRuntime.jsx(designSystem.Box, { paddingBottom: 4, children: /* @__PURE__ */ jsxRuntime.jsx(designSystem.Alert, { title: status.apiKeyConfigured ? "Reindex needed" : "Embeddings disabled", variant: "warning", closeLabel: "Close", children: status.statusMessage }) }),
       status && /* @__PURE__ */ jsxRuntime.jsxs(designSystem.Box, { paddingBottom: 4, children: [
         /* @__PURE__ */ jsxRuntime.jsxs(designSystem.Typography, { children: [
           "Model ",

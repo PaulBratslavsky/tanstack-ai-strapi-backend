@@ -2,7 +2,7 @@ import type { Core } from '@strapi/strapi';
 import { getUid } from '../mcp/types';
 import { isArchivedRecord, withActiveRecords } from './archive';
 
-const DEFAULT_TYPES = ['note', 'person', 'project', 'decision', 'source', 'resource'];
+const DEFAULT_TYPES = ['note', 'person', 'project', 'decision', 'source', 'resource', 'todo'];
 const NOTE_UID = 'plugin::paul-brain.note';
 
 export interface HybridSearchHit {

@@ -150,15 +150,15 @@ Read-only check before saving a note. Same permission as recall (\`plugin::paul-
 - Call this when you are unsure. remember still asks when it finds a duplicate and onDuplicate is not set
 
 ### recall
-Search across brain types with hybrid keyword and semantic ranking, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown) as well as note body and tags.
+Search across brain types with hybrid keyword and semantic ranking, including resources (title, summary, body, extractedText, altText, caption, and snapshotMarkdown), open todos (title, goal, acceptance criteria, context), and note body and tags.
 - Use specific queries: "strapi mcp tools" not just "strapi"
-- Filter by type: \`["note", "person"]\`. Resources are included by default. Use \`types: ["resource"]\` to search only deliverables. Resource matches look at title, summary, body, extractedText, altText, caption, and snapshotMarkdown
+- Filter by type: \`["note", "person"]\`. Notes, people, projects, decisions, sources, resources, and todos are included by default. Use \`types: ["todo"]\` to search only todos, or \`types: ["resource"]\` for deliverables. Resource matches look at title, summary, body, extractedText, altText, caption, and snapshotMarkdown
 - Filter by kind: \`"video"\`, \`"lesson"\`, \`"fact"\`, etc.
 - Filter by tag: \`"strapi"\` (notes and resources)
 - Filter by videoId: find notes for a specific YouTube video
 - Filter by sourceId: find notes linked to a specific source
-- Order comes from reciprocal rank fusion of Postgres full-text search (weight 2.5) and embedding cosine. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that rank
-- Tag and alias overlaps add a small boost on top of that fusion. Pinned notes get a boost too
+- Order follows cosine similarity. Keyword rank, tag overlap, aliases, and pinned notes add a small bonus that can reorder close neighbors. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that order
+- A recipe change marks old vectors stale. Search skips them until Reindex all rebuilds them
 - \`searchMode\` is \`hybrid\` or \`keyword-only\`. Without \`OPENAI_API_KEY\`, results are keyword-only and \`statusMessage\` says so. The keyword scan is the fallback when the index is not ready
 - Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
 - Always search before creating notes to avoid duplicates
@@ -170,7 +170,7 @@ Rebuild the hybrid search index. Permission \`plugin::paul-brain.search.reindex\
 - Pages through each content type. Embed failures are reported per row and do not stop the run
 - Without \`OPENAI_API_KEY\`, keyword text is refreshed and embeddings stay deferred. \`statusMessage\` says the key is missing
 - The admin Hybrid Search page and \`POST /hybrid-search/reindex\` call the same rebuild
-- Run it once after deploy so existing rows get vectors. Later edits update the index on save
+- Run it once after deploy, and again after an embedding recipe change, so existing rows get vectors. Later edits update the index on save
 
 ### get_entity
 Fetch one entity by type + documentId or slug, including \`resource\`. A raw resource row uses \`state\` and \`author\`; \`get_resource\` returns those as \`status\` and \`createdBy\`.

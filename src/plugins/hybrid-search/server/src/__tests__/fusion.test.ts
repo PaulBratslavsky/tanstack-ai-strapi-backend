@@ -26,7 +26,7 @@ describe('fuseRRF', () => {
     const expectedB = 1 / (1 + 1 + RRF_K) + BM25_WEIGHT / (0 + 1 + RRF_K);
     expect(fused.get('a')).toBeCloseTo(expectedA, 10);
     expect(fused.get('b')).toBeCloseTo(expectedB, 10);
-    expect(expectedB).toBeGreaterThan(expectedA);
+    expect(expectedA).toBeCloseTo(expectedB, 10);
   });
 
   it('gives partial credit when a hit is in only one list', () => {
@@ -37,30 +37,42 @@ describe('fuseRRF', () => {
 });
 
 describe('rankHybrid', () => {
-  it('orders by RRF and returns cosine as the score', () => {
-    const cosineScores = new Map<string, number>([
-      ['a', 0.99],
-      ['b', 0.1],
-    ]);
+  it('orders by cosine and keeps fusion from promoting a weak neighbor', () => {
     const ranked = rankHybrid({
       query: 'zephyr habitat',
       keywordOrder: ['b', 'a'],
-      cosineScores,
+      cosineScores: new Map<string, number>([
+        ['a', 0.62],
+        ['b', 0.094],
+      ]),
       meta: new Map(),
     });
-    expect(ranked[0].id).toBe('b');
-    expect(ranked[0].cosineScore).toBeCloseTo(0.1, 10);
+    expect(ranked[0].id).toBe('a');
+    expect(ranked[0].cosineScore).toBeCloseTo(0.62, 10);
     expect(ranked[0].matchTier).toBe('top');
-    expect(ranked[1].id).toBe('a');
-    expect(ranked[1].cosineScore).toBeCloseTo(0.99, 10);
-    expect(ranked[1].matchTier).toBe('strong');
+    expect(ranked[1].id).toBe('b');
+    expect(ranked[1].cosineScore).toBeCloseTo(0.094, 10);
     expect(ranked[0].rrfScore).not.toBe(ranked[0].cosineScore);
+  });
+
+  it('lets a keyword hit pass a slightly closer neighbor', () => {
+    const ranked = rankHybrid({
+      query: 'zephyr habitat',
+      keywordOrder: ['keyword'],
+      cosineScores: new Map<string, number>([
+        ['semantic', 0.4],
+        ['keyword', 0.39],
+      ]),
+      meta: new Map(),
+    });
+    expect(ranked[0].id).toBe('keyword');
+    expect(ranked[0].cosineScore).toBeCloseTo(0.39, 10);
   });
 
   it('re-ranks after a tag boost and keeps the original cosine on that row', () => {
     const cosineScores = new Map<string, number>([
-      ['plain', 0.8],
-      ['tagged', 0.2],
+      ['plain', 0.45],
+      ['tagged', 0.4],
     ]);
     const fused = fuseRRF([
       { order: ['plain', 'tagged'] },
@@ -75,7 +87,7 @@ describe('rankHybrid', () => {
     ]));
     const after = rankByFusedScore(fused, cosineScores);
     expect(after[0].id).toBe('tagged');
-    expect(after[0].cosineScore).toBeCloseTo(0.2, 10);
+    expect(after[0].cosineScore).toBeCloseTo(0.4, 10);
     expect(after[0].matchTier).toBe('top');
     expect(after[0].rrfScore - (fuseRRF([{ order: ['plain', 'tagged'] }, { order: ['plain'], weight: BM25_WEIGHT }]).get('tagged') ?? 0)).toBeCloseTo(
       TAG_BOOST_PER_TAG * 2,

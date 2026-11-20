@@ -3,8 +3,9 @@
  *
  * Ported from yt-kb `client/src/lib/services/retrieval.ts` and music-kb
  * `retrieval-fusion.ts`:
- *   - Reciprocal Rank Fusion decides ORDER only.
- *   - Cosine similarity is the user-facing score.
+ *   - Reciprocal Rank Fusion is a small reorder bonus.
+ *   - Cosine similarity is the user-facing score and the main sort key.
+ *     A lexical hit at cosine 0.09 must not outrank a closer note.
  *   - Match tiers come from rank, not from the raw cosine.
  *
  * The lexical list is the order returned by Postgres `ts_rank` (or the
@@ -18,7 +19,12 @@
  */
 
 export const RRF_K = 60;
-export const BM25_WEIGHT = 2.5;
+/**
+ * Lexical RRF weight. 2.5 let a keyword hit of ~0.04 outrank the best
+ * semantic-only hit (~0.016) and buried body matches under title keyword
+ * hits. 1 keeps a lexical preference for ties without that inversion.
+ */
+export const BM25_WEIGHT = 1;
 export const TAG_BOOST_PER_TAG = 0.06;
 export const TITLE_BOOST_PER_TOKEN = 0.015;
 export const TITLE_TOKEN_MIN_IDF = 1.5;
@@ -92,7 +98,7 @@ export function rankByFusedScore(
       cosineScore: cosineScores.get(id) ?? 0,
       matchTier: 'related' as MatchTier,
     }))
-    .sort((a, b) => b.rrfScore - a.rrfScore || a.id.localeCompare(b.id))
+    .sort((a, b) => b.cosineScore + b.rrfScore - (a.cosineScore + a.rrfScore) || a.id.localeCompare(b.id))
     .map((hit, rank) => ({ ...hit, matchTier: getMatchTier(rank, hit.cosineScore) }));
 }
 
