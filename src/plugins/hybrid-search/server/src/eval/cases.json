@@ -1,0 +1,91 @@
+{
+  "corpus": [
+    {
+      "uid": "plugin::paul-brain.note",
+      "documentId": "lesson",
+      "fields": {
+        "title": "Office hours",
+        "body": "Lesson: YouTube videos always go through yt-kb then a kind=video brain note.",
+        "summary": "What to do when someone shares a video clip.",
+        "tags": ["youtube"]
+      }
+    },
+    {
+      "uid": "plugin::paul-brain.note",
+      "documentId": "tutorial",
+      "fields": {
+        "title": "Strapi tutorial",
+        "body": "Install the admin panel and click Content Manager.",
+        "summary": "A generic admin walkthrough.",
+        "tags": ["strapi"]
+      }
+    },
+    {
+      "uid": "plugin::paul-brain.todo",
+      "documentId": "urology",
+      "fields": {
+        "title": "Call the clinic",
+        "goal": "Book the urology visit",
+        "acceptanceCriteria": "The referral is confirmed",
+        "context": "Still need to book this doctor appointment."
+      }
+    },
+    {
+      "uid": "plugin::paul-brain.todo",
+      "documentId": "labcorp",
+      "fields": {
+        "title": "Blood draw",
+        "goal": "Schedule Labcorp blood work",
+        "acceptanceCriteria": "The lab slip is in hand",
+        "context": "Labcorp blood work is still unbooked."
+      }
+    },
+    {
+      "uid": "plugin::paul-brain.person",
+      "documentId": "ada",
+      "fields": {
+        "name": "Ada Lovelace",
+        "notes_md": "Ada Lovelace keeps the clinic calendar and the referral list."
+      }
+    },
+    {
+      "uid": "plugin::paul-brain.decision",
+      "documentId": "postgres",
+      "fields": {
+        "title": "One database",
+        "summary": "We decided to use postgres for the brain and not a second database.",
+        "body": "Strapi Cloud Postgres stays the only store."
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "video-clip",
+      "live": true,
+      "query": "what to do when someone shares a video clip with me",
+      "expectDocumentIds": ["lesson"],
+      "expectInTop": ["yt-kb"]
+    },
+    {
+      "id": "doctor-appointments",
+      "live": true,
+      "query": "doctor appointments I still need to book",
+      "expectDocumentIds": ["urology", "labcorp"],
+      "expectInTop": ["urology", "Labcorp"]
+    },
+    {
+      "id": "ada",
+      "live": false,
+      "query": "where do I find Ada Lovelace",
+      "expectDocumentIds": ["ada"],
+      "expectInTop": ["Ada Lovelace"]
+    },
+    {
+      "id": "postgres",
+      "live": false,
+      "query": "did we decide to use postgres for the brain",
+      "expectDocumentIds": ["postgres"],
+      "expectInTop": ["postgres for the brain"]
+    }
+  ]
+}

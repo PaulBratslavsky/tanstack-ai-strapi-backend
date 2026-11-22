@@ -64,7 +64,7 @@ const index = {
       },
       permissions: [{ action: `plugin::${PLUGIN_ID}.read`, subject: null }],
       Component: async () => {
-        const { App } = await Promise.resolve().then(() => require("./App-BWZblquI.js"));
+        const { App } = await Promise.resolve().then(() => require("./App-D690IVwx.js"));
         return App;
       }
     });

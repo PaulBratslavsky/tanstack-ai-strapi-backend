@@ -63,7 +63,7 @@ const index = {
       },
       permissions: [{ action: `plugin::${PLUGIN_ID}.read`, subject: null }],
       Component: async () => {
-        const { App } = await import("./App-BalBA6kQ.mjs");
+        const { App } = await import("./App-CcNtUmxC.mjs");
         return App;
       }
     });

@@ -1,8 +1,12 @@
 /**
  * Lexical search against the content-type tables.
  *
- * Postgres: a generated `hybrid_search_tsv` tsvector column plus a GIN index,
- * ranked with `ts_rank`. SQLite (local dev): LIKE on `hybrid_search_text`.
+ * Postgres: a generated `hybrid_search_tsv` tsvector column plus a GIN index.
+ * The query is an OR of stemmed lexemes (`to_tsquery` with `|`), ranked with
+ * `ts_rank_cd` so more matched terms rank higher. User text is bound as a
+ * parameter and lexemes are reduced to [a-z0-9] before they reach tsquery,
+ * so the query string cannot change the operator. SQLite (local dev): OR of
+ * LIKE on `hybrid_search_text`, ranked by how many terms hit.
  * This is not an in-process BM25 store. The fusion module only consumes
  * the order this module returns.
  */
@@ -45,7 +49,32 @@ export function contentKeywords(queryText: string): string[] {
     .split(/\s+/)
     .map((part) => part.replace(/[^a-z0-9]+/g, ''))
     .filter((part) => part.length >= 3 && !STOPWORDS.has(part))
-    .slice(0, 8);
+    .slice(0, 12);
+}
+
+/**
+ * OR tsquery built inside Postgres. The only input is a bound parameter to
+ * `to_tsvector`. Lexemes are stripped to letters and digits, then joined
+ * with `|`. An empty parse becomes NULL and matches nothing.
+ */
+export const OR_TSQUERY_SQL = `(
+  SELECT CASE
+    WHEN q IS NULL OR q = '' THEN NULL
+    ELSE to_tsquery('english', q)
+  END
+  FROM (
+    SELECT string_agg(term, ' | ') AS q
+    FROM (
+      SELECT DISTINCT regexp_replace(lexeme, '[^a-z0-9]+', '', 'g') AS term
+      FROM unnest(to_tsvector('english', ?)) AS lex(lexeme, positions)
+    ) cleaned
+    WHERE term <> ''
+  ) built
+)`;
+
+export function keywordHitCount(text: string, keywords: string[]): number {
+  const lower = text.toLowerCase();
+  return keywords.reduce((count, word) => count + (lower.includes(word) ? 1 : 0), 0);
 }
 
 const quote = (ident: string) => {
@@ -160,20 +189,19 @@ export async function searchKeyword(
 ): Promise<KeywordHit[]> {
   const keywords = contentKeywords(queryText);
   if (keywords.length === 0 || limit <= 0) return [];
-  const lexicalQuery = keywords.join(' ');
 
   if (client === 'postgres') {
     const query = knex(type.table)
       .select({
         documentId: type.documentId,
         snippet: knex.raw(
-          `ts_headline('english', coalesce(${quote(TEXT_COLUMN)}, ''), plainto_tsquery('english', ?), 'MaxWords=24, MinWords=6, MaxFragments=1')`,
-          [lexicalQuery]
+          `ts_headline('english', coalesce(${quote(TEXT_COLUMN)}, ''), ${OR_TSQUERY_SQL}, 'MaxWords=24, MinWords=6, MaxFragments=1')`,
+          [queryText]
         ),
-        rank: knex.raw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?))`, [lexicalQuery]),
+        rank: knex.raw(`ts_rank_cd(${quote(TSV_COLUMN)}, ${OR_TSQUERY_SQL})`, [queryText]),
       })
-      .whereRaw(`${quote(TSV_COLUMN)} @@ plainto_tsquery('english', ?)`, [lexicalQuery])
-      .orderByRaw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?)) DESC`, [lexicalQuery])
+      .whereRaw(`${quote(TSV_COLUMN)} @@ ${OR_TSQUERY_SQL}`, [queryText])
+      .orderByRaw('rank DESC')
       .limit(limit);
     applyCommon(query, type, filter);
     const rows = await query;
@@ -189,18 +217,24 @@ export async function searchKeyword(
     text: TEXT_COLUMN,
   });
   applyCommon(query, type, filter);
-  for (const keyword of keywords) {
-    const escaped = keyword.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-    query.where(TEXT_COLUMN, 'like', `%${escaped}%`);
-  }
-  query.limit(Math.max(limit * 4, limit));
+  query.where((builder: any) => {
+    for (const keyword of keywords) {
+      const escaped = keyword.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+      builder.orWhere(TEXT_COLUMN, 'like', `%${escaped}%`);
+    }
+  });
+  query.limit(Math.max(limit * 8, limit));
   const rows = await query;
   return rows
-    .map((row: any, index: number) => ({
-      documentId: String(row.documentId),
-      snippet: snippetAround(String(row.text ?? ''), keywords),
-      rank: rows.length - index,
-    }))
+    .map((row: any) => {
+      const text = String(row.text ?? '');
+      return {
+        documentId: String(row.documentId),
+        snippet: snippetAround(text, keywords),
+        rank: keywordHitCount(text, keywords),
+      };
+    })
+    .sort((a, b) => b.rank - a.rank || a.documentId.localeCompare(b.documentId))
     .slice(0, limit);
 }
 

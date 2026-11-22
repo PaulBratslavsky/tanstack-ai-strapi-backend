@@ -24,7 +24,17 @@ interface StatusPayload {
   lexicalReady: boolean;
   types: TypeRow[];
   totals: { current: number; stale: number; failed: number; missing: number; content: number };
-  job: { running: boolean; dryRun: boolean; scanned: number; failed: number; startedAt: string } | null;
+  job: {
+    running: boolean;
+    dryRun: boolean;
+    reason?: 'manual' | 'auto';
+    incompleteOnly?: boolean;
+    scanned: number;
+    embedded?: number;
+    skipped?: number;
+    failed: number;
+    startedAt: string;
+  } | null;
 }
 
 interface ReindexReport {
@@ -125,7 +135,17 @@ const HomePage = () => {
         )}
         {status?.statusMessage && (
           <Box paddingBottom={4}>
-            <Alert title={status.apiKeyConfigured ? 'Reindex needed' : 'Embeddings disabled'} variant="warning" closeLabel="Close">
+            <Alert
+              title={
+                status.job?.running
+                  ? 'Reindex running'
+                  : status.apiKeyConfigured
+                    ? 'Reindex needed'
+                    : 'Embeddings disabled'
+              }
+              variant="warning"
+              closeLabel="Close"
+            >
               {status.statusMessage}
             </Alert>
           </Box>
@@ -138,7 +158,10 @@ const HomePage = () => {
               {formatPacific(status.lastSyncAt)} (Pacific).
             </Typography>
             {status.job?.running && (
-              <Typography>Reindex in progress. Scanned {status.job.scanned}.</Typography>
+              <Typography>
+                Reindex in progress ({status.job.reason || 'manual'}). Scanned {status.job.scanned}, embedded{' '}
+                {status.job.embedded ?? 0}, failed {status.job.failed}.
+              </Typography>
             )}
           </Box>
         )}
