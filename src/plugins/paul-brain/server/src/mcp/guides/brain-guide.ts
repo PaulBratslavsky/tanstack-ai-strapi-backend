@@ -157,7 +157,7 @@ Search across brain types with hybrid keyword and semantic ranking, including re
 - Filter by tag: \`"strapi"\` (notes and resources)
 - Filter by videoId: find notes for a specific YouTube video
 - Filter by sourceId: find notes linked to a specific source
-- Order follows cosine similarity. Keyword rank, tag overlap, aliases, and pinned notes add a small bonus that can reorder close neighbors. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that order
+- Order follows cosine similarity. Keyword rank, tag overlap, aliases, and pinned notes add a small bonus that can reorder close neighbors. Keyword search matches any content term, so a query does not have to contain every word. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that order
 - A recipe change marks old vectors stale. Search skips them until Reindex all rebuilds them
 - \`searchMode\` is \`hybrid\` or \`keyword-only\`. Without \`OPENAI_API_KEY\`, results are keyword-only and \`statusMessage\` says so. The keyword scan is the fallback when the index is not ready
 - Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
@@ -170,7 +170,8 @@ Rebuild the hybrid search index. Permission \`plugin::paul-brain.search.reindex\
 - Pages through each content type. Embed failures are reported per row and do not stop the run
 - Without \`OPENAI_API_KEY\`, keyword text is refreshed and embeddings stay deferred. \`statusMessage\` says the key is missing
 - The admin Hybrid Search page and \`POST /hybrid-search/reindex\` call the same rebuild
-- Run it once after deploy, and again after an embedding recipe change, so existing rows get vectors. Later edits update the index on save
+- On boot, when \`OPENAI_API_KEY\` is set and any vectors are stale, failed, or missing, hybrid-search starts a background reindex of only those rows. It does not block startup, and API errors are logged per row. \`GET /hybrid-search/status\` shows the running job. A manual reindex and the automatic one share one lock
+- Later edits update the index on save. Use this tool for a full rebuild or a dry run
 
 ### get_entity
 Fetch one entity by type + documentId or slug, including \`resource\`. A raw resource row uses \`state\` and \`author\`; \`get_resource\` returns those as \`status\` and \`createdBy\`.
@@ -183,6 +184,7 @@ Get newest N items across types, including resources.
 - Archived rows are excluded
 - Filter by \`kind\` for notes (\`fact\`, \`preference\`, etc.)
 - Filter by \`source_bot\` to see what a specific bot created
+- \`errors\` lists per-type failures as \`{ type, message }\`. Items from the types that succeeded are still returned. An empty \`items\` list with an empty \`errors\` list means nothing was recent. An empty list with errors means those types failed
 
 ### update_note
 Patch a note's fields.

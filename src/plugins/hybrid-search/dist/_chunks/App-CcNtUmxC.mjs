@@ -3,7 +3,7 @@ import { useFetchClient, useNotification, Page, Layouts } from "@strapi/strapi/a
 import { Routes, Route } from "react-router-dom";
 import { useState, useCallback, useEffect } from "react";
 import { Flex, Button, Box, Alert, Typography, Table, Thead, Tr, Th, Tbody, Td } from "@strapi/design-system";
-import { P as PLUGIN_ID } from "./index-BAXXqC7H.mjs";
+import { P as PLUGIN_ID } from "./index-BD4MPAvM.mjs";
 const formatPacific = (iso) => {
   if (!iso) return "—";
   const date = new Date(iso);
@@ -70,7 +70,15 @@ const HomePage = () => {
         /* @__PURE__ */ jsx(Button, { variant: "tertiary", onClick: load, disabled: busy, children: "Refresh" })
       ] }),
       error && /* @__PURE__ */ jsx(Box, { paddingBottom: 4, children: /* @__PURE__ */ jsx(Alert, { title: "Status unavailable", variant: "danger", closeLabel: "Close", children: error }) }),
-      status?.statusMessage && /* @__PURE__ */ jsx(Box, { paddingBottom: 4, children: /* @__PURE__ */ jsx(Alert, { title: status.apiKeyConfigured ? "Reindex needed" : "Embeddings disabled", variant: "warning", closeLabel: "Close", children: status.statusMessage }) }),
+      status?.statusMessage && /* @__PURE__ */ jsx(Box, { paddingBottom: 4, children: /* @__PURE__ */ jsx(
+        Alert,
+        {
+          title: status.job?.running ? "Reindex running" : status.apiKeyConfigured ? "Reindex needed" : "Embeddings disabled",
+          variant: "warning",
+          closeLabel: "Close",
+          children: status.statusMessage
+        }
+      ) }),
       status && /* @__PURE__ */ jsxs(Box, { paddingBottom: 4, children: [
         /* @__PURE__ */ jsxs(Typography, { children: [
           "Model ",
@@ -90,8 +98,15 @@ const HomePage = () => {
           " (Pacific)."
         ] }),
         status.job?.running && /* @__PURE__ */ jsxs(Typography, { children: [
-          "Reindex in progress. Scanned ",
+          "Reindex in progress (",
+          status.job.reason || "manual",
+          "). Scanned ",
           status.job.scanned,
+          ", embedded",
+          " ",
+          status.job.embedded ?? 0,
+          ", failed ",
+          status.job.failed,
           "."
         ] })
       ] }),

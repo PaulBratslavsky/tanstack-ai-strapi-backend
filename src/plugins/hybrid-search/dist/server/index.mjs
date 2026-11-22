@@ -172,7 +172,7 @@ class EmbedRateLimitError extends Error {
     this.name = "EmbedRateLimitError";
   }
 }
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep$1 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function createEmbedder(options) {
   const gapMs = options?.gapMs ?? 40;
   const fetchImpl = options?.fetchImpl ?? fetch;
@@ -181,7 +181,7 @@ function createEmbedder(options) {
   const enqueue = (fn) => {
     const run = tail.then(async () => {
       const wait = gapMs - (Date.now() - lastAt);
-      if (wait > 0) await sleep(wait);
+      if (wait > 0) await sleep$1(wait);
       try {
         return await fn();
       } finally {
@@ -235,7 +235,7 @@ function createEmbedder(options) {
             return { ok: true, vector };
           } catch (error) {
             if (error instanceof EmbedRateLimitError && attempt < MAX_429_ATTEMPTS - 1) {
-              await sleep(retryDelayMs(attempt, error.retryAfterHeader));
+              await sleep$1(retryDelayMs(attempt, error.retryAfterHeader));
               continue;
             }
             const message = error instanceof Error ? error.message : "Embedding failed";
@@ -384,7 +384,25 @@ const STOPWORDS = /* @__PURE__ */ new Set([
   "your"
 ]);
 function contentKeywords(queryText) {
-  return queryText.toLowerCase().split(/\s+/).map((part) => part.replace(/[^a-z0-9]+/g, "")).filter((part) => part.length >= 3 && !STOPWORDS.has(part)).slice(0, 8);
+  return queryText.toLowerCase().split(/\s+/).map((part) => part.replace(/[^a-z0-9]+/g, "")).filter((part) => part.length >= 3 && !STOPWORDS.has(part)).slice(0, 12);
+}
+const OR_TSQUERY_SQL = `(
+  SELECT CASE
+    WHEN q IS NULL OR q = '' THEN NULL
+    ELSE to_tsquery('english', q)
+  END
+  FROM (
+    SELECT string_agg(term, ' | ') AS q
+    FROM (
+      SELECT DISTINCT regexp_replace(lexeme, '[^a-z0-9]+', '', 'g') AS term
+      FROM unnest(to_tsvector('english', ?)) AS lex(lexeme, positions)
+    ) cleaned
+    WHERE term <> ''
+  ) built
+)`;
+function keywordHitCount(text, keywords) {
+  const lower = text.toLowerCase();
+  return keywords.reduce((count, word) => count + (lower.includes(word) ? 1 : 0), 0);
 }
 const quote = (ident) => {
   if (!isSafeIdent(ident)) throw new Error(`Unsafe SQL identifier: ${ident}`);
@@ -468,16 +486,15 @@ function applyCommon(query, type, filter) {
 async function searchKeyword(knex, client, type, queryText, limit, filter) {
   const keywords = contentKeywords(queryText);
   if (keywords.length === 0 || limit <= 0) return [];
-  const lexicalQuery = keywords.join(" ");
   if (client === "postgres") {
     const query2 = knex(type.table).select({
       documentId: type.documentId,
       snippet: knex.raw(
-        `ts_headline('english', coalesce(${quote(TEXT_COLUMN)}, ''), plainto_tsquery('english', ?), 'MaxWords=24, MinWords=6, MaxFragments=1')`,
-        [lexicalQuery]
+        `ts_headline('english', coalesce(${quote(TEXT_COLUMN)}, ''), ${OR_TSQUERY_SQL}, 'MaxWords=24, MinWords=6, MaxFragments=1')`,
+        [queryText]
       ),
-      rank: knex.raw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?))`, [lexicalQuery])
-    }).whereRaw(`${quote(TSV_COLUMN)} @@ plainto_tsquery('english', ?)`, [lexicalQuery]).orderByRaw(`ts_rank(${quote(TSV_COLUMN)}, plainto_tsquery('english', ?)) DESC`, [lexicalQuery]).limit(limit);
+      rank: knex.raw(`ts_rank_cd(${quote(TSV_COLUMN)}, ${OR_TSQUERY_SQL})`, [queryText])
+    }).whereRaw(`${quote(TSV_COLUMN)} @@ ${OR_TSQUERY_SQL}`, [queryText]).orderByRaw("rank DESC").limit(limit);
     applyCommon(query2, type, filter);
     const rows2 = await query2;
     return rows2.map((row) => ({
@@ -491,17 +508,22 @@ async function searchKeyword(knex, client, type, queryText, limit, filter) {
     text: TEXT_COLUMN
   });
   applyCommon(query, type, filter);
-  for (const keyword of keywords) {
-    const escaped = keyword.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-    query.where(TEXT_COLUMN, "like", `%${escaped}%`);
-  }
-  query.limit(Math.max(limit * 4, limit));
+  query.where((builder) => {
+    for (const keyword of keywords) {
+      const escaped = keyword.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+      builder.orWhere(TEXT_COLUMN, "like", `%${escaped}%`);
+    }
+  });
+  query.limit(Math.max(limit * 8, limit));
   const rows = await query;
-  return rows.map((row, index2) => ({
-    documentId: String(row.documentId),
-    snippet: snippetAround(String(row.text ?? ""), keywords),
-    rank: rows.length - index2
-  })).slice(0, limit);
+  return rows.map((row) => {
+    const text = String(row.text ?? "");
+    return {
+      documentId: String(row.documentId),
+      snippet: snippetAround(text, keywords),
+      rank: keywordHitCount(text, keywords)
+    };
+  }).sort((a, b) => b.rank - a.rank || a.documentId.localeCompare(b.documentId)).slice(0, limit);
 }
 async function countIndexable(knex, type) {
   const query = knex(type.table).count({ count: "*" });
@@ -725,6 +747,8 @@ async function probePgvector(knex, client) {
 const KEYWORD_LIMIT = 100;
 const VECTOR_LIMIT = 200;
 const MAX_ERRORS = 50;
+const AUTO_EMBED_GAP_MS = 80;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const runtimes = /* @__PURE__ */ new WeakMap();
 function getRuntime(strapi) {
   let runtime = runtimes.get(strapi);
@@ -804,12 +828,45 @@ class HybridRuntime {
       this.log("error", "[hybrid-search] Startup index prepare failed. Boot continues.", error);
     }
     if (!this.embedder.hasKey()) this.log("warn", `[hybrid-search] ${missingKeyMessage()}`);
+    else this.scheduleAutoReindex();
     this.timer = setInterval(() => {
       this.drainRetries().catch((error) => {
         this.log("error", "[hybrid-search] Retry pass failed.", error);
       });
     }, 3e4);
     this.timer.unref?.();
+  }
+  /**
+   * Fire-and-forget. start() does not await this. A manual reindex that
+   * already holds the job lock wins; this one logs and returns.
+   */
+  scheduleAutoReindex() {
+    void this.autoReindexIfNeeded().catch((error) => {
+      this.log("error", "[hybrid-search] Auto-reindex failed to start. Boot continues.", error);
+    });
+  }
+  async autoReindexIfNeeded() {
+    if (!this.embedder.hasKey() || this.job?.running) return;
+    const counts = this.memory.counts();
+    let gap = counts.stale + counts.failed + counts.missing;
+    if (gap === 0) {
+      try {
+        const snapshot = await this.status();
+        gap = snapshot.totals.stale + snapshot.totals.failed + snapshot.totals.missing;
+      } catch (error) {
+        this.log("warn", "[hybrid-search] Could not count missing embeddings. Skipping auto-reindex.", error);
+        return;
+      }
+    }
+    if (gap === 0 || this.job?.running) return;
+    this.log(
+      "info",
+      `[hybrid-search] ${gap} embeddings are stale, failed, or missing for recipe ${EMBEDDING_VERSION}. Starting a background reindex of those rows.`
+    );
+    const started = await this.reindex({ wait: false, incompleteOnly: true, reason: "auto" });
+    if (started.alreadyRunning) {
+      this.log("info", "[hybrid-search] Auto-reindex left the reindex that is already running in place.");
+    }
   }
   knex() {
     return this.strapi.db?.connection;
@@ -1278,13 +1335,25 @@ class HybridRuntime {
   }
   async reindex(input = {}) {
     if (this.job?.running) {
-      return { alreadyRunning: true, dryRun: Boolean(this.job.dryRun), ...this.job.report || {}, statusMessage: this.job.report?.statusMessage ?? null };
+      return {
+        alreadyRunning: true,
+        dryRun: Boolean(this.job.dryRun),
+        reason: this.job.reason,
+        ...this.job.report || {},
+        statusMessage: this.job.report?.statusMessage ?? null
+      };
     }
     const run = this.runReindex(input);
     this.jobPromise = run;
     if (input.wait === false) {
-      run.catch((error) => this.log("error", "[hybrid-search] Reindex failed.", error));
-      return { started: true, dryRun: Boolean(input.dryRun), statusMessage: this.embedder.hasKey() ? null : missingKeyMessage() };
+      run.catch((error) => this.log("error", "[hybrid-search] Reindex failed. The server stays up.", error));
+      return {
+        started: true,
+        dryRun: Boolean(input.dryRun),
+        reason: input.reason || "manual",
+        incompleteOnly: Boolean(input.incompleteOnly),
+        statusMessage: this.embedder.hasKey() ? null : missingKeyMessage()
+      };
     }
     return run;
   }
@@ -1305,15 +1374,23 @@ class HybridRuntime {
       errorCount: 0,
       statusMessage: this.embedder.hasKey() ? null : missingKeyMessage()
     };
+    const reason = input.reason || "manual";
+    const incompleteOnly = Boolean(input.incompleteOnly);
     this.job = {
       running: true,
       dryRun,
+      incompleteOnly,
+      reason,
       scanned: 0,
       embedded: 0,
       skipped: 0,
       failed: 0,
       startedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
+    this.log(
+      "info",
+      `[hybrid-search] Reindex started (${reason}${incompleteOnly ? ", stale and missing only" : ""}${dryRun ? ", dry run" : ""}).`
+    );
     const pushError = (uid, documentId, message) => {
       report.errorCount += 1;
       report.failed += 1;
@@ -1344,12 +1421,21 @@ class HybridRuntime {
             async (row) => {
               report.scanned += 1;
               this.job.scanned = report.scanned;
+              this.job.embedded = report.embedded;
+              this.job.skipped = report.skipped;
+              this.job.failed = report.failed;
               const documentId = row.documentId;
               try {
-                if (dryRun) {
-                  const outcome2 = this.dryRunRow(uid, row);
-                  report[outcome2] += 1;
-                  return;
+                if (dryRun || incompleteOnly) {
+                  const planned = this.dryRunRow(uid, row);
+                  if (dryRun || planned === "skipped") {
+                    report[planned] += 1;
+                    this.job.embedded = report.embedded;
+                    this.job.skipped = report.skipped;
+                    this.job.failed = report.failed;
+                    if (report.scanned % 50 === 0) this.logReindexProgress(report);
+                    return;
+                  }
                 }
                 const outcome = await this.indexDocument(uid, documentId, row);
                 if (outcome === "embedded") report.embedded += 1;
@@ -1358,7 +1444,21 @@ class HybridRuntime {
                 else if (outcome === "deferred") {
                   report.deferred += 1;
                   report.keywordUpdated += 1;
-                } else report.failed += 1;
+                } else {
+                  report.failed += 1;
+                  report.errorCount += 1;
+                  report.partial = true;
+                  if (report.errors.length < MAX_ERRORS) {
+                    report.errors.push({ uid, documentId, message: "embed or index failed" });
+                  }
+                }
+                this.job.embedded = report.embedded;
+                this.job.skipped = report.skipped;
+                this.job.failed = report.failed;
+                if (incompleteOnly && (outcome === "embedded" || outcome === "failed")) {
+                  await sleep(AUTO_EMBED_GAP_MS);
+                }
+                if (report.scanned % 25 === 0) this.logReindexProgress(report);
               } catch (error) {
                 const message = error instanceof Error ? error.message : "row failed";
                 this.log("error", `[hybrid-search] Reindex row failed for ${uid} ${documentId}: ${message}`);
@@ -1376,6 +1476,10 @@ class HybridRuntime {
       if (report.failed > 0) {
         report.statusMessage = `Reindex finished with ${report.errorCount} error${report.errorCount === 1 ? "" : "s"}. Failed rows are marked failed and will be retried.`;
       }
+      this.log(
+        "info",
+        `[hybrid-search] Reindex finished scanned=${report.scanned} embedded=${report.embedded} skipped=${report.skipped} failed=${report.failed} removed=${report.removed}.`
+      );
       return report;
     } finally {
       if (this.job) {
@@ -1387,6 +1491,12 @@ class HybridRuntime {
         this.job.report = report;
       }
     }
+  }
+  logReindexProgress(report) {
+    this.log(
+      "info",
+      `[hybrid-search] Reindex progress scanned=${report.scanned} embedded=${report.embedded} skipped=${report.skipped} failed=${report.failed}.`
+    );
   }
   dryRunRow(uid, row) {
     const config2 = this.types()[uid];
@@ -1430,9 +1540,17 @@ class HybridRuntime {
       totals.content += content;
     }
     const apiKeyConfigured = this.embedder.hasKey();
+    const running = Boolean(this.job?.running);
+    let statusMessage = null;
+    if (!apiKeyConfigured) statusMessage = missingKeyMessage();
+    else if (running) {
+      statusMessage = `Background reindex is running (${this.job?.reason || "manual"}). Scanned ${this.job?.scanned ?? 0}, embedded ${this.job?.embedded ?? 0}, failed ${this.job?.failed ?? 0}.`;
+    } else if (totals.stale > 0 || totals.missing > 0 || totals.failed > 0) {
+      statusMessage = `${totals.stale} embeddings are stale for recipe ${EMBEDDING_VERSION}, ${totals.missing} missing, ${totals.failed} failed. A background reindex runs on boot when the API key is set.`;
+    }
     return {
       embeddings: apiKeyConfigured ? "ready" : "disabled",
-      statusMessage: !apiKeyConfigured ? missingKeyMessage() : totals.stale > 0 ? `${totals.stale} embeddings are stale for recipe ${EMBEDDING_VERSION}. Run Reindex all to rebuild them.` : null,
+      statusMessage,
       model: EMBEDDING_MODEL,
       embeddingVersion: EMBEDDING_VERSION,
       embedRecipeVersion: EMBEDDING_VERSION,
@@ -1446,6 +1564,8 @@ class HybridRuntime {
       job: this.job ? {
         running: this.job.running,
         dryRun: this.job.dryRun,
+        incompleteOnly: this.job.incompleteOnly,
+        reason: this.job.reason,
         scanned: this.job.scanned,
         embedded: this.job.embedded,
         skipped: this.job.skipped,

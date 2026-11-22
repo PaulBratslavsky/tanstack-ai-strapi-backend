@@ -62,7 +62,17 @@ export interface ReindexInput {
   dryRun?: boolean;
   /** Default true. False returns immediately and the job is visible on status. */
   wait?: boolean;
+  /**
+   * Skip rows whose stored vector is already current for this text.
+   * Used by the boot-time job so a recipe change re-embeds stale and
+   * missing rows and leaves current ones alone.
+   */
+  incompleteOnly?: boolean;
+  reason?: 'manual' | 'auto';
 }
+
+const AUTO_EMBED_GAP_MS = 80;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const runtimes = new WeakMap<object, HybridRuntime>();
 
@@ -112,6 +122,8 @@ export class HybridRuntime {
   private job: {
     running: boolean;
     dryRun: boolean;
+    incompleteOnly: boolean;
+    reason: 'manual' | 'auto';
     scanned: number;
     embedded: number;
     skipped: number;
@@ -163,12 +175,47 @@ export class HybridRuntime {
       this.log('error', '[hybrid-search] Startup index prepare failed. Boot continues.', error);
     }
     if (!this.embedder.hasKey()) this.log('warn', `[hybrid-search] ${missingKeyMessage()}`);
+    else this.scheduleAutoReindex();
     this.timer = setInterval(() => {
       this.drainRetries().catch((error) => {
         this.log('error', '[hybrid-search] Retry pass failed.', error);
       });
     }, 30_000);
     this.timer.unref?.();
+  }
+
+  /**
+   * Fire-and-forget. start() does not await this. A manual reindex that
+   * already holds the job lock wins; this one logs and returns.
+   */
+  private scheduleAutoReindex(): void {
+    void this.autoReindexIfNeeded().catch((error) => {
+      this.log('error', '[hybrid-search] Auto-reindex failed to start. Boot continues.', error);
+    });
+  }
+
+  private async autoReindexIfNeeded(): Promise<void> {
+    if (!this.embedder.hasKey() || this.job?.running) return;
+    const counts = this.memory.counts();
+    let gap = counts.stale + counts.failed + counts.missing;
+    if (gap === 0) {
+      try {
+        const snapshot = await this.status();
+        gap = snapshot.totals.stale + snapshot.totals.failed + snapshot.totals.missing;
+      } catch (error) {
+        this.log('warn', '[hybrid-search] Could not count missing embeddings. Skipping auto-reindex.', error);
+        return;
+      }
+    }
+    if (gap === 0 || this.job?.running) return;
+    this.log(
+      'info',
+      `[hybrid-search] ${gap} embeddings are stale, failed, or missing for recipe ${EMBEDDING_VERSION}. Starting a background reindex of those rows.`
+    );
+    const started = await this.reindex({ wait: false, incompleteOnly: true, reason: 'auto' });
+    if (started.alreadyRunning) {
+      this.log('info', '[hybrid-search] Auto-reindex left the reindex that is already running in place.');
+    }
   }
 
   private knex(): any {
@@ -681,13 +728,25 @@ export class HybridRuntime {
 
   async reindex(input: ReindexInput = {}) {
     if (this.job?.running) {
-      return { alreadyRunning: true, dryRun: Boolean(this.job.dryRun), ...(this.job.report || {}), statusMessage: this.job.report?.statusMessage ?? null };
+      return {
+        alreadyRunning: true,
+        dryRun: Boolean(this.job.dryRun),
+        reason: this.job.reason,
+        ...(this.job.report || {}),
+        statusMessage: this.job.report?.statusMessage ?? null,
+      };
     }
     const run = this.runReindex(input);
     this.jobPromise = run;
     if (input.wait === false) {
-      run.catch((error) => this.log('error', '[hybrid-search] Reindex failed.', error));
-      return { started: true, dryRun: Boolean(input.dryRun), statusMessage: this.embedder.hasKey() ? null : missingKeyMessage() };
+      run.catch((error) => this.log('error', '[hybrid-search] Reindex failed. The server stays up.', error));
+      return {
+        started: true,
+        dryRun: Boolean(input.dryRun),
+        reason: input.reason || 'manual',
+        incompleteOnly: Boolean(input.incompleteOnly),
+        statusMessage: this.embedder.hasKey() ? null : missingKeyMessage(),
+      };
     }
     return run;
   }
@@ -709,15 +768,23 @@ export class HybridRuntime {
       errorCount: 0,
       statusMessage: this.embedder.hasKey() ? null : missingKeyMessage(),
     };
+    const reason = input.reason || 'manual';
+    const incompleteOnly = Boolean(input.incompleteOnly);
     this.job = {
       running: true,
       dryRun,
+      incompleteOnly,
+      reason,
       scanned: 0,
       embedded: 0,
       skipped: 0,
       failed: 0,
       startedAt: new Date().toISOString(),
     };
+    this.log(
+      'info',
+      `[hybrid-search] Reindex started (${reason}${incompleteOnly ? ', stale and missing only' : ''}${dryRun ? ', dry run' : ''}).`
+    );
     const pushError = (uid: string, documentId: string, message: string) => {
       report.errorCount += 1;
       report.failed += 1;
@@ -748,12 +815,21 @@ export class HybridRuntime {
             async (row) => {
               report.scanned += 1;
               this.job!.scanned = report.scanned;
+              this.job!.embedded = report.embedded;
+              this.job!.skipped = report.skipped;
+              this.job!.failed = report.failed;
               const documentId = row.documentId as string;
               try {
-                if (dryRun) {
-                  const outcome = this.dryRunRow(uid, row);
-                  report[outcome] += 1;
-                  return;
+                if (dryRun || incompleteOnly) {
+                  const planned = this.dryRunRow(uid, row);
+                  if (dryRun || planned === 'skipped') {
+                    report[planned] += 1;
+                    this.job!.embedded = report.embedded;
+                    this.job!.skipped = report.skipped;
+                    this.job!.failed = report.failed;
+                    if (report.scanned % 50 === 0) this.logReindexProgress(report);
+                    return;
+                  }
                 }
                 const outcome = await this.indexDocument(uid, documentId, row);
                 if (outcome === 'embedded') report.embedded += 1;
@@ -762,7 +838,21 @@ export class HybridRuntime {
                 else if (outcome === 'deferred') {
                   report.deferred += 1;
                   report.keywordUpdated += 1;
-                } else report.failed += 1;
+                } else {
+                  report.failed += 1;
+                  report.errorCount += 1;
+                  report.partial = true;
+                  if (report.errors.length < MAX_ERRORS) {
+                    report.errors.push({ uid, documentId, message: 'embed or index failed' });
+                  }
+                }
+                this.job!.embedded = report.embedded;
+                this.job!.skipped = report.skipped;
+                this.job!.failed = report.failed;
+                if (incompleteOnly && (outcome === 'embedded' || outcome === 'failed')) {
+                  await sleep(AUTO_EMBED_GAP_MS);
+                }
+                if (report.scanned % 25 === 0) this.logReindexProgress(report);
               } catch (error) {
                 const message = error instanceof Error ? error.message : 'row failed';
                 this.log('error', `[hybrid-search] Reindex row failed for ${uid} ${documentId}: ${message}`);
@@ -780,6 +870,10 @@ export class HybridRuntime {
       if (report.failed > 0) {
         report.statusMessage = `Reindex finished with ${report.errorCount} error${report.errorCount === 1 ? '' : 's'}. Failed rows are marked failed and will be retried.`;
       }
+      this.log(
+        'info',
+        `[hybrid-search] Reindex finished scanned=${report.scanned} embedded=${report.embedded} skipped=${report.skipped} failed=${report.failed} removed=${report.removed}.`
+      );
       return report;
     } finally {
       if (this.job) {
@@ -791,6 +885,13 @@ export class HybridRuntime {
         this.job.report = report;
       }
     }
+  }
+
+  private logReindexProgress(report: { scanned: number; embedded: number; skipped: number; failed: number }): void {
+    this.log(
+      'info',
+      `[hybrid-search] Reindex progress scanned=${report.scanned} embedded=${report.embedded} skipped=${report.skipped} failed=${report.failed}.`
+    );
   }
 
   private dryRunRow(uid: string, row: Record<string, any>): 'embedded' | 'skipped' | 'removed' | 'deferred' {
@@ -838,13 +939,17 @@ export class HybridRuntime {
       totals.content += content;
     }
     const apiKeyConfigured = this.embedder.hasKey();
+    const running = Boolean(this.job?.running);
+    let statusMessage: string | null = null;
+    if (!apiKeyConfigured) statusMessage = missingKeyMessage();
+    else if (running) {
+      statusMessage = `Background reindex is running (${this.job?.reason || 'manual'}). Scanned ${this.job?.scanned ?? 0}, embedded ${this.job?.embedded ?? 0}, failed ${this.job?.failed ?? 0}.`;
+    } else if (totals.stale > 0 || totals.missing > 0 || totals.failed > 0) {
+      statusMessage = `${totals.stale} embeddings are stale for recipe ${EMBEDDING_VERSION}, ${totals.missing} missing, ${totals.failed} failed. A background reindex runs on boot when the API key is set.`;
+    }
     return {
       embeddings: apiKeyConfigured ? 'ready' : 'disabled',
-      statusMessage: !apiKeyConfigured
-        ? missingKeyMessage()
-        : totals.stale > 0
-          ? `${totals.stale} embeddings are stale for recipe ${EMBEDDING_VERSION}. Run Reindex all to rebuild them.`
-          : null,
+      statusMessage,
       model: EMBEDDING_MODEL,
       embeddingVersion: EMBEDDING_VERSION,
       embedRecipeVersion: EMBEDDING_VERSION,
@@ -859,6 +964,8 @@ export class HybridRuntime {
         ? {
             running: this.job.running,
             dryRun: this.job.dryRun,
+            incompleteOnly: this.job.incompleteOnly,
+            reason: this.job.reason,
             scanned: this.job.scanned,
             embedded: this.job.embedded,
             skipped: this.job.skipped,

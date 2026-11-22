@@ -20055,7 +20055,7 @@ Search across brain types with hybrid keyword and semantic ranking, including re
 - Filter by tag: \`"strapi"\` (notes and resources)
 - Filter by videoId: find notes for a specific YouTube video
 - Filter by sourceId: find notes linked to a specific source
-- Order follows cosine similarity. Keyword rank, tag overlap, aliases, and pinned notes add a small bonus that can reorder close neighbors. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that order
+- Order follows cosine similarity. Keyword rank, tag overlap, aliases, and pinned notes add a small bonus that can reorder close neighbors. Keyword search matches any content term, so a query does not have to contain every word. \`score\` is the cosine similarity (0 when embeddings are off). \`matchTier\` is \`top\`, \`strong\`, \`good\`, or \`related\` from that order
 - A recipe change marks old vectors stale. Search skips them until Reindex all rebuilds them
 - \`searchMode\` is \`hybrid\` or \`keyword-only\`. Without \`OPENAI_API_KEY\`, results are keyword-only and \`statusMessage\` says so. The keyword scan is the fallback when the index is not ready
 - Returns linkedSourceIds and linkedPersonIds for notes (useful for traversing connections)
@@ -20068,7 +20068,8 @@ Rebuild the hybrid search index. Permission \`plugin::paul-brain.search.reindex\
 - Pages through each content type. Embed failures are reported per row and do not stop the run
 - Without \`OPENAI_API_KEY\`, keyword text is refreshed and embeddings stay deferred. \`statusMessage\` says the key is missing
 - The admin Hybrid Search page and \`POST /hybrid-search/reindex\` call the same rebuild
-- Run it once after deploy, and again after an embedding recipe change, so existing rows get vectors. Later edits update the index on save
+- On boot, when \`OPENAI_API_KEY\` is set and any vectors are stale, failed, or missing, hybrid-search starts a background reindex of only those rows. It does not block startup, and API errors are logged per row. \`GET /hybrid-search/status\` shows the running job. A manual reindex and the automatic one share one lock
+- Later edits update the index on save. Use this tool for a full rebuild or a dry run
 
 ### get_entity
 Fetch one entity by type + documentId or slug, including \`resource\`. A raw resource row uses \`state\` and \`author\`; \`get_resource\` returns those as \`status\` and \`createdBy\`.
@@ -20081,6 +20082,7 @@ Get newest N items across types, including resources.
 - Archived rows are excluded
 - Filter by \`kind\` for notes (\`fact\`, \`preference\`, etc.)
 - Filter by \`source_bot\` to see what a specific bot created
+- \`errors\` lists per-type failures as \`{ type, message }\`. Items from the types that succeeded are still returned. An empty \`items\` list with an empty \`errors\` list means nothing was recent. An empty list with errors means those types failed
 
 ### update_note
 Patch a note's fields.
@@ -20406,7 +20408,7 @@ Each tool requires specific permissions on your admin token:
 
 Plus the standard content-manager permissions for read/create/update on paul-brain types.
 `;
-const PLUGIN_VERSION = "1.13.0";
+const PLUGIN_VERSION = "1.14.0";
 const register$H = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "get_brain_guide",
@@ -21138,7 +21140,7 @@ const register$E = (strapi2) => {
   strapi2.ai.mcp.registerTool({
     name: "list_recent",
     title: "List Recent Brain Items",
-    description: 'Get newest N items by updatedAt across or within types. Archived rows are excluded. Good for "what did we save today?". Optional filters: types, kind (notes only), source_bot. See get_brain_guide for usage.',
+    description: "Get newest N items by updatedAt across or within types. Archived rows are excluded. A per-type failure is returned in errors (type and message) along with any items that loaded, so an empty items list with an empty errors list means nothing was recent. Optional filters: types, kind (notes only), source_bot. See get_brain_guide for usage.",
     resolveInputSchema: () => object({
       types: array(_enum(["note", "person", "project", "decision", "source", "resource"])).optional().describe("Limit to these types (default: all)"),
       kind: _enum(["fact", "preference", "idea", "todo", "log", "reference", "lesson", "video", "taught"]).optional().describe("Filter notes by kind"),
@@ -21154,7 +21156,11 @@ const register$E = (strapi2) => {
         slug: string().nullish(),
         updatedAt: string()
       })),
-      count: number()
+      count: number(),
+      errors: array(object({
+        type: string(),
+        message: string()
+      }))
     }),
     auth: {
       policies: [{ action: getActionId("read") }]
@@ -21163,6 +21169,7 @@ const register$E = (strapi2) => {
       const types = args.types || [...CONTENT_TYPES];
       const limit = args.limit || 25;
       const allItems = [];
+      const errors = [];
       for (const type of types) {
         const uid = getUid(type);
         const filters2 = withActiveRecords(type, {});
@@ -21196,14 +21203,17 @@ const register$E = (strapi2) => {
             });
           }
         } catch (err) {
+          const message = err instanceof Error ? err.message : "list failed";
           strapi22.log.warn(`Failed to list recent for type ${type}:`, err);
+          errors.push({ type, message });
         }
       }
       allItems.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
       const limited = allItems.slice(0, limit);
       const output = stripNullish({
         items: limited,
-        count: limited.length
+        count: limited.length,
+        errors
       });
       return {
         content: [
